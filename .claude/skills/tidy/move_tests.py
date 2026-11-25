@@ -18,7 +18,8 @@ Usage:
 method). ``DEST`` is ``path`` for classes, ``path::Class`` for methods, which are
 appended to the end of that class. ``--before CLASS`` places moved classes above
 ``CLASS`` in ``DEST`` instead of at the end; ``--rename`` renames a single moved
-class (or method).
+class (or method). A whole class whose ``DEST`` is its own file is renamed in place
+instead of moved (see below).
 
 What moves with a spec:
 
@@ -73,10 +74,17 @@ Moves, merges, and renames also repoint backticked citations of the moved symbol
 (``path::Class[::test]`` and ``Class::test``) in ``_docs/`` (archive and research
 excepted), ``CLAUDE.md``, ``CONTRIBUTING.rst``, ``README.rst``, and ``docs/*.rst``; a
 renamed method's bare ``test`` citations follow it unless another test keeps the old
-name. ``--delete`` lists the citations it leaves dangling. Touched files are then run
-through ``ruff format``. Imports are never sorted or
-pruned here: ``ruff check --fix`` at the gates owns that. A destination name
-collision aborts before anything is written.
+name. An in-place class rename (``--rename NEW`` with one ``path::Class`` spec and
+that path as ``DEST``) keeps the class where it is, renames its whole-word uses in
+that file, and rewrites whole-word prose mentions in those docs too, printing each
+rewrite as ``path:line: old -> new``. When ``tests/`` defines more than one class
+with the old name, only path-carrying citations are repointed; its other
+mentions are left and printed as ``path:line: old (ambiguous, left)``. It refuses
+when the new name is already a class under ``tests/`` or used in that file, or when
+the file does not define the old class exactly once. ``--delete`` lists the
+citations it leaves dangling. Touched files are then run through ``ruff format``.
+Imports are never sorted or pruned here: ``ruff check --fix`` at the gates owns that.
+A destination name collision aborts before anything is written.
 """
 
 from __future__ import annotations
@@ -94,7 +102,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 DESCRIPTION = "Move test classes or methods between test files."
 RUFF = shutil.which("ruff") or "ruff"
@@ -474,10 +482,13 @@ def has_test_named(name: str) -> bool:
     )
 
 
-def rewrite_citations(
-    old: tuple[str, str, str | None], new: tuple[str, str, str | None]
-) -> None:
-    """Repoints doc citations of a moved or renamed test class or method."""
+def build_citation_rewrite(
+    old: tuple[str, str, str | None],
+    new: tuple[str, str, str | None],
+    *,
+    bare_class: bool = True,
+) -> Callable[[str], str]:
+    """Builds the text rewrite that repoints citations of a moved or renamed test."""
     (old_path, old_cls, old_method), (new_path, new_cls, new_method) = old, new
     old_short = old_path.removeprefix("tests/")
     new_short = new_path.removeprefix("tests/")
@@ -500,20 +511,92 @@ def rewrite_citations(
         path = new_path if match[1] else new_short
         return f"`{path}::{new_symbol}"
 
+    def _rewrite(text: str) -> str:
+        updated = with_path.sub(_with_path, text)
+        if bare is not None:
+            updated = bare.sub(f"`{new_symbol}", updated)
+        if bare_class and renamed_cls is not None and new_cls != old_cls:
+            updated = renamed_cls.sub(f"`{new_cls}", updated)
+        if lone_pattern is not None:
+            updated = lone_pattern.sub(f"`{new_method}", updated)
+        return updated
+
+    return _rewrite
+
+
+def rewrite_citations(
+    old: tuple[str, str, str | None], new: tuple[str, str, str | None]
+) -> None:
+    """Repoints doc citations of a moved or renamed test class or method."""
+    rewrite = build_citation_rewrite(old, new)
+
     for path in _gen_doc_paths():
         if not path.exists():
             continue
         text = path.read_text()
-        updated = with_path.sub(_with_path, text)
-        if bare is not None:
-            updated = bare.sub(f"`{new_symbol}", updated)
-        if renamed_cls is not None and new_cls != old_cls:
-            updated = renamed_cls.sub(f"`{new_cls}", updated)
-        if lone_pattern is not None:
-            updated = lone_pattern.sub(f"`{new_method}", updated)
+        updated = rewrite(text)
         if updated != text:
             path.write_text(updated)
             print(f"  citations repointed in {path.relative_to(ROOT)}")
+
+
+def load_test_class_counts() -> Counter[str]:
+    """Loads how many times each class name is defined under ``tests/``."""
+    paths = sorted((ROOT / "tests").rglob("*.py"))
+    return Counter(
+        node.name
+        for path in paths
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.ClassDef)
+    )
+
+
+def rename_class(spec: Spec, new: str, dry: bool) -> list[Path]:
+    """Renames a test class in place and repoints its mentions in the docs."""
+    old = spec.cls
+    text = spec.path.read_text()
+    word = re.compile(rf"\b{re.escape(old)}\b")
+    defined = [
+        node
+        for node in ast.walk(ast.parse(text))
+        if isinstance(node, ast.ClassDef) and node.name == old
+    ]
+    counts = load_test_class_counts()
+
+    if len(defined) != 1:
+        raise SystemExit(f"{spec.path} defines class {old} {len(defined)} times")
+    if counts[new]:
+        raise SystemExit(f"a class named {new} already exists under tests/")
+    if re.search(rf"\b{re.escape(new)}\b", text):
+        raise SystemExit(f"{spec.path} already uses the name {new}")
+
+    ambiguous = counts[old] > 1
+    rel = _rel(spec.path)
+    rewrite = build_citation_rewrite(
+        (rel, old, None), (rel, new, None), bare_class=not ambiguous
+    )
+    texts = {spec.path: (text, word.sub(new, text))}
+
+    for path in (p for p in _gen_doc_paths() if p.exists()):
+        body = path.read_text()
+        cited = rewrite(body)
+        texts[path] = (body, cited if ambiguous else word.sub(new, cited))
+
+    for path, (before, after) in texts.items():
+        pairs = zip(before.splitlines(), after.splitlines(), strict=True)
+        for number, (line, updated) in enumerate(pairs, 1):
+            if line != updated:
+                print(f"{_rel(path)}:{number}: {old} -> {new}")
+            if word.search(updated):
+                print(f"{_rel(path)}:{number}: {old} (ambiguous, left)")
+
+    print(f"renamed {spec.path}::{old} -> {new}")
+    writes = {path: after for path, (before, after) in texts.items() if after != before}
+
+    for path, after in ({} if dry else writes).items():
+        path.write_text(after)
+
+    return [] if dry else [spec.path]
 
 
 def _read(path: Path) -> str:
@@ -877,7 +960,11 @@ def main() -> int:  # noqa: C901
         "args", nargs="+", help="DEST SPEC... (or SPEC... with --check/--sort)"
     )
     parser.add_argument("--before", help="place moved classes above this class")
-    parser.add_argument("--rename", help="rename the single moved class or method")
+    parser.add_argument(
+        "--rename",
+        help="rename the single moved class or method (a class in place when DEST "
+        "is its own file)",
+    )
     parser.add_argument(
         "--with-helpers",
         action="store_true",
@@ -962,6 +1049,14 @@ def main() -> int:  # noqa: C901
             touched |= set(sort_class(spec, args.dry_run))
         elif args.merge:
             touched |= set(merge(dest, spec, args.dry_run, args.with_helpers))
+        elif (
+            args.rename is not None
+            and spec.method is None
+            and Path(dest).resolve() == spec.path.resolve()
+        ):
+            if args.before is not None:
+                raise SystemExit("an in-place --rename takes no --before")
+            touched |= set(rename_class(spec, args.rename, args.dry_run))
         else:
             touched |= set(
                 move(

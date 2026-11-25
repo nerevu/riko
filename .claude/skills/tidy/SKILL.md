@@ -276,7 +276,8 @@ neighborhood it affects:
    test's current home with `overlap_scan.py --where NAME`. Usage:
    `move_tests.py DEST SPEC... [--before CLASS] [--rename NEW]` (plus `--with-helpers`,
    `--dry-run`), `SPEC` being `path::Class` or `path::Class::method` and `DEST` a path
-   (classes) or `path::Class` (methods); the mode flags above replace `DEST`
+   (classes) or `path::Class` (methods); `--rename` with `DEST` equal to the spec's file
+   renames the class in place; the mode flags above replace `DEST`
    (`--check`/`--sort`/`--delete SPEC...`, `--merge DEST_CLASS SPEC...`,
    `--drop-row path::TABLE ID...`, `--place path::NAME... --above NAME`,
    `--plan-split FILE`). Module constants that a move strands below code go back to the
