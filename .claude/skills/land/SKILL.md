@@ -111,11 +111,17 @@ for iterating on one gate alone.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh `implementer`
    subagent (`model: "opus"`, so it never inherits a Fable session's model), never as an
    in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step 0),
+   `python .claude/skills/wrapup/repoint_hashes.py`,
    `python $G run prettify --mutates -- <manage> prettify` (step 2), then
    `python $G run codegen --mutates -- <manage> codegen --all` when step 3 applies, then
    `python $G check tidy` and `python .claude/skills/land/require_agents.py`. Prettify
    and codegen go before tidy so they never write a file tidy is editing, and before
-   `check tidy` so the check judges the tree they left; nothing records tidy here. When
+   `check tidy` so the check judges the tree they left; nothing records tidy here.
+   `repoint_hashes.py` repoints any doc, memory, or `CLASS_HISTORY` citation an
+   autosquash or rebase rewrote, so the user never does; its edits join the change. It
+   exits 1 only for a citation nothing resolves: resolve that line (rewrite it as an
+   `old → new` record, which it keeps, or describe the dropped commit) and rerun the
+   setup call. When
    `check tidy` exits 0, skip the agent (tidy already ran on this tree, in any session)
    and run `python $G all [--codegen]` in the foreground; when `require_agents.py`
    fails, stop and report its output (the user-level agent definitions are missing);

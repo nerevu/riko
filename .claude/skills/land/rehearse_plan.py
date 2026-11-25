@@ -8,7 +8,7 @@ Usage: python .claude/skills/land/rehearse_plan.py [PLAN] [--out DIR] [-U N]
 PLAN is a text file of steps, in order. A step starts with a header line and lists
 the ids it takes (from ``split_hunks.py list``; ``path``, ``path:N``, ``path:N-M``):
 
-    fixup 3c2a62bb
+    fixup 1a2b3c4d
     uv.lock
 
     commit msgs/map-keys.txt     # message file, relative to PLAN
@@ -52,7 +52,7 @@ temp folders are left for the OS.
 **Folds** move hunks of an already-committed branch commit (the mover) into an
 earlier branch commit (the target), so a fix lands in the commit that caused it:
 
-    fold e5448a49b 5052114ad     # target, then mover
+    fold 1f2e3d4c5 5e6f7a8b9     # target, then mover
     riko/execution/_sync_execution.py
     tests/internal/test_plan_closes.py:681
 

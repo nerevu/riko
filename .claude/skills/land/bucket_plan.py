@@ -34,7 +34,7 @@ Example::
 
     [[bucket]]
     name = "tee"
-    fixup = "1e7b5c1ce"
+    fixup = "0a1b2c3d4"
 
     [[bucket]]
     name = "feature"

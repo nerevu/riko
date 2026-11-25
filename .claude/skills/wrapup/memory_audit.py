@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-_DEFAULT_MEMORY = (
+DEFAULT_MEMORY = (
     Path.home() / ".claude/projects/-Users-reubano-Documents-Projects-riko/memory"
 )
 _HARD_LINES = 200
@@ -108,7 +108,7 @@ def gen_ranking(files: dict[str, str], top: int) -> Iterator[str]:
 def main() -> int:
     """Prints the audit and returns the exit status."""
     parser = argparse.ArgumentParser(description="Audit the Claude memory directory.")
-    parser.add_argument("--memory", type=Path, default=_DEFAULT_MEMORY)
+    parser.add_argument("--memory", type=Path, default=DEFAULT_MEMORY)
     parser.add_argument("--top", type=int, default=15)
     args = parser.parse_args()
     index_text = (args.memory / "MEMORY.md").read_text()
