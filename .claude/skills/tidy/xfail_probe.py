@@ -4,6 +4,7 @@ Reports each xfail whose failure today is not the one its marker documents.
 Usage:
     PYTHONPATH=.claude/skills/tidy uv run --active pytest -p xfail_probe --no-cov \\
         [-n auto] [FILE ...]
+    python .claude/skills/tidy/xfail_probe.py --list [PATH ...]
 
 A pytest plugin. A strict xfail is a tripwire: it should fail only until the
 pending capability lands, and only with the exception its ``raises=`` names. A
@@ -20,23 +21,37 @@ Each line reads ``VERDICT nodeid strict=S raises=R actual=A: first message line`
 followed by a count per verdict (``ok`` included). Records travel on the report's
 ``user_properties``, so the summary is complete under ``-n auto``. It works with or
 without ``--runxfail``.
+
+``--list`` runs no tests: it reads each Python file under ``PATH`` (default
+``tests``) that mentions xfail and prints one line per marker, so a cited
+tripwire can be checked against what exists. Each line reads
+``path:line Class::test :: <decorator source>``, ``path:line CLASS name ::
+<decorator source>`` for a class marker, or ``path:line ASSIGN :: <statement>``
+for a marker bound to a name.
 """
 
 from __future__ import annotations
 
+import argparse
+import ast
 from collections import Counter
+from itertools import chain
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable, Iterator
 
     from _pytest.terminal import TerminalReporter
 
 PROPERTY = "xfail_probe"
 SUSPECTS = ("SETUP", "MISMATCH", "UNPINNED", "PASSES")
 MAX_MESSAGE = 120
+MAX_MARK = 300
+MAX_ASSIGN = 200
+LIST_ROOT = Path("tests")
 
 
 def get_names(raises: object) -> str:
@@ -118,3 +133,52 @@ class Summary:
 
 def pytest_configure(config: pytest.Config) -> None:
     config.pluginmanager.register(Summary(), f"{PROPERTY}-summary")
+
+
+def get_marks(node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    """Gets the source of each xfail decorator on ``node``."""
+    sources = map(ast.unparse, node.decorator_list)
+    return [source[:MAX_MARK] for source in sources if "xfail" in source]
+
+
+def gen_markers(path: Path, node: ast.AST, owner: str = "") -> Iterator[str]:
+    """Generates one line per xfail marker among the children of ``node``."""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.ClassDef):
+            prefix = f"{path}:{child.lineno} CLASS {child.name}"
+            yield from (f"{prefix} :: {mark}" for mark in get_marks(child))
+            yield from gen_markers(path, child, child.name)
+        elif isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+            prefix = f"{path}:{child.lineno} {owner}::{child.name}"
+            yield from (f"{prefix} :: {mark}" for mark in get_marks(child))
+        elif isinstance(child, ast.Assign) and "xfail" in ast.unparse(child):
+            yield f"{path}:{child.lineno} ASSIGN :: {ast.unparse(child)[:MAX_ASSIGN]}"
+
+
+def gen_listing(roots: Iterable[Path]) -> Iterator[str]:
+    """Generates the marker lines of every Python file under ``roots``."""
+    paths = chain.from_iterable(
+        root.rglob("*.py") if root.is_dir() else [root] for root in roots
+    )
+
+    for path in sorted(paths):
+        text = path.read_text()
+
+        if "xfail" in text:
+            yield from gen_markers(path, ast.parse(text))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Lists every xfail marker.")
+    parser.add_argument("--list", action="store_true", required=True)
+    parser.add_argument("paths", nargs="*", type=Path, default=[LIST_ROOT])
+    args = parser.parse_args()
+
+    for line in gen_listing(args.paths):
+        print(line)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

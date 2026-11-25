@@ -63,6 +63,8 @@ Add these only when their dimension is in scope:
   xfail_probe --no-cov -n auto <files>` records why each xfail fails today and
   lists the suspects: `SETUP` (satisfied by a setup error), `MISMATCH` (not its
   `raises=`), `UNPINNED` (no `raises=`), `PASSES` (the capability may have landed).
+  `python .claude/skills/tidy/xfail_probe.py --list [PATH ...]` lists every marker by
+  location without running anything, to check which tripwires a slice cites.
 - **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times, each
   saved to a file; `uv run --active python .claude/skills/tidy/fit_bounds.py FILE...`
   keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok; an
