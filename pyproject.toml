@@ -369,9 +369,9 @@ uncovered-lowered = 2026-11-24
 # `typing.cast` calls. A run fails above either and lowers it on a gain. It records the
 # day as `<key>-lowered`.
 any = 122
-any-lowered = 2026-11-14
-cast = 74
-cast-lowered = 2026-11-16
+any-lowered = 2026-11-21
+cast = 73
+cast-lowered = 2026-11-25
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the

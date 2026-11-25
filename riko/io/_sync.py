@@ -272,8 +272,10 @@ def buffer(
         max_size=STREAMING_THRESHOLD, mode=mode
     )
 
-    if first is not None:
-        spool.write(cast("bytes", first).decode(encoding) if decode else first)
+    if isinstance(first, bytes) and decode:
+        spool.write(first.decode(encoding))
+    elif first is not None:
+        spool.write(first)
 
     for chunk in chunks:
         spool.write(cast("bytes", chunk).decode(encoding) if decode else chunk)
