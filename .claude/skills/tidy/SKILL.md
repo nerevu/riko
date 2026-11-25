@@ -298,6 +298,11 @@ Sort each verified finding into one bucket:
   option saying what it buys and forecloses. Running as a subagent without
   AskUserQuestion, return these framed questions instead of deciding them.
 
+A fix that edits `examples/` is proved behavior-neutral by running
+`python .claude/skills/tidy/snapshot_examples.py OUT` before the edit and
+`python .claude/skills/tidy/snapshot_examples.py --compare OUT` after it (exit 1 and
+the first differing section, log and stderr lines included, on any change; about 6s).
+
 Then check whether any finding class appeared more than once in this run, or matches a
 phrase the Reserved terms table already rules out. If it is regex-able, propose adding
 it to `riko/cli/_lint_terms.py` (`BANNED_TERMS`, with its Reserved terms ruling) or a
