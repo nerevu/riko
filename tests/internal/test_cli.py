@@ -1890,8 +1890,9 @@ class TestLogLevel:
     def test_resolve_log_level(self, verbose, quiet, level):
         assert resolve_log_level(verbose, quiet) == level
 
+    @pytest.mark.usefixtures("riko_level")
     @pytest.mark.parametrize(("args", "level"), MANAGER_LEVELS)
-    def test_manager_sets_the_riko_level(self, riko_level, args, level):
+    def test_manager_sets_the_riko_level(self, args, level):
         result = CliRunner().invoke(manager, [*args, "hello"])
         assert result.exit_code == 0
         assert getLogger("riko").level == level
