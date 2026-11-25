@@ -1658,10 +1658,15 @@ consumes (above) is that route.
 
 Typing note (2026-10-27 `Any`/`cast` audit, re-measured in the follow-up triage): every
 module's `pipe`/`async_pipe` takes `*args: Any` (106 of the package's `Any` uses, two
-per module). The decorators run the stub itself per item (`_PreparedCall.parser` is the
-stub's `__wrapped__`), and its overloads check it against the processor/operator parser
-protocols in `riko/types/_wrappers.py`, which type `objconf` as `DynamicConf` while each
-parser annotates its generated `<Name>Objconf`. `*args: object` alone gives 4 errors per
+per module; 104 on 2026-11-25). Nine more go with the same rewrite (2026-11-25
+triage; each fails pyright as `object` because an untyped conf or parser signature
+reaches typed code): the `*args`/`**kwargs` of the `WrapperMeta`, `SyncModuleWrapper`,
+and `AsyncModuleWrapper` protocols (6), `SyncFieldParseFunc`'s `**kwargs`,
+`NodeCall`'s `item`, and `DynamicConf`'s `Objectify[Any]` base. The decorators run
+the stub itself per item (`_PreparedCall.parser` is the stub's `__wrapped__`), and its
+overloads check it against the processor/operator parser protocols in
+`riko/types/_wrappers.py`, which type `objconf` as `DynamicConf` while each parser
+annotates its generated `<Name>Objconf`. `*args: object` alone gives 4 errors per
 module, all in the stub's forwarding body. Measured removal chain (103 of the 106;
 pyright clean and the full suite passing on a scratch copy): (1) make the
 processor/operator parser protocols and the `processor` `__new__`/`__call__` overloads
@@ -1675,12 +1680,14 @@ depend on the `get_conf_type` decision (it has no runtime callers; runtime `objc
 always a plain `DynamicConf`), but the user kept it here (2026-10-27 triage) so the
 stubs are rewritten once, with the conf contract. The last three
 (`aggregate`/`receive`/`write` `async_pipe`) also need their async parsers annotated
-`stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
-sync/async output unions picked by the runtime `is_async` flag (plus 3 `wraps` and 2
-`embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`is_async` interface classification here should type that split instead; the cast on the
-worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial` because the
-process executor pickles it) and on `build_item_call`'s return in
+`stream: Feed`. Separately, 12 of the 23 casts in `riko/modules/_decorators.py` are
+pure sync/async wrapper unions picked by the runtime `is_async` flag (11 outputs and the
+operator's sync input), plus 3 `wraps` and 2 `embed` casts on the same split and 1 on
+the untyped `_PreparedCall.parser`; `is_async` interface classification here should
+type that split instead. The other 5 are the two `cast("ItemOrValue", item)` calls the
+open typing question below owns, the decorator factory `cls()` in `Module.__new__`, the
+`ItemDispatcher` return of `dispatch`, and the `partial` over `arun_item` passed on as
+an `AsyncItemProcessor`. The cast on `build_item_call`'s return in
 `riko/execution/_concurrency.py` narrows the same `NodeCall` output union and goes with
 it (2026-11-11 triage). `manage lint --escapes` lowers its ceilings as these go. The
 stub rewrite also gives call options one owner (2026-11-03 repo-audit triage, deferred
@@ -2489,23 +2496,11 @@ than moving it twice. The sync hub's `coroutine` receiver decorator
 (2026-10-23 move audit); delete it with that module unless the new subscribe API reuses
 it.
 
-Typing note (2026-10-27 `Any`/`cast` audit): the input router's
-`V: (Iterator[Any], AsyncIterator[Any])` constraint
-(`_BaseExecution._resolve_node_inputs`) and the pipe-output casts in
-`_sync_execution.py` and `_async_execution.py` go when port-keyed dispatch retypes the
-router on port streams (the splitter-union exit below). The `Acquisitions` map
+Typing note (2026-10-27 `Any`/`cast` audit): the router's `Any` constraint and
+pipe-output casts are gone (port-keyed dispatch, 33c481e4a). The `Acquisitions` map
 (`dict[Resource[Any], Acquisition[Any]]`) stays existential: `Resource` is invariant, so
 `Resource[object]` rejects the typed call sites until `_aacquire_entry` returns a type a
-generic `_acquire_entry_once[R]` can carry. One typing unsoundness rides on this
-(2026-10-27 triage, typing only, so no runtime tripwire): the router hands
-`DEFAULT_ENVELOPES` (the placeholder envelope in a tuple) to `as_stream` as
-`V = Iterator[T]` for an unbounded `T`; retyping the router on `Stream`/`AsyncStream`
-port streams removes it. The second one, acquisition entries holding
-`Acquisition[R | Closable]` while `acquire`/`aacquire` return `R`, closed on
-2026-11-02: the `ResolvedValue` alias is gone, `ValuePlan[T]`/`ExternalPlan[T]` hold a
-plain `T`, and `register_owned` (sync and async executions) types its `cleanup` as
-`Cleanup[R]` for the registered value (it was `Cleanup[Never]` while the plan paired a
-`T | Closable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closable)`
+generic `_acquire_entry_once[R]` can carry. Still open: the `Resource(value: Closable)`
 overload leaves `T` unbound (a method-scoped `[C: Closable]` with
 `cls: type[Resource[C]]` is inconsistent with the `__new__` implementation under
 pyright), so `Resource(client)` with no cleanup types as `OneShotResource[Unknown]`.
