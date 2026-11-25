@@ -196,28 +196,6 @@ PROCESS_REFUSALS = [
 ]
 
 
-class TestRequireProcessSafe:
-    @pytest.mark.parametrize(("build", "node", "cause"), PROCESS_REFUSALS)
-    def test_process_executor_refuses_an_unsafe_node(
-        self, monkeypatch, opened, build, node, cause
-    ) -> None:
-        monkeypatch.setattr(_sync_execution, "start_blocking_portal", lambda: None)
-        plan, context = build()
-        settings = TWO_PROCESSES
-        execution = SyncExecution(context, settings=settings)
-
-        with (
-            execution,
-            pytest.raises(
-                InvalidPipelineError, match=f"node '{node}' cannot run"
-            ) as info,
-        ):
-            execution.run(plan, seed=ITEMS)
-
-        assert cause is None or isinstance(info.value.__cause__, cause)
-        assert opened == []
-
-
 SYNC_POLICIES = [
     pytest.param({"concurrency": 1}, _INLINE_POLICY, id="one"),
     pytest.param(_INLINE, _INLINE_POLICY, id="inline"),
@@ -440,6 +418,26 @@ class TestSyncPolicy:
             )
 
         assert released == ["terminate"]
+
+    @pytest.mark.parametrize(("build", "node", "cause"), PROCESS_REFUSALS)
+    def test_process_executor_refuses_an_unsafe_node(
+        self, monkeypatch, opened, build, node, cause
+    ) -> None:
+        monkeypatch.setattr(_sync_execution, "start_blocking_portal", lambda: None)
+        plan, context = build()
+        settings = TWO_PROCESSES
+        execution = SyncExecution(context, settings=settings)
+
+        with (
+            execution,
+            pytest.raises(
+                InvalidPipelineError, match=f"node '{node}' cannot run"
+            ) as info,
+        ):
+            execution.run(plan, seed=ITEMS)
+
+        assert cause is None or isinstance(info.value.__cause__, cause)
+        assert opened == []
 
     def test_sync_sequential_run_has_no_worker_pool(self) -> None:
         with SyncExecution() as execution, pytest.raises(PipelineStateError):

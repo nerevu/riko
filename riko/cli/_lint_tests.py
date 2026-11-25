@@ -679,8 +679,9 @@ def _gen_file_issues(
         pass
     elif lines > SPLIT_LINES:
         message = (
-            f"{lines} lines; move its largest Test<Subject> class into its own file, "
-            "then check both files for overlaps, misfits, and move candidates"
+            f"{lines} lines; move its largest concept (the subject rows that share it) "
+            "into a file named for that concept, then check both files for overlaps, "
+            "misfits, and move candidates"
         )
         yield LayoutIssue(path, 1, message, fatal=False)
     elif lines < MERGE_LINES:

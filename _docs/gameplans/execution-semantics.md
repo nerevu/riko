@@ -233,7 +233,7 @@ Worker adaptation must enter and exit a sync lifecycle resource on the same thre
 thread-affine clients such as `sqlite3` connections work under async execution. Today
 entry and exit may land on different worker threads; R11 (provider sessions) owns the
 fix, and a strict xfail,
-`tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`,
+`tests/internal/test_resources.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`,
 marks it. The same thread rule keeps a sync-closable seed's `close()` on the event loop
 (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
 seed close that blocks; R11 owns that bound with the entry-thread exit (triage
@@ -1595,7 +1595,7 @@ needs worker tasks alive across a `yield`. On the default async processor path
 abandoned-iteration constraint in §6.5 forbids. An attempt over `_pool_stream` broke a
 bare `break`, `afirst`, and plain-exception propagation. So the port waits for R7's
 dedicated-task hosting. Tripwire:
-`tests/internal/test_io.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
+`tests/internal/test_stream_helpers.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
 
 ### 6.4 Cancellation
 

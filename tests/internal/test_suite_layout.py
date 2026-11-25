@@ -468,7 +468,7 @@ class TestTestsLint:
         (tests_dir / "public" / "test_alpha.py").write_text(_ALPHA + "\n" * SPLIT_LINES)
         messages = _messages(tests_dir)
         assert [fatal for _, fatal in messages] == [False]
-        assert "move its largest Test<Subject> class" in messages[0][0]
+        assert "move its largest concept" in messages[0][0]
 
     @pytest.mark.parametrize(("fatal", "line", "code"), FINDING_EXIT_CODES)
     def test_findings_print_and_set_the_exit_code(

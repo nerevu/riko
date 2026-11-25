@@ -898,7 +898,7 @@ def docs_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return tmp_path
 
 
-class TestCitationLint:
+class TestDocsCitations:
     """The stale test-file and source-file citation checks."""
 
     @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
@@ -985,7 +985,7 @@ class TestCitationLint:
         assert set(_docs.gen_private_names(path)) == names
 
 
-class TestUserDocsLint:
+class TestDocsTodos:
     """The internal-docs lint checks over the shipped user docs."""
 
     def test_todo_lines_are_named_by_path_and_line(
@@ -1647,7 +1647,7 @@ OPTIONAL_CASES = [
 ]
 
 
-class TestDependencyLint:
+class TestDepsLint:
     """The run-time requirement lint check."""
 
     @pytest.mark.parametrize(("source", "expected"), RUNTIME_NAME_CASES)
@@ -1681,7 +1681,7 @@ def _pin_issues(tmp_path: Path, hooks: str) -> list[tuple[str, str]]:
     return [(issue.where.rsplit(":", 1)[-1], issue.message) for issue in issues]
 
 
-class TestHookPinLint:
+class TestUpgradeHookPins:
     """Pre-commit hook pins checked against uv.lock."""
 
     def test_hook_pin_must_match_the_lock(self, tmp_path: Path) -> None:
@@ -1883,7 +1883,7 @@ MANAGER_LEVELS = [
 ]
 
 
-class TestLogLevel:
+class TestResolveLogLevel:
     """The manage flags select the level every riko logger inherits."""
 
     @pytest.mark.parametrize(("verbose", "quiet", "level"), LOG_LEVELS)

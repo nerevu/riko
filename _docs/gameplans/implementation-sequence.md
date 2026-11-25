@@ -1771,7 +1771,7 @@ slices depend on two resource seams R3 left unbuilt:
 - honor `Resource.credential` (`riko/definitions/_resource_definition.py` documents it
   as not yet honored): a run resolves the credential reference and passes it to the
   resource's factory; flips the strict xfail
-  `tests/internal/test_execution.py::TestResourceAcquisition::test_sync_acquire_passes_a_credential_reference_to_its_factory`;
+  `tests/internal/test_resources.py::TestResourceAcquisition::test_sync_acquire_passes_a_credential_reference_to_its_factory`;
 - export `ResourceView` (`riko/execution/_resource_view.py`) on `riko.ext` so
   `riko-msp` factories can annotate `resources`.
 
@@ -2956,7 +2956,7 @@ dependency ordering stay here:
 - a sync lifecycle resource under async execution is entered and exited on the same
   thread, so thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail
   tripwire
-  `tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`);
+  `tests/internal/test_resources.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`);
 - lazy resources acquire on first use rather than at run start, and declared
   resource-to-resource dependencies acquire dependency-first and clean up
   dependent-first (moved from R4B; tripwire

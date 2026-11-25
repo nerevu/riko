@@ -108,7 +108,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_workflow` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
 | ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed on 2026-09-01 by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
-| ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_io.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
+| ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_stream_helpers.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
@@ -349,8 +349,9 @@ shrink the suite — they cover contracts hard to catch elsewhere: `TestCompileW
 in `tests/public/test_workflow.py`; `TestSyncPolicy`, `TestPoolLifetime`,
 `TestAsyncPolicy`, and `TestThreadBudget` in `tests/internal/test_concurrency.py`;
 `TestAsyncOperatorLaziness` in `tests/internal/test_modules.py`; and
-`TestSyncExecution`, `TestAsyncExecution`, `TestResourceAcquisition`, and
-`TestAsyncResourceAcquisition` in `tests/internal/test_execution.py`.
+`TestSyncExecution` and `TestAsyncExecution` in `tests/internal/test_execution.py`;
+and `TestResourceAcquisition` and `TestAsyncResourceAcquisition` in
+`tests/internal/test_resources.py`.
 
 **Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
 

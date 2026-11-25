@@ -422,7 +422,7 @@ arrive in a later slice with the execution-scoped task group.
   `ResourceWarning` only when a closable is a resource (`has_open_resource`: anything
   with `close`/`aclose` other than a generator or another wrapper), so hand-composed
   `split` feeding an early-stopping pipe no longer warns; a file-backed leak still does
-  (`tests/internal/test_io.py::TestAutoClose::test_dropping_an_unclosed_wrapper_of_streams_does_not_warn`).
+  (`tests/internal/test_stream_helpers.py::TestAutoClose::test_dropping_an_unclosed_wrapper_of_streams_does_not_warn`).
   `auto_close.close()` closes every value, then raises the single failure or an
   `ExceptionGroup` (execution-semantics § cleanup). `auto_close.close()` claims its
   close with one atomic pop of a one-item list, so concurrent closes (a deferred reader

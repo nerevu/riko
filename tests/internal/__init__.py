@@ -7,33 +7,30 @@ Index (file, then the subjects it owns, in file order):
 
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, CeilingRatchet,
-                              ConsoleScripts, Docstyle, CitationLint, UserDocsLint,
+                              ConsoleScripts, Docstyle, DocsCitations, DocsTodos,
                               TermLint, LiteralLint, RstLint, BindingLint, BasenameLint,
-                              EscapeLint, HelperLint, OwnershipLint, DependencyLint,
-                              HookPinLint, CanonicalImportLint, RelativeImportLint,
+                              EscapeLint, HelperLint, OwnershipLint, DepsLint,
+                              UpgradeHookPins, CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
-                              ReadDocument, LogLevel
+                              ReadDocument, ResolveLogLevel
     test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
                               ModuleCategory, GenerateModuleNames, GenerateModuleIds,
                               ConfigCodegen, GenerateUserAgents, WorkflowFixtures,
                               WorkflowProbes, ImportSurface, GenerateVerbTables,
                               GenerateApiSurface
-    test_concurrency.py       BuildTrackedCall, RequireProcessSafe, SyncPolicy,
-                              PoolLifetime, ThreadBudget
+    test_concurrency.py       BuildTrackedCall, SyncPolicy, PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
                               NormalizeInternals, ParsePort, RawWorkflowFields,
                               PipelineDefinitionFields, WriteOperation, NormalizeTarget,
                               ResolveFormat, ValidateTargetMode, BuildWrite
-    test_execution.py         SyncExecution, ResourceAcquisition, ResourceView,
-                              ResultEnvelopes, NodeProvenance, BuildEnvelopeStream
+    test_execution.py         SyncExecution, ResultEnvelopes, NodeProvenance,
+                              BuildEnvelopeStream
     test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, StreamAdapters,
                               PreparedCall, PreparedNode
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
-                              AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
-                              AsyncMap, AutoClose, RequireCloser, AsyncMapStream,
-                              AsyncMerge, GatherResults, AsyncRunner, CapabilityFlags,
-                              ConverterPath, Csv, Jsonl, Framed, SessionLifecycle,
-                              WriteExecution, Sink
+                              AsyncUrlOpen, Reencode, ExportConverters, ChunkContent,
+                              CapabilityFlags, ConverterPath, Csv, WriteJsonl,
+                              WriteFramed, SessionLifecycle, WriteExecution, WriteSink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, OperatorInputClose,
                               SyncPipeAsyncInput, ReturnInference, ModuleMetadata,
@@ -47,7 +44,10 @@ Index (file, then the subjects it owns, in file order):
                               ResolverDispatcher, RequireInterface, RegistryEntryPoints,
                               WorkflowResolver, PackageStore, DirectoryStore,
                               CompositeStore, ResolvedWorkflow, TargetRegistry
-    test_suite_layout.py      GenerateTierIndex, LayoutLint, Timeouts, DoctestSkips
+    test_resources.py         ResourceAcquisition, ResourceView
+    test_stream_helpers.py    AsyncMap, AutoClose, RequireCloser, AsyncMapStream,
+                              AsyncMerge, GatherResults, AsyncRunner
+    test_suite_layout.py      GenerateTierIndex, TestsLint, Timeouts, DoctestSkips
     test_tee.py               Tee
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, IdentityAccumulator, Metadata,
