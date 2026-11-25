@@ -817,18 +817,6 @@ class TestPlanRun:
         assert run_plan(flow, dispatcher=dispatcher) == _SOURCE_ROWS * 2
         assert source.pulled == tuple(_SOURCE_ROWS)
 
-    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
-    @pytest.mark.parametrize("native", SPLITTERS)
-    def test_run_rejects_a_splitter_yielding_other_than_its_declared_branches(
-        self, native: bool, count: int, match: str, pulled: int
-    ) -> None:
-        dispatcher, branches = _counted_branch_dispatcher(count, native=native)
-
-        with pytest.raises(InvalidPipelineError, match=match):
-            run_plan(_SPLIT_FLOW, dispatcher=dispatcher)
-
-        assert len(branches.pulled) == pulled
-
     @pytest.mark.parametrize("native", SPLITTERS)
     def test_run_reads_one_split_branch_without_buffering_its_sibling(
         self, native: bool, monkeypatch: pytest.MonkeyPatch
@@ -1112,6 +1100,18 @@ class TestPlanRun:
         with SyncExecution(context) as execution:
             assert list(execution.run(plan)) == [{"q": "y"}]
 
+    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
+    @pytest.mark.parametrize("native", SPLITTERS)
+    def test_run_rejects_a_splitter_yielding_other_than_its_declared_branches(
+        self, native: bool, count: int, match: str, pulled: int
+    ) -> None:
+        dispatcher, branches = _counted_branch_dispatcher(count, native=native)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            run_plan(_SPLIT_FLOW, dispatcher=dispatcher)
+
+        assert len(branches.pulled) == pulled
+
     @pytest.mark.parametrize("pipe", LIST_RETURNS)
     def test_run_rejects_a_pipe_that_returns_a_list(self, pipe) -> None:
         resolver = build_dispatcher(build_sync_definition(pipe))
@@ -1391,19 +1391,6 @@ class TestAsyncPlanRun:
         assert await arun_plan(flow, dispatcher=dispatcher) == [{"t": "a"}]
         assert seen == [{"t": "side"}]
 
-    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
-    @pytest.mark.parametrize("native", SPLITTERS)
-    @async_test
-    async def test_arun_rejects_a_splitter_yielding_other_than_its_declared_branches(
-        self, native: bool, count: int, match: str, pulled: int
-    ) -> None:
-        dispatcher, branches = _counted_branch_dispatcher(count, native=native)
-
-        with pytest.raises(InvalidPipelineError, match=match):
-            await arun_plan(_SPLIT_FLOW, dispatcher=dispatcher)
-
-        assert len(branches.pulled) == pulled
-
     @pytest.mark.parametrize("native", SPLITTERS)
     @async_test
     async def test_arun_reads_one_split_branch_without_buffering_its_sibling(
@@ -1588,6 +1575,19 @@ class TestAsyncPlanRun:
         ]
         assert threads
         assert loop_thread not in threads
+
+    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
+    @pytest.mark.parametrize("native", SPLITTERS)
+    @async_test
+    async def test_arun_rejects_a_splitter_yielding_other_than_its_declared_branches(
+        self, native: bool, count: int, match: str, pulled: int
+    ) -> None:
+        dispatcher, branches = _counted_branch_dispatcher(count, native=native)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            await arun_plan(_SPLIT_FLOW, dispatcher=dispatcher)
+
+        assert len(branches.pulled) == pulled
 
     @pytest.mark.parametrize("pipe", ASYNC_LIST_RETURNS)
     @async_test

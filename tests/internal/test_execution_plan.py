@@ -446,17 +446,6 @@ class TestExecutionPlan:
 
         assert plan.require_seed_target("default") == "n"
 
-    def test_inputs_are_set_only_through_with_inputs_once(self):
-        flow = Workflow(input_schemas=_Q_SCHEMAS).with_nodes(Q_NODE)
-        plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        planned = plan.with_inputs({"q": 5})
-
-        with pytest.raises(TypeError, match="inputs"):
-            evolve(plan, inputs={"q": 5})
-
-        with pytest.raises(InvalidPipelineError, match="already built"):
-            planned.with_inputs({"q": 6})
-
     def test_a_run_compiles_each_input_schema_once(self, monkeypatch) -> None:
         compiled = []
         fjs_compile = inputs_module.fjs_compile
@@ -621,6 +610,17 @@ class TestExecutionPlan:
 
         with pytest.raises(InvalidPipelineError, match="no output port 'out:2'"):
             plan.with_inputs({"n": 2})
+
+    def test_inputs_are_set_only_through_with_inputs_once(self):
+        flow = Workflow(input_schemas=_Q_SCHEMAS).with_nodes(Q_NODE)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+        planned = plan.with_inputs({"q": 5})
+
+        with pytest.raises(TypeError, match="inputs"):
+            evolve(plan, inputs={"q": 5})
+
+        with pytest.raises(InvalidPipelineError, match="already built"):
+            planned.with_inputs({"q": 6})
 
     @pytest.mark.parametrize(("flow", "match"), BUILD_REJECTIONS)
     def test_build_rejects_an_invalid_graph(self, flow, match) -> None:

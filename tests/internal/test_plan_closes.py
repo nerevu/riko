@@ -691,21 +691,6 @@ class TestPlanClose:
 
         assert closed == ["closed"]
 
-    def test_run_rejects_an_item_result_whose_close_must_be_awaited(self) -> None:
-        closed: list[str] = []
-        make = partial(AwaitableCloseIterator, closed)
-        src = _tag_loopable_source(lambda _items=None, **_: make())
-        dispatcher = build_dispatcher(build_sync_definition(src))
-        plan = build_module_plan(dispatcher)
-
-        with (
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
-        ):
-            list(execution.run(plan))
-
-        assert closed == []
-
     @skipif_sync
     def test_run_closes_an_unfinished_async_only_item_on_the_portal(self) -> None:
         closed: list[str] = []
@@ -863,6 +848,21 @@ class TestPlanClose:
             assert events == ["src-close"]
 
         assert events == ["src-close"]
+
+    def test_run_rejects_an_item_result_whose_close_must_be_awaited(self) -> None:
+        closed: list[str] = []
+        make = partial(AwaitableCloseIterator, closed)
+        src = _tag_loopable_source(lambda _items=None, **_: make())
+        dispatcher = build_dispatcher(build_sync_definition(src))
+        plan = build_module_plan(dispatcher)
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
+        ):
+            list(execution.run(plan))
+
+        assert closed == []
 
     @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
     def test_run_rejects_a_value_whose_only_close_is_async(self, build, make) -> None:
