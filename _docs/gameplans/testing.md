@@ -74,7 +74,7 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    `.pipe()`. Discovery tests should own **discovery**, not generic enum acceptance.
 
 4. **`internal/test_modules.py` has an exact behavioral duplicate.**
-   `test_loop_count_all_flattens_embedded_results` and
+   `test_loop_fold[emit-all]` and
    `test_loop_level_field_selects_child_input` invoke the same
    `_tokenizer_loop(... count="all", emit=True)` and expect the same output. The latter
    does not isolate the `field` behavior its name claims — give the parent both `title`
@@ -162,7 +162,7 @@ Enforcement:
 - `manage lint --tests` (in `--all`, `riko/cli/_lint_tests.py`) fails on a stale
   generated tier index (`manage codegen --tests` regenerates it), a subject owned by two
   files, a top-level `test_*` function, a private name imported in `public/`, a
-  history-named file (`test_regressions`), a helper module inside a tier, or a stray
+  history-named file (`test_regressions.py`), a helper module inside a tier, or a stray
   folder; it prints size advice without failing. It also fails on a test bound off the
   ladder in `tests/__init__.py` (a `timeout` marker, a `fail_after`/`move_on_after`
   bound, a `wait`/`join`/`result` timeout, and the `timeout`/ `faulthandler_timeout`
@@ -191,9 +191,11 @@ Enforcement:
   tracked `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or
   `docs/*.rst` that names no current file; a line saying the file was deleted, retired,
   removed, dropped, merged, or superseded records history and is exempt. Its
-  `path::Class[::test]` and `Class::test` citations must also name a current test class
-  or test. `.claude/skills/tidy/move_tests.py` repoints both forms when it moves or
-  renames a test; keep each citation on one line.
+  `path::Class[::test]` and `Class::test` citations, and bare `test_*` names (a
+  `[param-id]` suffix allowed), must also name a current test class, test, or test-file
+  basename. `.claude/skills/tidy/move_tests.py` repoints these forms when it moves or
+  renames a test (a bare name only when no other test keeps it); keep each citation on
+  one line.
 - The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root
   doc, `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source
   file; gameplans, `MILESTONES.md`, and `docs/*.rst` keep historical paths and are
@@ -371,7 +373,7 @@ and `TestResourceAcquisition` and `TestAsyncResourceAcquisition` in
   two stores so it proves precedence, not fallback.
 - `test_loop_level_field_selects_child_input` now isolates `field` (a parent carrying
   both `title` and `alt`, tokenizing on `alt`), so it is no longer a duplicate of
-  `test_loop_count_all_flattens_embedded_results`.
+  `test_loop_fold[emit-all]`.
 - `test_script.assert_output_matches` dropped the dead/broken `bool` branch and the
   `SequenceMatcher` `partial` path; `test_benchmark` now asserts the stable benchmark
   labels directly (each label heads a line, robust to the right-justified name padding).

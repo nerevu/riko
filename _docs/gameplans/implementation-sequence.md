@@ -1079,7 +1079,8 @@ from the same `is_splitter` `TypeIs` guard (`riko/types/_wrappers.py`) on the pi
 declared type, consuming nothing. Regressions:
 `TestResolvedModule::test_resolved_module_refuses_invalid_pipes`,
 `test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
-`test_iterating_a_split_pipeline_raises_before_running` pair. The async splitter
+`test_iterating_a_split_pipeline_raises_before_running` pair (the last two retired
+once splitter nodes ran). The async splitter
 wrapper's inability to read an async input stream is R7's (tripwire
 `test_async_splitter_accepts_an_async_input_stream`).
 
@@ -1156,8 +1157,8 @@ and value feeders (not an output's node; every outgoing edge enters a named port
 themselves; unseeded, any other placeholder-fed node raises `InvalidPipelineError`
 ("requires a seed") in `ExecutionPlan.gen_build_order`, so the internal placeholder
 never reaches output. The old
-`test_run_still_seeds_a_node_wired_only_through_a_named_value_port` became the
-named-port seed-target tests in `tests/internal/test_plan_runs.py`.
+`test_run_still_seeds_a_node_wired_only_through_a_named_value_port` was superseded by
+the named-port seed-target tests in `tests/internal/test_plan_runs.py`.
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope),
 side effects and idempotency (R6), state/checkpoints (R6), and per-item gating

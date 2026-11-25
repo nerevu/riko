@@ -310,9 +310,11 @@ sync when source is moved between package groups.
   line saying the file was deleted, retired, removed, dropped, merged, or superseded is
   exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
   The same documents' `path::Class[::test]` and `Class::test` citations must name a
-  current test class or test (`gen_stale_test_symbol_citations` over
-  `gen_test_symbols`); one whose file is missing is left to the file check, and a
-  citation must sit on one line to be checked. Likewise, a `` `name` (`riko/…py`) `` or
+  current test class or test, and a bare backticked `test_*` name (a `[param-id]`
+  suffix allowed) must be carried by a current test or test file
+  (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file is
+  missing is left to the file check, and a citation must sit on one line to be
+  checked. Likewise, a `` `name` (`riko/…py`) `` or
   `` `Class.member` (`riko/…py`) `` pair in the `riko/*.py` citation documents must name
   something that file binds at top level, imports included, or that its top-level class
   binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`). To cite a

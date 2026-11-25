@@ -273,12 +273,13 @@ step 3 rebuilt it on `riko/runtime/_codegen.py` over canonical v2, so
   to `tests/internal/test_codegen.py`; the vacuous "imports no compiler" resolver test
   became `test_resolver.py::TestResolverDispatcher::test_missing_stored_workflow_raises`
   (pins `UnsupportedModuleError` for `pipe_missing`); `test_basics.py` gained
-  `test_loop_subpipe_embed` and `test_loop_count_all_assign` pinning the exact outputs
-  of the two loop fixtures that only the codegen parity test reached;
-  `test_index_workflow_orders_and_indexes` now also asserts `GraphIndex.dependents`.
-  Docs: CHANGES "Removed" bullet names `extract_dependencies` (the v0.77.3 name) and the
-  graph-index "Changes" bullet was folded into the `Workflow` bullet as a `validate()`
-  cycle rejection; FAQ/MIGRATION/CLAUDE.md/KEY_PATHS/INTERNALS/API_SURFACE prose swept.
+  `test_whole_stream[loop-subpipe-embed]` and `test_whole_stream[loop-count-all-assign]`
+  pinning the exact outputs of the two loop fixtures that only the codegen parity test
+  reached; `test_workflow_index_orders_and_indexes` now also asserts the index's
+  `upstream` and `downstream` maps. Docs: CHANGES "Removed" bullet names
+  `extract_dependencies` (the v0.77.3 name) and the graph-index "Changes" bullet was
+  folded into the `Workflow` bullet as a `validate()` cycle rejection;
+  FAQ/MIGRATION/CLAUDE.md/KEY_PATHS/INTERNALS/API_SURFACE prose swept.
 
 ## Step 6 — `SINK_NAMES` + `Sinks`: defer to R5C, recorded now
 

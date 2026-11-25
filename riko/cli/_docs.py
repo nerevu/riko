@@ -109,8 +109,9 @@ _TEST_CITATION = re.compile(
 )
 
 _SYMBOL_CITATION = re.compile(
-    r"`(?:(?P<path>(?:tests/)?(?:public|internal|functional)/test_\w+\.py)::)?"
+    r"`(?:(?:(?P<path>(?:tests/)?(?:public|internal|functional)/test_\w+\.py)::)?"
     r"(?P<cls>Test\w+)(?:::(?P<method>test_\w+))?"
+    r"|(?P<bare>test_\w+)(?=(?:\[[^\]`]*\])?`))"
 )
 
 _HISTORY_WORDS = re.compile(
@@ -381,18 +382,21 @@ def gen_stale_test_symbol_citations(
     """
     Finds test-class and test-method citations in ``text`` that name nothing current.
 
-    A citation is ``path::Class``, ``path::Class::test``, or ``Class::test``, where
-    ``path`` is a ``tests/<tier>/test_<name>.py`` file (the ``tests/`` prefix may be
-    omitted). A citation whose file is missing is left to the test-file check, and a
-    sentence that records history (deleted, retired, removed, dropped, merged,
-    superseded) is not checked.
+    A citation is ``path::Class``, ``path::Class::test``, ``Class::test``, or a bare
+    ``test`` name (a ``[param-id]`` suffix allowed), where ``path`` is a
+    ``tests/<tier>/test_<name>.py`` file (the ``tests/`` prefix may be omitted). A bare
+    name is current when a test of that name or a test file of that basename exists. A
+    citation whose file is missing is left to the test-file check, and a sentence that
+    records history (deleted, retired, removed, dropped, merged, superseded) is not
+    checked.
 
     Args:
 
         text: The document text.
         known: The current symbols, each as ``tests/<tier>/test_x.py::Class``,
-            ``tests/<tier>/test_x.py::Class::test``, or ``Class::test``, plus the
-            current test files as plain paths.
+            ``tests/<tier>/test_x.py::Class::test``, ``Class::test``, or a bare
+            ``test`` name or test-file basename, plus the current test files as plain
+            paths.
 
     Yields:
 
@@ -401,23 +405,26 @@ def gen_stale_test_symbol_citations(
     Examples:
 
         >>> path = "tests/public/test_pipeline.py"
-        >>> known = (path, f"{path}::TestClose", "TestClose::test_twice")
+        >>> known = (path, f"{path}::TestClose", "TestClose::test_twice", "test_twice")
         >>> text = "`public/test_pipeline.py::TestClose` and `TestClose::test_once`"
         >>> list(gen_stale_test_symbol_citations(text, known))
         [(1, 'TestClose::test_once')]
         >>> text = "`public/test_pipeline.py::TestGone` was removed."
         >>> list(gen_stale_test_symbol_citations(text, known))
         []
+        >>> list(gen_stale_test_symbol_citations("`test_twice`, `test_thrice`", known))
+        [(1, 'test_thrice')]
 
     """
     _known = frozenset(known)
 
     for lineno, match in _gen_current_citations(text, _SYMBOL_CITATION):
-        cited, method = match["path"], match["method"]
+        cited, method, bare = match["path"], match["method"], match["bare"]
         path = None if cited is None else f"tests/{cited.removeprefix('tests/')}"
         symbol = match["cls"] if method is None else f"{match['cls']}::{method}"
         key = symbol if path is None else f"{path}::{symbol}"
-        checked = method is not None or path is not None
+        key = key if bare is None else bare
+        checked = method is not None or path is not None or bare is not None
         present = path is None or path in _known
 
         if checked and present and key not in _known:
@@ -434,13 +441,16 @@ def gen_test_symbols(*paths: Path) -> Iterator[str]:
 
     Yields:
 
-        Each file's path, then ``path::Class``, ``path::Class::test``, and
-        ``Class::test`` for every top-level ``Test<Subject>`` class and its tests.
+        Each file's path and basename, then ``path::Class``, ``path::Class::test``,
+        ``Class::test``, and the bare ``test`` name for every top-level
+        ``Test<Subject>`` class and its tests, and the bare name of every top-level
+        test function.
 
     """
     for path in paths:
         rel = get_posix_root(path)
         yield rel
+        yield path.stem
         tree = ast.parse(_read(path))
 
         for node in tree.body:
@@ -453,6 +463,9 @@ def gen_test_symbols(*paths: Path) -> Iterator[str]:
                     if is_func and member.name.startswith("test"):
                         yield f"{rel}::{node.name}::{member.name}"
                         yield f"{node.name}::{member.name}"
+                        yield member.name
+            elif isinstance(node, FUNCTION_NODES) and node.name.startswith("test"):
+                yield node.name
 
 
 def gen_stale_path_citations(

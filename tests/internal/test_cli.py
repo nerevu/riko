@@ -889,6 +889,13 @@ CITATION_SCANS = [
         "TestKept::test_kept",
         id="symbols",
     ),
+    pytest.param(gen_stale_test_symbol_citations, "test_{}", "test_kept", id="bare"),
+    pytest.param(
+        gen_stale_test_symbol_citations,
+        "test_{}[sync]",
+        "test_kept",
+        id="bare-param-id",
+    ),
 ]
 
 
@@ -910,6 +917,7 @@ class TestDocsCitations:
         kept: str,
     ) -> None:
         gone = template.format("gone")
+        reported = gone.partition("[")[0]
         paths = (docs_root / "a.md", docs_root / "b.md")
 
         for path in paths:
@@ -918,7 +926,7 @@ class TestDocsCitations:
 
         known = (name for name in (kept,))
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
-        assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
+        assert list(offenders) == [f"a.md:1: {reported}", f"b.md:1: {reported}"]
 
     @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
     def test_history_words_exempt_their_wrapped_sentence_only(
@@ -928,19 +936,26 @@ class TestDocsCitations:
         kept: str,
     ) -> None:
         gone = template.format("gone")
+        reported = gone.partition("[")[0]
         text = (
             f"`{gone}` and its\nneighbors were deleted. See\n`{gone}`.\n\n"
             f"- `{gone}` stays.\n- Another was removed.\n"
         )
-        assert list(scan(text, (kept,))) == [(3, gone), (5, gone)]
+        assert list(scan(text, (kept,))) == [(3, reported), (5, reported)]
 
     def test_test_symbols_cover_files_classes_and_tests(self, docs_root: Path) -> None:
         path = docs_root / "tests" / "public" / "test_alpha.py"
         path.parent.mkdir(parents=True)
         path.write_text("class TestAlpha:\n    def test_one(self): ...\n")
         rel = "tests/public/test_alpha.py"
-        expected = [rel, f"{rel}::TestAlpha", f"{rel}::TestAlpha::test_one"]
-        assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
+        expected = [
+            rel,
+            "test_alpha",
+            f"{rel}::TestAlpha",
+            f"{rel}::TestAlpha::test_one",
+        ]
+        bare = ["TestAlpha::test_one", "test_one"]
+        assert list(_docs.gen_test_symbols(path)) == [*expected, *bare]
 
     def test_source_symbol_pairs_check_both_names_with_the_class_prefix(self) -> None:
         path = "riko/x.py"
