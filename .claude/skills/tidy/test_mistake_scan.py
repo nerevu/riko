@@ -270,6 +270,34 @@ def test_unclassified_lists_fixes_no_class_cites(monkeypatch, capsys, cited, exp
 
 
 @pytest.mark.parametrize(
+    ("sha", "expected"),
+    [
+        pytest.param("eeee5555", "non-behavioral", id="non-behavioral"),
+        pytest.param("dddd4444", "probe-only: races", id="probe-only"),
+        pytest.param("aaaa1111", "explained: parity", id="explained"),
+        pytest.param("bbbb2222", "unexplained: parity", id="unexplained"),
+        pytest.param("cccc3333", "unexplained: close", id="two-classes"),
+        pytest.param("ffff6666", "uncited", id="uncited"),
+        pytest.param("aaaa11119f", "explained: parity", id="long-sha"),
+    ],
+)
+def test_status_reads_replay_status_from_the_table(monkeypatch, capsys, sha, expected):
+    history = {
+        "parity": mistake_scan.BugClass(
+            "aaaa1111 (11-01 a; note); bbbb2222 (11-02 b); cccc3333 (11-03 c; note)",
+            "",
+            "",
+        ),
+        "close": mistake_scan.BugClass("cccc3333 (11-04 d)", "", ""),
+        "races": mistake_scan.BugClass("dddd4444 (11-05 e)", "", ""),
+    }
+    monkeypatch.setattr(mistake_scan, "CLASS_HISTORY", history)
+    monkeypatch.setattr(mistake_scan, "NON_BEHAVIORAL", ("eeee5555",))
+    assert mistake_scan.main(["--status", sha]) == 0
+    assert capsys.readouterr().out == f"{sha} {expected}\n"
+
+
+@pytest.mark.parametrize(
     ("refs", "expected", "code"),
     [
         pytest.param("aaaa1111 (11-17 a)", "bbbb2222 (11-17 a)", 0, id="rewritten"),

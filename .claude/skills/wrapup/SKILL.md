@@ -76,9 +76,9 @@ current, run both as one call in the turn after the setup call.
 - Beside the launch: `git log --oneline -8`.
 - Beside the launch: the scanner's recall on this release's fixes,
   `bash .claude/skills/tidy/replay_fixes.sh $(git log --format=%h
-  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix with
-  0 leads as a scanner miss: a candidate rule, or a probe line for its class in
-  `mistake_scan.py`'s `CLASS_HISTORY`. Run
+  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix it
+  marks `unexplained` or `uncited` as a scanner miss: a candidate rule, or a `;` note
+  on its ref / a probe line for its class in `mistake_scan.py`'s `CLASS_HISTORY`. Run
   `python .claude/skills/wrapup/repoint_hashes.py` beside it: it repoints every doc
   and memory citation (the memory directory is its default `--paths`) a rebase or fold
   rewrote, then runs `mistake_scan.py --remap`, which does the same for

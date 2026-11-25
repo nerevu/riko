@@ -93,6 +93,14 @@ Inputs:
     --unclassified lists the ``[FIX]`` commits since the last tag (or ``--since REF``)
                    that no class's refs and no ``NON_BEHAVIORAL`` entry cite, one
                    ``sha subject`` per line; exits 1 when any is listed
+    --status SHA   prints each fix's replay status, one ``sha status`` line per sha
+                   (repeatable, or several after one flag): ``non-behavioral``,
+                   ``probe-only`` (cited only in classes with no rule), ``explained``
+                   (each ruled class's ref carries a ``;`` note), ``unexplained`` (a
+                   ruled class cites it with no note), or ``uncited``; ``probe-only``
+                   appends ``: class, ...`` (every citing class), ``explained`` the
+                   ruled classes, and ``unexplained`` the ruled classes whose ref needs
+                   a note
     --rewrap       rewrite this file's ``CLASS_HISTORY`` source with every string
                    re-wrapped to 88 columns (run after adding a ref; then
                    ``ruff format``)
@@ -145,15 +153,19 @@ from collections import Counter
 from functools import cache
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 type _Methods = dict[str, ast.FunctionDef | ast.AsyncFunctionDef]
+type ReplayStatus = Literal[
+    "non-behavioral", "probe-only", "explained", "unexplained", "uncited"
+]
 
 _NONE_RECORDED = "none recorded yet"
 _REF_GROUP = re.compile(r"\(\d\d-\d\d ([^()]*(?:\([^()]*\)[^()]*)*)\)")
+_CITED_GROUP = re.compile(rf"\b([0-9a-f]{{7,40}}) {_REF_GROUP.pattern}")
 _RULE_ROW = re.compile(r"^ {4}(RM\d+) (\S+) ", re.MULTILINE)
 _SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 _NOTE_TOKEN = re.compile(r"`(\w+)`|(\b\w*_\w+)|(\w+)\(\)")
@@ -318,14 +330,16 @@ CLASS_HISTORY = {
     ),
     "parity": BugClass(
         (
-            "072730e2 (09-12 async kwargs drained); ef566c5e (09-30 async and "
-            "awaitable sources); 85e25563 (10-28 async write/aggregate sources); "
-            "cb4ab17d (10-28 async_write iterables); 0cfbfc62 (10-29 lazy async "
-            "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
+            "072730e2 (09-12 async kwargs drained; source shape); ef566c5e (09-30 "
+            "async and awaitable sources; source shape); 85e25563 (10-28 async "
+            "write/aggregate sources; source shape); cb4ab17d (10-28 async_write "
+            "iterables; source shape); 0cfbfc62 (10-29 lazy async processor reads; "
+            "source shape); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
             "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
-            "async HTTP status); 6dba2fe3 (11-17 split branches in both colors); none "
-            "RM801-shaped (source shape, status handling, not keyword drift); 6ad28467 "
-            "(11-21 twin type/subtype/identity)"
+            "async HTTP status; status handling); 6dba2fe3 (11-17 split branches in "
+            "both colors; branch behavior, no keyword drift); none RM801-shaped "
+            "(source shape, status handling, not keyword drift); 6ad28467 (11-21 twin "
+            "type/subtype/identity; attributes, not keywords)"
         ),
         (
             "run each sync/async twin on the same input, an error status and a bad "
@@ -469,7 +483,8 @@ CLASS_HISTORY = {
         (
             "fb7ea681 (10-29 out-of-range settings); 597a0181 (11-03 int cast "
             "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); fcf97e1c "
-            "(11-19 cast_datetime timestamp overflow)"
+            "(11-19 cast_datetime timestamp overflow; a named callee, not "
+            "runtime-chosen)"
         ),
         (
             "set each RIKO_* variable and conf number to malformed, out-of-range, inf, "
@@ -545,7 +560,7 @@ CLASS_HISTORY = {
     "kwarg-shadow": BugClass(
         (
             "a9079f9b (11-17 call keywords; a missing `/`); 322664c6 (11-19 "
-            "prepare_call wrapper, _call_direct wrapper/items)"
+            "prepare_call wrapper, _call_direct wrapper/items; a missing `/`)"
         ),
         (
             "pass a keyword named like each bound parameter through every `**kwargs` "
@@ -1582,11 +1597,17 @@ def gen_files(args: argparse.Namespace) -> Iterator[Path]:
                 yield path
 
 
-def gen_class_table() -> Iterator[str]:
+def _get_rule_codes() -> dict[str, list[str]]:
     codes: dict[str, list[str]] = {}
 
     for code, kind in _RULE_ROW.findall(__doc__ or ""):
         codes.setdefault(kind, []).append(code)
+
+    return codes
+
+
+def gen_class_table() -> Iterator[str]:
+    codes = _get_rule_codes()
 
     for kind, entry in sorted(CLASS_HISTORY.items(), key=lambda x: (-x[1].count, x[0])):
         rules = " ".join(codes.get(kind, [])) or "probe-only"
@@ -1681,6 +1702,50 @@ def report_unclassified(since: str | None = None) -> int:
         print(line)
 
     return int(bool(lines))
+
+
+def get_replay_status(sha: str) -> tuple[ReplayStatus, list[str]]:
+    """
+    Gets a fix's replay status from ``NON_BEHAVIORAL`` and ``CLASS_HISTORY``.
+
+    Shas compare on their first 8 characters. The classes are every class citing the
+    fix for ``probe-only``, the ruled ones for ``explained``, the ruled ones whose
+    citing ref has no ``;`` note for ``unexplained``, and none otherwise.
+    """
+    short = sha[:8]
+    codes = _get_rule_codes()
+    notes = {
+        kind: [
+            ";" in group
+            for cited, group in _CITED_GROUP.findall(entry.refs)
+            if cited[:8] == short
+        ]
+        for kind, entry in CLASS_HISTORY.items()
+    }
+    cited = [kind for kind, groups in notes.items() if groups]
+    ruled = [kind for kind in cited if kind in codes]
+    bare = [kind for kind in ruled if not all(notes[kind])]
+
+    if short in {entry[:8] for entry in NON_BEHAVIORAL}:
+        status: tuple[ReplayStatus, list[str]] = ("non-behavioral", [])
+    elif bare:
+        status = ("unexplained", bare)
+    elif ruled:
+        status = ("explained", ruled)
+    elif cited:
+        status = ("probe-only", cited)
+    else:
+        status = ("uncited", [])
+
+    return status
+
+
+def report_status(shas: list[str]) -> int:
+    for sha in shas:
+        status, kinds = get_replay_status(sha)
+        print(f"{sha} {status}: {', '.join(kinds)}" if kinds else f"{sha} {status}")
+
+    return 0
 
 
 def resolve_successor(sha: str) -> str | None:
@@ -1809,6 +1874,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tests", action="store_true")
     parser.add_argument("--classes", action="store_true")
     parser.add_argument("--unclassified", action="store_true")
+    parser.add_argument("--status", action="extend", nargs="+", default=[])
     parser.add_argument("--rewrap", action="store_true")
     parser.add_argument("--remap", action="store_true")
     args = parser.parse_args(argv)
@@ -1818,6 +1884,8 @@ def main(argv: list[str] | None = None) -> int:
         result = 0
     elif args.unclassified:
         result = report_unclassified(args.since)
+    elif args.status:
+        result = report_status(args.status)
     elif args.rewrap:
         result = rewrap_class_history()
     elif args.remap:
