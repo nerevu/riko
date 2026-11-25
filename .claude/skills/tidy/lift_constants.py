@@ -16,21 +16,22 @@ blank line around it. Plain statements the lift brings together are one blank li
 apart (the block follows the header by one); two blank lines stay only where the
 source had them or where Ruff requires them, around a top-level function or class.
 
-The header is the leading run of docstring, imports, guarded ``try`` imports, and
-``if TYPE_CHECKING:`` blocks; later imports are code. A name assigned more than once
-is never moved (lifting would let the later value win everywhere); it is reported
+The header is the leading run of docstring, imports, guarded ``try`` imports,
+``if TYPE_CHECKING:`` blocks, and ``sys.path.insert(...)``/``sys.path.append(...)``
+bootstrap calls (with the imports that follow them); later imports are code. A
+constant a bootstrap call reads stays above it. A name assigned more than once is
+never moved (lifting would let the later value win everywhere); it is reported
 instead. A constant that calls a module function or class defined below it brings
 that helper up too (every overload of it, and every helper it calls), placed just
-before the first constant that needs it and after any constant the helper reads.
-A constant that reads anything else defined later in the file (a fixture, a
-lowercase module value, a name some later statement mutates in place) stays where
-it is and is reported, so it can be renamed or moved by hand. An alias of a
-same-file function or class (``LINT_COMMAND = _lint_command``) is not a constant
-and stays put. Comment lines directly above a moved statement move with it. Only
-files whose statements would change are reported and written: blank lines alone
-never count, so the tool never respaces an already-ordered file, and a top block
-that only swaps into private-first order reports as ``reordered``. A second pass
-reports nothing.
+before the first constant that needs it and after any constant the helper reads. A
+constant that reads anything else defined later in the file (a fixture, a lowercase
+module value, a name some later statement mutates in place) stays where it is and is
+reported, so it can be renamed or moved by hand. An alias of a same-file function or
+class (``LINT_COMMAND = _lint_command``) is not a constant and stays put. Comment
+lines directly above a moved statement move with it. Only files whose statements
+would change are reported and written: blank lines alone never count, so the tool
+never respaces an already-ordered file, and a top block that only swaps into
+private-first order reports as ``reordered``. A second pass reports nothing.
 """
 
 from __future__ import annotations
@@ -72,6 +73,7 @@ MUTATORS = frozenset(
 
 DEF_LINE = re.compile(r"(?:async def |def |class |@)")
 SCOPES = (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+BOOTSTRAPS = frozenset({"sys.path.insert", "sys.path.append"})
 
 
 type Helper = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
@@ -145,7 +147,16 @@ def is_header(node: ast.stmt, index: int) -> bool:
     guarded = isinstance(node, ast.Try) and any(
         isinstance(n, (ast.Import, ast.ImportFrom)) for n in node.body
     )
-    return docstring or imports or checking or guarded
+    return docstring or imports or checking or guarded or is_bootstrap(node)
+
+
+def is_bootstrap(node: ast.stmt) -> bool:
+    """Whether ``node`` is a ``sys.path.insert(...)``/``sys.path.append(...)`` call."""
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and ast.unparse(node.value.func) in BOOTSTRAPS
+    )
 
 
 def get_reads(node: ast.AST) -> set[str]:
@@ -371,6 +382,20 @@ def split_movable(body: list[ast.stmt]) -> tuple[list[ast.stmt], list[ast.stmt]]
     return top, late
 
 
+def get_pinned(top: list[ast.stmt], header: list[ast.stmt]) -> list[ast.stmt]:
+    """Gets the top constants a bootstrap call reads, directly or through each other."""
+    reads = set(chain.from_iterable(get_reads(n) for n in header if is_bootstrap(n)))
+    pinned: list[ast.stmt] = []
+    fresh = [n for n in top if set(get_targets(n)) & reads]
+
+    while fresh:
+        pinned.extend(fresh)
+        reads = set(chain.from_iterable(map(get_import_reads, fresh)))
+        fresh = [n for n in top if n not in pinned and set(get_targets(n)) & reads]
+
+    return pinned
+
+
 def get_helper_closure(
     pending: list[str], functions: dict[str, list[Helper]]
 ) -> list[str]:
@@ -459,7 +484,8 @@ def lift(path: Path, dry: bool) -> list[str]:
             moved.append(node)
             available |= set(get_targets(node))
 
-    current = [*top, *moved]
+    pinned = get_pinned(top, header)
+    current = [*(n for n in top if n not in pinned), *moved]
     new = build_text(text, header, helpers, current) if current else text
 
     if squash(new) != squash(text):
