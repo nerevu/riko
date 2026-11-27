@@ -33,11 +33,11 @@ index and committed with ``git commit-tree`` (no hooks; the gates already ran). 
    ``manage lint --verify-types``, and full-project pyright with ``import riko``
    resolved to the copy rather than the venv's editable install (bisect-safe
    commits). ``--tests`` then runs ``manage test --ratchet`` on each step, one at a
-   time, since the suite must run alone. A step that touches ``.claude/skills/``
-   also runs the skill scripts' smoke tests (``pytest .claude/skills``). A failing
-   check writes its whole output to ``NN.<label>.log`` in ``--out``, and the summary
-   quotes its first error-looking lines (a lint's last lines are often a success
-   line from another check).
+   time, since the suite must run alone, and skips every suite after the first that
+   fails. A step that touches ``.claude/skills/`` also runs the skill scripts' smoke
+   tests (``pytest .claude/skills``). A failing check writes its whole output to
+   ``NN.<label>.log`` in ``--out``, and the summary quotes its first error-looking
+   lines (a lint's last lines are often a success line from another check).
 3. **Autosquash**: when there are fixups, a throwaway worktree replays
    ``rebase -i --autosquash`` from the oldest target, counting the targets of the
    branch's pending ``fixup!`` commits too (an older one left unmoved would collide
@@ -135,6 +135,7 @@ TAR = shutil.which("tar") or "tar"
 PBCOPY = shutil.which("pbcopy")
 EDIT_TODO = "--edit-todo"
 FOLD_ENV = "REHEARSE_PLAN_FOLDS"
+SUITE_SKIPPED = "tests: skipped, an earlier suite failed"
 RESOLVE_MODES = ("ours", "theirs", "max")
 DIFF3_RE = re.compile(
     r"^<<<<<<< .*?\n(.*?)^\|\|\|\|\|\|\| .*?\n.*?^=======\n(.*?)^>>>>>>> .*?\n",
@@ -340,6 +341,19 @@ def run_suite(root: Path, log: Path | None = None) -> str:
     """Runs the full suite with the coverage ratchet on one extracted tree."""
     suite = (sys.executable, *MANAGE, "test", "--ratchet", "--quiet")
     return run_checks(root, [("tests", suite)], log)
+
+
+@dataclass
+class SuiteRunner:
+    """Runs suites in turn and skips every one after the first that fails."""
+
+    failed: bool = False
+
+    def run(self, root: Path, log: Path | None = None) -> str:
+        """Runs the suite on ``root`` unless an earlier suite failed."""
+        result = SUITE_SKIPPED if self.failed else run_suite(root, log)
+        self.failed = self.failed or result != "ok"
+        return result
 
 
 def oldest(shas: list[str]) -> str:
@@ -910,7 +924,11 @@ def is_pushed(pairs: list[tuple[str, str]]) -> bool:
 
 
 def check_folds(
-    args: argparse.Namespace, out: Path, pairs: list[tuple[str, str]], folds: list[Fold]
+    args: argparse.Namespace,
+    out: Path,
+    pairs: list[tuple[str, str]],
+    folds: list[Fold],
+    suites: SuiteRunner,
 ) -> list[tuple[str, str]]:
     """Checks every rewritten commit whose tree changed; hints at moved test hunks."""
     tree = lambda sha: git("rev-parse", f"{sha}^{{tree}}").strip()
@@ -925,7 +943,7 @@ def check_folds(
         skills = any(path.startswith(SKILLS) for path in touched)
         log = out / f"fold-{new[:9]}"
         result = check(root, full=args.full_checks, skills=skills, log=log)
-        suite = run_suite(root, log) if args.tests else "ok"
+        suite = suites.run(root, log) if args.tests else "ok"
         hint = check_moved_tests(root, folds) if old in targets else "ok"
         tested = [
             h for f in folds for h in (f.ids or f.added) if h.startswith("tests/")
@@ -953,6 +971,7 @@ def finish_folds(
     start: str,
     folds: list[Fold],
     resolve: dict[str, str],
+    suites: SuiteRunner,
 ) -> tuple[str, list[tuple[str, str]], list[str]]:
     """Squashes from ``start``, confirms the tree, checks, and prints the sha map."""
     rehearse_squash(rehearsal, start, resolve)
@@ -977,7 +996,7 @@ def finish_folds(
 
     if squash == "ok":
         pairs = map_commits(rehearsal.base, "HEAD", rehearsal.tip, rehearsal.renames)
-        folded = check_folds(args, out, pairs, folds)
+        folded = check_folds(args, out, pairs, folds, suites)
         push = " && git push --force-with-lease" if is_pushed(pairs) else ""
         steps = start != rehearsal.first
 
@@ -1032,7 +1051,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, help="output folder (default: temp)")
     parser.add_argument("-U", type=int, default=0, dest="context", help="diff context")
     parser.add_argument("--full-checks", action="store_true", help="lint + types")
-    parser.add_argument("--tests", action="store_true", help="suite per step, alone")
+    parser.add_argument(
+        "--tests",
+        action="store_true",
+        help="suite per step, alone; stops at the first failure",
+    )
     parser.add_argument("--copy", action="store_true", help="pbcopy the chain")
     parser.add_argument("--base", default="HEAD", help="commit the chain resets to")
     parser.add_argument(
@@ -1084,10 +1107,12 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=4) as pool:
         checks = list(pool.map(_check, roots, skills, logs))
 
+    runner = SuiteRunner()
+
     if args.tests:
-        suites = [run_suite(root, log) for root, log in zip(roots, logs, strict=True)]
+        tested = [runner.run(root, log) for root, log in zip(roots, logs, strict=True)]
     else:
-        suites = []
+        tested = []
 
     lead: list[str] = []
     folded: list[tuple[str, str]] = []
@@ -1096,7 +1121,9 @@ def main() -> None:
         squash = rehearse_autosquash(steps)
     else:
         start = steps[-1].commit if steps else rehearsal.first
-        squash, folded, lead = finish_folds(args, out, rehearsal, start, folds, resolve)
+        squash, folded, lead = finish_folds(
+            args, out, rehearsal, start, folds, resolve, runner
+        )
 
     rows = write_outputs(steps, out, files, lead, first if steps else None)
 
@@ -1105,7 +1132,7 @@ def main() -> None:
         (out / "chain.txt").write_text("")
 
     for n, ((header, details), result) in enumerate(zip(rows, checks, strict=True)):
-        tests = f"  tests: {suites[n]}" if suites else ""
+        tests = f"  tests: {tested[n]}" if tested else ""
         print(f"{header}  check: {result}{tests}")
         print("\n".join(details))
 
@@ -1125,7 +1152,7 @@ def main() -> None:
         subprocess.run((PBCOPY,), input=(out / "chain.txt").read_bytes(), check=True)
         print("chain copied to the clipboard")
 
-    results = (*checks, *suites, *(r for _, r in folded))
+    results = (*checks, *tested, *(r for _, r in folded))
     failed = any(c != "ok" for c in results) or not ok
     sys.exit(1 if failed else 0)
 

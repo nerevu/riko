@@ -192,6 +192,16 @@ def test_moved_test_hunk_naming_a_kept_helper_is_reported(repo):
     )
 
 
+def test_suites_after_the_first_failure_are_skipped(tmp_path, monkeypatch):
+    results = iter(["ok", "tests: 1 failed"])
+    monkeypatch.setattr(
+        rehearse_plan, "run_suite", lambda root, log=None: next(results)
+    )
+    runner = rehearse_plan.SuiteRunner()
+    ran = [runner.run(tmp_path) for _ in range(3)]
+    assert ran == ["ok", "tests: 1 failed", rehearse_plan.SUITE_SKIPPED]
+
+
 def test_fold_conflict_without_a_pick_stops(repo):
     _, commit = repo
     target = commit("v", "1\n", "-m", "target")
