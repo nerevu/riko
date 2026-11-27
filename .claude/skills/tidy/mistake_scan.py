@@ -298,13 +298,13 @@ CLASS_HISTORY = {
             "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
             "stream, splitter cascade at node start; cancellation window, failed "
-            "iter); 02aff835 (11-22 async-only hand-through); 02aff835 (11-23 native "
-            "async inputs, seed and root wrappers run-owned); 02aff835 (11-23 callable "
-            "stream wrappers own their input); uncommitted (11-25 cancelled "
-            "aauto_close aclose stops before later closers; cancellation mid-close); "
-            "uncommitted (11-25 auto_close source whose iterator is a separate object; "
-            "no close call); uncommitted (11-25 auto_close skipped an async-only close "
-            "silently); uncommitted (11-26 maybe_closing async-only)"
+            "iter); 909a7369 (11-22 async-only hand-through); 909a7369 (11-23 native "
+            "async inputs, seed and root wrappers run-owned); 909a7369 (11-23 callable "
+            "stream wrappers own their input); cc8af8f0 (11-25 cancelled aauto_close "
+            "aclose stops before later closers; cancellation mid-close); cc8af8f0 "
+            "(11-25 auto_close source whose iterator is a separate object; no close "
+            "call); cc8af8f0 (11-25 auto_close skipped an async-only close silently); "
+            "cc8af8f0 (11-26 maybe_closing async-only)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -324,8 +324,8 @@ CLASS_HISTORY = {
             "is-None fallbacks); e937e766 (10-05 port null); 0705f0cd (10-29 falsy "
             "input iterables); 7ee178c7 (10-31 regex, falsy func, rename '', DotDict "
             "''); 2bdc13e6 (11-11 skip_if presence); da63a1a3 (11-14 filter missing "
-            "fields); uncommitted (11-25 gen_assignments yielded None read as empty; "
-            "next default, not a falsy test)"
+            "fields); 75dcdbd3 (11-25 gen_assignments yielded None read as empty; next "
+            "default, not a falsy test)"
         ),
         'feed `0`, `False`, and `""` to every optional field and check each is kept',
         (
@@ -344,8 +344,8 @@ CLASS_HISTORY = {
             "async HTTP status; status handling); 6dba2fe3 (11-17 split branches in "
             "both colors; branch behavior, no keyword drift); none RM801-shaped "
             "(source shape, status handling, not keyword drift); 6ad28467 (11-21 twin "
-            "type/subtype/identity; attributes, not keywords); uncommitted (11-25 "
-            "native splitter list branches; branch type, not keywords)"
+            "type/subtype/identity; attributes, not keywords); cc8af8f0 (11-25 native "
+            "splitter list branches; branch type, not keywords)"
         ),
         (
             "run each sync/async twin on the same input, an error status and a bad "
@@ -437,7 +437,8 @@ CLASS_HISTORY = {
         (
             "cdbeda1a (10-31 port spellings); ededc9ce (11-03 regex field case); "
             "83630c28 (11-03 dotted/case rename fields); 9bbcf0ab (11-14 ModuleName "
-            "resolvers); aef2a5f4 (11-23 split phrasal-verb ban)"
+            "resolvers); 466a3477 (11-23 split phrasal-verb ban); bbdd385b (11-27 "
+            "Decimal negative zero identity)"
         ),
         (
             "try a case variant, dotted form, zero-padded index, or NewType/str twin "
@@ -453,8 +454,9 @@ CLASS_HISTORY = {
         (
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
             "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
-            "61aaa929 (11-21 failed close on a failed build); uncommitted (11-26 tee "
-            "interrupted copy left the close failure off the interrupt)"
+            "61aaa929 (11-21 failed close on a failed build); b2eceb31 (11-26 tee "
+            "interrupted copy left the close failure off the interrupt); 34a7ef31 "
+            "(11-27 failed run close left the run unfinished)"
         ),
         (
             "make a worker, task, or cleanup step die or raise, once and twice, and "
@@ -537,7 +539,10 @@ CLASS_HISTORY = {
         _NONE_RECORDED,
     ),
     "serializer-framing": BugClass(
-        "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline)",
+        (
+            "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline); 6a47419b "
+            "(11-27 export appended a second JSON document)"
+        ),
         (
             "write zero, one, and several records in each format, appending too, and "
             "check headers, separators, and terminators appear once where required"
@@ -579,7 +584,7 @@ CLASS_HISTORY = {
         ),
     ),
     "inert-knob": BugClass(
-        "aef2a5f4 (11-22 C90 selected; mccabe table configured without its rule)",
+        "466a3477 (11-22 C90 selected; mccabe table configured without its rule)",
         (
             "for each [tool.ruff.lint.<plugin>] table, confirm its rule prefix is "
             "selected; for each [tool.*] threshold, confirm the tool that reads it "
