@@ -82,7 +82,7 @@ def noop[T](value: T) -> T:
 
 
 def _composed[A, B, R](
-    outer: Callable[..., R],
+    outer: Callable[Concatenate[B, ...], R],
     inner: Callable[[A], B],
     args: tuple[object, ...],
     kwargs: dict[str, object],
@@ -100,10 +100,10 @@ def compose[A, B, R, **P](
     **kwargs: P.kwargs,
 ) -> Callable[[A], R]:
     """
-    Combines two callables into one that calls ``inner``, then ``outer``.
+    Combines two callables into one that calls ``inner``, then ``outer`` with arguments.
 
-    The composed function takes one argument and can be pickled when both callables
-    can, so a process pool can run it.
+    The composed function takes one argument and can be pickled when both callables can,
+    so a process pool can run it.
 
     Args:
 
@@ -117,8 +117,7 @@ def compose[A, B, R, **P](
 
     Returns:
 
-        A function equivalent to
-        ``lambda value: outer(inner(value), *args, **kwargs)``.
+        A function equivalent to ``lambda value: outer(inner(value), *args, **kwargs)``.
 
     Examples:
 
@@ -131,6 +130,54 @@ def compose[A, B, R, **P](
 
     """
     return partial(_composed, outer, inner, args, kwargs)
+
+
+def _composed_inner[A, B, R](
+    outer: Callable[[B], R],
+    inner: Callable[Concatenate[A, ...], B],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    value: A,
+    /,
+) -> R:
+    return outer(inner(value, *args, **kwargs))
+
+
+def compose_inner[A, B, R, **P](
+    outer: Callable[[B], R],
+    inner: Callable[Concatenate[A, P], B],
+    /,
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> Callable[[A], R]:
+    """
+    Combines two callables into one that calls ``inner`` with arguments, then ``outer``.
+
+    The composed function takes one argument and can be pickled when both callables can,
+    so a process pool can run it.
+
+    Args:
+
+        outer: Called with ``inner``'s result.
+        inner: Called with the composed function's argument, ``args``, and ``kwargs``.
+        args: Positional arguments passed to ``inner``.
+
+    Kwargs:
+
+        kwargs: Keyword arguments passed to ``inner``.
+
+    Returns:
+
+        A function equivalent to ``lambda value: outer(inner(value, *args, **kwargs))``.
+
+    Examples:
+
+        >>> from_binary = compose_inner(str, int, 2)
+        >>> from_binary("101")
+        '5'
+
+    """
+    return partial(_composed_inner, outer, inner, args, kwargs)
 
 
 def map_values[K, V, R](
@@ -149,13 +196,11 @@ def map_values[K, V, R](
 
     Kwargs:
 
-        non_null: Whether to drop the keys whose value is ``None`` instead of
-            transforming them.
+        non_null: Whether to drop the ``None`` values instead of transforming them.
 
     Returns:
 
-        A new dict with the same keys, in the same order, holding the
-        transformed values.
+        A new dict with the same keys, in the same order, holding transformed values.
 
     Examples:
 
@@ -268,8 +313,7 @@ def map_keys_and_values[K, V, RK, RV](
 
     Kwargs:
 
-        non_null: Whether to drop the keys whose value is ``None`` instead of
-            transforming them.
+        non_null: Whether to drop the ``None`` values instead of transforming them.
 
     Returns:
 
