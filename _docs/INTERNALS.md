@@ -79,10 +79,24 @@ at call sites.
   `line`, `doc`, and `section`; a heading's `plan_url` is its rendered anchor, while a
   lead-in or exit bullet, which has no anchor of its own, links to its line in the
   source view (`?plain=1#L<line>`).
-- **Forward track** — `riko/cli/_gen_forward_track.py` adapts the planning model to
-  an external page's contract, `_docs/forward-track.schema.json`, with its page copy
-  in `_docs/forward-track.toml`. Run as a module it prints the view for the current
-  commit and exits 1 when the view breaks the schema or its cross-reference checks.
+- **Forward track** — `riko/cli/_gen_forward_track.py` adapts the planning model to an
+  external page's contract, `_docs/forward-track.schema.json`, with its page copy in
+  `_docs/forward-track.toml`. Run as a module it prints the view for the current commit
+  and exits 1 when the view breaks the schema or its cross-reference checks. Work items
+  read `<ref> · <title>` (a rider takes the ref of the slice it rides and keeps its own
+  tag; an exit item reads `<phase> · ADD`) and carry the optional `planUrl` and
+  `location` (`implementation-sequence.md › R7 › R7.fan-in`). Open phases become
+  `areas`: one card per phase (its open milestones and the other-area phases it really
+  `needs`), placed by `_place` on a grid of real in-area `edges`; `areaEdges` are the
+  cross-area dependencies, transitively reduced.
+  `python -m riko.cli._gen_forward_track --html` renders the validated view through
+  `_docs/forward-track/index.html.j2` (its `style.css` and `controls.js` inlined, and no
+  document wrapper since the artifact host adds one) to `output/forward-track.html`,
+  which is never committed: overview tiles, Next up, Phases, History, Scheduled work
+  (area boxes stacked per column, cards on a CSS grid, elbow connectors drawn by the
+  script) beside Release gates, and a dialog per phase. It refuses (exit 1, no file)
+  when the view fails its checks. Claude republishes the page to the progress-view
+  artifact (<https://claude.ai/artifact/Gy1JHYcXhr1EaTdmjEzdYM>) on request.
 - **Marked blocks** — `riko/cli/_gen_blocks.py` is the shared helper behind the
   verb, API-surface, and planning generators: it builds the block patterns
   (`<!-- key -->`/`<!-- /key -->` in Markdown, `.. begin key`/`.. end key` in RST),

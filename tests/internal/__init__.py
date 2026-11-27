@@ -18,7 +18,8 @@ Index (file, then the subjects it owns, in file order):
                               ConfigCodegen, GenerateUserAgents, WorkflowFixtures,
                               WorkflowProbes, ImportSurface, GenerateVerbTables,
                               GenerateApiSurface, PlanningData, GenSections, PlanFile,
-                              GeneratePlanningBlocks, BuildExport, BuildForwardTrack
+                              GeneratePlanningBlocks, BuildExport, BuildForwardTrack,
+                              BuildForwardTrackPage
     test_concurrency.py       BuildTrackedCall, SyncPolicy, PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
                               NormalizeInternals, ParsePort, RawWorkflowFields,

@@ -1,0 +1,81 @@
+{% set phase_labels = {'landed': ('✓', 'Landed'), 'next_up': ('◉', 'Next up'), 'pending': ('○', 'Pending')} %}
+{% set work_labels = {'complete': ('✓', 'Done'), 'next_up': ('◉', 'Next up'), 'in_progress': ('◐', 'In progress'), 'planned': ('○', 'Planned'), 'deferred': ('–', 'Deferred')} %}
+{% set gate_rows = {'landed': ('done', '✓'), 'next_up': ('next', '◉'), 'pending': ('open', '○')} %}
+{% set phase = dict(phases|map(attribute='id')|zip(phases)) %}
+{% set gate = dict(milestones|map(attribute='id')|zip(milestones)) %}
+{% set all_work = phases|map(attribute='work')|sum(start=[]) %}
+{% set counted = all_work|rejectattr('status', 'equalto', 'deferred')|list %}
+{% set done = counted|selectattr('status', 'equalto', 'complete')|list %}
+{% macro prose(value) -%}
+{% for part in value.split('`') %}{% if loop.index is even %}<code>{{ part }}</code>{% else %}{{ part }}{% endif %}{% endfor %}
+{%- endmacro %}
+{% macro badge(id, extra='') -%}
+<span class="badge {{ id|lower }}{{ extra }}">{{ id }}</span>
+{%- endmacro %}
+{% macro work_row(w, body=false) -%}
+<li class="work {{ w.status }}"><span class="g" aria-hidden="true">{{ work_labels[w.status][0] }}</span><span class="w-title">{% if w.planUrl is defined %}<a href="{{ w.planUrl }}"{% if w.location is defined %} title="{{ w.location }}"{% endif %}>{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}{% if w.tag is defined %} <span class="tag">{{ w.tag }}</span>{% endif %}</span><span class="w-status">{{ work_labels[w.status][1] }}</span>{% if body %}<p>{{ prose(w.body) }}</p>{% endif %}</li>
+{%- endmacro %}
+{% macro worklist(items, body=false) -%}
+<ul class="worklist">{% for w in items %}{{ work_row(w, body) }}{% endfor %}</ul>
+{%- endmacro %}
+<title>{{ page.documentTitle }}</title><style>{{ css|safe }}</style>
+<main>
+<header class="top"><h1>{{ page.title }}</h1>
+<span class="meta">{{ snapshot.branch }} · {{ snapshot.commit[:9] }} · {{ snapshot.date }} · {{ snapshot.unreleasedVersion }} unreleased</span>
+<a class="repo" href="{{ snapshot.repository.url }}">{{ snapshot.repository.label }} ↗</a>
+<p>{{ page.subtitle }}</p></header>
+<nav class="jump" aria-label="Sections"><a href="#next-up">Next up</a><a href="#phases">Phases</a><a href="#history">History</a><a href="#scheduled">Scheduled work</a><a href="#gates">Release gates</a></nav>
+{% set landed = phases|selectattr('status', 'equalto', 'landed')|list %}
+{% set target = gate[focus.milestone] %}
+{% set prerequisites = (target.prerequisites if target.prerequisites is defined else [])|rejectattr('ref', 'in', gate)|list %}
+<section class="overview" aria-label="Progress">
+<article><small>Phases landed</small><div class="metric">{{ landed|length }} <span>/ {{ phases|length }}</span></div>
+<div class="segments">{% for p in phases %}<i class="{{ p.status }}" title="{{ p.id }}"></i>{% endfor %}</div></article>
+<article><small>Slices done</small><div class="metric">{{ done|length }} <span>/ {{ counted|length }}</span></div>
+<div class="meter"><b style="width:{{ (100 * done|length / counted|length)|round|int if counted else 0 }}%"></b></div></article>
+<article><small>Next release</small><div class="metric">{{ badge(target.id) }} {{ target.title }}</div>
+<p>{{ prerequisites|selectattr('status', 'equalto', 'landed')|list|length }} of {{ prerequisites|length }} prerequisites landed</p></article>
+</section>
+{% set current = phase[focus.phase] %}
+<section id="next-up" class="focus">
+<div class="focus-head"><small>Next up · <a href="#phase-{{ current.id }}" data-open="detail-{{ current.id }}">{{ current.id }} · {{ current.title }}</a></small>
+<h2>{{ focus.heading }}</h2><p>{{ prose(focus.summary) }}</p>
+{% if focus.decision is defined %}<aside><b>{{ focus.decision.heading }}</b><p>{{ prose(focus.decision.body) }}</p></aside>{% endif %}
+</div>
+<div class="focus-work"><h3>Ready to start</h3>{{ worklist(current.work|selectattr('status', 'equalto', 'next_up')) }}
+<details><summary>All {{ current.work|length }} {{ current.id }} {{ 'slices' if current.workKind == 'slices' else 'work items' }}</summary>{{ worklist(current.work) }}</details></div>
+</section>
+<section id="phases"><h2>Phases</h2><nav class="filters" aria-label="Filter phases">
+{%- for key, label in [('all', 'All'), ('next_up', 'Next up'), ('pending', 'Pending'), ('landed', 'Landed')] %}<button aria-pressed="{{ 'true' if loop.first else 'false' }}" data-filter="{{ key }}">{{ label }} <span>{{ phases|length if key == 'all' else phases|selectattr('status', 'equalto', key)|list|length }}</span></button>{% endfor %}</nav>
+<div class="cards">{% for p in phases %}{% set items = p.work|rejectattr('status', 'equalto', 'deferred')|list %}<button class="phase {{ p.status }}" id="phase-{{ p.id }}" data-status="{{ p.status }}" data-open="detail-{{ p.id }}" aria-haspopup="dialog"><span class="p-top"><b>{{ p.id }}</b><span class="pill {{ p.status }}">{{ phase_labels[p.status]|join(' ') }}</span></span><strong>{{ p.title }}</strong><span class="p-foot"><span>{{ p.dependency.badge }}</span>{% if items %}<span class="count">{{ items|selectattr('status', 'equalto', 'complete')|list|length }}/{{ items|length }}</span>{% endif %}</span></button>{% endfor %}</div></section>
+<section id="history"><h2>History</h2><p class="sub">{{ page.historyCaption }}</p>
+<ol class="rail"><li class="here"><time>{{ snapshot.date|when }}</time><span class="badge here-badge">You are here</span><span><b>{{ snapshot.branch }}</b> · {{ snapshot.commit[:9] }} · {{ snapshot.unreleasedVersion }} unreleased</span></li>
+{%- for e in history %}<li class="{{ 'h-release' if e.url is defined else 'h-phase' }}"><time>{{ e.when }}</time><span class="badge plain">{{ e.badge }}</span><span>{% if e.url is defined %}<a href="{{ e.url }}">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}</span></li>{% endfor %}</ol></section>
+<div class="plan-row">
+<section id="scheduled"><h2>Scheduled work</h2><p class="sub">Open work, grouped into areas.</p>
+<div class="areas" data-edges="{% for e in areaEdges %}area-{{ e.upstream }}>area-{{ e.downstream }}{{ ' ' if not loop.last }}{% endfor %}">
+{% for column in areas|map(attribute='column')|unique|sort %}
+{% set stack = areas|selectattr('column', 'equalto', column)|sort(attribute='row') %}
+<div class="stack" style="flex:{{ stack|map(attribute='cards')|sum(start=[])|map(attribute='span')|map('last')|max + 1 }} 1 0">
+{% for a in stack %}
+{% set width = a.cards|map(attribute='span')|map('last')|max + 1 %}
+<section class="lane area" id="area-{{ a.id }}"><h3>{{ a.title }}</h3><div class="lgraph" data-edges="{% for e in a.edges %}{{ e.upstream }}>{{ e.downstream }}{{ ' ' if not loop.last }}{% endfor %}" style="grid-template-columns:repeat({{ width }}, minmax(0, 300px))">
+{%- for c in a.cards %}{% set k = c.span[1] - c.span[0] + 1 %}<div class="cell" style="grid-column:{{ c.span[0] + 1 }} / {{ c.span[1] + 2 }};grid-row:{{ c.row + 1 }}{% if c.forked %};margin-top:18px{% endif %}{% if k > 1 %};justify-self:center;width:calc((100% - {{ (k - 1) * 12 }}px) / {{ k }}){% endif %}"><article class="card {{ c.status }}" id="{{ c.id }}" data-open="detail-{{ c.ref }}" tabindex="0" role="button" aria-haspopup="dialog"><div class="card-top"><h4>{{ c.ref }}</h4>{% if c.needs %}<span class="needs">Depends on {{ c.needs|join(', ') }}</span>{% endif %}{% if c.milestones %}<span class="badges">{% for m in c.milestones %}{{ badge(m) }}{% endfor %}</span>{% endif %}</div><div>{{ c.title }}</div></article></div>{% endfor %}<svg class="wires" aria-hidden="true"></svg></div></section>
+{% endfor %}
+</div>
+{% endfor %}
+<svg class="wires" aria-hidden="true"></svg></div></section>
+<section id="gates"><h2>Release gates</h2><p class="sub">What each release waits on.</p>
+<div class="gates"><section class="lane"><h3>Release sequence</h3>
+{%- for m in milestones %}{% set rows = (m.prerequisites if m.prerequisites is defined else [])|rejectattr('ref', 'in', gate)|list %}{% set left = rows|rejectattr('status', 'equalto', 'landed')|list|length %}{% if not loop.first %}<div class="children"><div class="child">{% endif %}<article class="gate" id="gate-{{ m.id|lower }}" data-open="detail-{{ m.id }}" tabindex="0" role="button" aria-haspopup="dialog"><header>{{ badge(m.id) }}<h3>{{ m.title }}</h3><span class="state">{{ left ~ ' left' if left else 'Ready' }}</span></header><ul>{% for r in rows %}{% set row = gate_rows[r.status] %}<li class="{{ row[0] }}"><span class="g">{{ row[1] }}</span>{% if r.card is defined and r.status != 'landed' %}<a href="#{{ r.card }}"><b>{{ r.ref }}</b> {{ r.title }}</a>{% else %}<span><b>{{ r.ref }}</b> {{ r.title }}</span>{% endif %}</li>{% endfor %}</ul></article>{% if not loop.first %}</div></div>{% endif %}{% endfor %}</section></div>
+<p class="outlook">{{ prose(page.outlook) }}</p></section>
+</div>
+<footer>Generated from {% for l in snapshot.sources %}<a href="{{ l.url }}">{{ l.label }}</a>{{ ' · ' if not loop.last }}{% endfor %}.</footer>
+</main>
+{% for p in phases %}
+<dialog id="detail-{{ p.id }}" aria-labelledby="title-{{ p.id }}"><form method="dialog"><button class="close" aria-label="Close">×</button></form><small>{{ p.id }} · {{ phase_labels[p.status]|join(' ') }}</small><h2 id="title-{{ p.id }}">{{ p.title }}</h2><p>{{ prose(p.purpose) }}</p><p class="dep"><b>{{ p.dependency.badge }}</b> · {{ prose(p.dependency.detail) }}</p><h3>{{ 'Slices' if p.workKind == 'slices' else 'Exit work' }}</h3>{{ worklist(p.work, body=true) }}<a class="plan" href="{{ p.planUrl }}">Read the plan ↗</a></dialog>
+{% endfor %}
+{% for m in milestones %}
+<dialog id="detail-{{ m.id }}" aria-labelledby="title-{{ m.id }}"><form method="dialog"><button class="close" aria-label="Close">×</button></form><small>{{ m.id }}{% if m.date is defined %} · Landed <time>{{ m.date }}</time>{% endif %}</small><h2 id="title-{{ m.id }}">{{ m.title }}</h2><p>{{ prose(m.summary) }}</p><h3>Prerequisites</h3><ul class="prereqs">{% for r in (m.prerequisites if m.prerequisites is defined else []) %}{% set row = gate_rows[r.status] %}<li class="{{ row[0] }}"><span class="g">{{ row[1] }}</span>{% if r.card is defined and r.status != 'landed' %}<a href="#{{ r.card }}"><b>{{ r.ref }}</b> {{ r.title }}</a>{% else %}<span><b>{{ r.ref }}</b> {{ r.title }}</span>{% endif %}{% if r.detail %}<p>{{ prose(r.detail) }}</p>{% endif %}</li>{% endfor %}</ul><a class="plan" href="{{ m.planUrl }}">Read the plan ↗</a></dialog>
+{% endfor %}
+<script>{{ js|safe }}</script>

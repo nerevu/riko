@@ -1,13 +1,8 @@
 # Page copy for the forward-track view of the planning data. View text only: the
 # planning facts live in the plan TOML files.
 
-brand = "riko"
 documentTitle = "riko Forward Track"
-sectionLabel = "Roadmap"
 title = "Forward Track"
 subtitle = "Phases, slices, and releases generated from the planning data."
 historyCaption = "Releases and landed phases"
-
-[outlook]
-heading = "Outlook"
-body = "Dates for future milestones are not set; order comes from dependencies."
+outlook = "Dates for future milestones are not set; order comes from dependencies."

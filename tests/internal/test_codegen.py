@@ -18,6 +18,7 @@ import pytest
 
 import riko
 import riko.bado
+import riko.cli._gen_forward_track
 import riko.definitions._workflow_definition
 import riko.exceptions
 import riko.ext
@@ -70,6 +71,7 @@ from riko.cli._gen_config import objconf_structure, render
 from riko.cli._gen_forward_track import (
     Release,
     build_forward_track,
+    build_forward_track_page,
     gen_forward_track_problems,
     load_validator,
 )
@@ -217,12 +219,30 @@ _TRACK_PHASES = {
         "slices": [
             {"id": "a"},
             {"id": "b"},
+            {"id": "c", "deferred": True},
             *({**item, "lands_with": ["R91.b"]} for item in _EXITS),
         ],
     },
-    "R92": {"area": "edge", "blocked_by": ["R90"], "slices": _EXITS},
-    "R93": {"area": "edge", "scheduled_after": ["R92", "R94"], "slices": _EXITS},
-    "R94": {"area": "edge", "slices": [{"id": "add", "designing": _DAY1}, *_EXITS[1:]]},
+    "R92": {
+        "area": "edge",
+        "blocked_by": ["R90"],
+        "decisions": [{"id": "s", "settled": _DAY1}],
+        "slices": _EXITS,
+    },
+    "R93": {
+        "area": "edge",
+        "blocked_by": ["R91.b"],
+        "scheduled_after": ["R92", "R94"],
+        "slices": _EXITS,
+    },
+    "R94": {
+        "area": "edge",
+        "scheduled_after": ["R91"],
+        "slices": [{"id": "add", "designing": _DAY1}, *_EXITS[1:]],
+    },
+    "R95": {"area": "tail", "blocked_by": ["R91", "R92"], "slices": _EXITS},
+    "R96": {"area": "tail", "blocked_by": ["R95", "R91.q"], "slices": _EXITS},
+    "R97": {"area": "tail", "blocked_by": ["R95", "R92.s"], "slices": _EXITS},
 }
 _TRACK_PLANS = {
     "plan": {
@@ -232,7 +252,11 @@ _TRACK_PLANS = {
         "milestones": {
             "M90": {"doc": "plan.md", "blocked_by": ["R91.a"]},
             "M91": {"doc": "plan.md", "blocked_by": ["M90", "R91.b", "R92"]},
-            "M93": {"doc": "plan.md", "blocked_by": ["R93"], "proposed": True},
+            "M93": {
+                "doc": "plan.md",
+                "blocked_by": ["R93", "R96", "R97"],
+                "proposed": True,
+            },
         },
     },
     "stream": {"slices": [{"id": "S90", "lands_with": ["R91.a"]}]},
@@ -257,6 +281,8 @@ _TRACK_TEXT = """## Areas
 
 **R91.b: Second slice.** Prose.
 
+**R91.c: Parked slice.** Prose.
+
 **R91.q: Split question.** Why split.
 
 ### R92: Side
@@ -271,24 +297,33 @@ _TRACK_TEXT = """## Areas
 
 ### M91: Final release
 
+**R92: needs the side.** Detail.
+
 ### M93: Preview
 
 **Goal:** Maybe ship.
+
+### R95: Fork
+
+### R96: Left
+
+### R97: Right
 """
 _TRACK_DOCS = {"plan.md": _TRACK_TEXT, "stream.md": "**S90: Riding slice.** Prose.\n"}
 _TRACK_PAGE = {
-    "brand": "brand",
     "documentTitle": "document",
-    "sectionLabel": "section",
     "title": "title",
     "subtitle": "subtitle",
     "historyCaption": "caption",
-    "outlook": {"heading": "heading", "body": "body"},
+    "outlook": "outlook",
 }
 _TRACK_SNAPSHOT = Snapshot(
     "main", "abc1234", _TODAY, "https://example.com/org/repo", "v9.9.9"
 )
-_TRACK_RELEASES = [Release("v9.0.0", _DAY2, "Release")]
+_TRACK_RELEASES = [
+    Release("v8.0.0", _DAY1, "v8.0.0"),
+    Release("v9.0.0", _DAY2, "Release"),
+]
 
 RENAME_CONF = RenameRawConf(
     {
@@ -1669,6 +1704,9 @@ FORWARD_TRACK_FIELDS = [
     pytest.param(
         ("phases", "R93", "work", "add", "status"), "planned", id="work-planned"
     ),
+    pytest.param(
+        ("phases", "R91", "work", "c", "status"), "deferred", id="work-deferred"
+    ),
     pytest.param(("phases", "R91", "workKind"), "slices", id="work-kind-slices"),
     pytest.param(("phases", "R92", "workKind"), "implementation", id="work-kind-exits"),
     pytest.param(("phases", "R92", "work", "add", "title"), "R92 · ADD", id="exit"),
@@ -1692,7 +1730,7 @@ FORWARD_TRACK_FIELDS = [
     ),
     pytest.param(
         ("phases", "R91", "work", "ids"),
-        ["a", "stream-s90", "b"],
+        ["a", "stream-s90", "b", "c"],
         id="plan-slice-after-its-host",
     ),
     pytest.param(
@@ -1700,70 +1738,118 @@ FORWARD_TRACK_FIELDS = [
     ),
     pytest.param(
         ("phases", "R90", "dependency"),
-        {
-            "kind": "unlocks",
-            "badge": "Unlocks R91",
-            "detail": "needs the base",
-            "targets": ["R91", "R92"],
-        },
+        {"kind": "unlocks", "badge": "Unlocks R91", "detail": "needs the base"},
         id="dependency-unlocks",
     ),
     pytest.param(
         ("phases", "R94", "dependency"),
-        {
-            "kind": "scheduled_before",
-            "badge": "Before R93",
-            "detail": "Later",
-            "targets": ["R93"],
-        },
+        {"kind": "scheduled_before", "badge": "Before R93", "detail": "Later"},
         id="dependency-scheduled",
     ),
     pytest.param(
         ("phases", "R93", "dependency"),
-        {
-            "kind": "proposed",
-            "badge": "Unlocks M93",
-            "detail": "Preview",
-            "targets": ["m93"],
-        },
+        {"kind": "proposed", "badge": "Unlocks M93", "detail": "Preview"},
         id="dependency-proposed",
     ),
     pytest.param(
-        ("schedule", "stages", "m90", "lanes", 0, "steps", "ids"),
-        ["r90", "r91-a", "m90"],
-        id="split-first-leg",
+        ("areas", "core", "cards", "r91", "milestones"),
+        ["M90", "M91"],
+        id="card-milestones-from-each-leg",
     ),
     pytest.param(
-        ("schedule", "stages", "m91", "lanes", 0, "steps", "r91-b", "label"),
-        "Second slice",
-        id="split-later-leg",
+        ("areas", "edge", "cards", "r93", "needs"), ["R91"], id="card-needs-other-area"
     ),
     pytest.param(
-        ("schedule", "bridges"),
+        ("areas", "edge", "cards", "r92", "needs"), [], id="card-skips-landed-upstream"
+    ),
+    pytest.param(
+        ("areas", "tail", "cards", "r96", "needs"),
+        ["R91"],
+        id="card-needs-open-decision-phase",
+    ),
+    pytest.param(
+        ("areas", "tail", "cards", "r97", "needs"), [], id="card-skips-settled-decision"
+    ),
+    pytest.param(
+        ("areas", "edge", "cards", "r94", "needs"), [], id="chosen-order-needs-nothing"
+    ),
+    pytest.param(("areas", "edge", "edges"), [], id="chosen-order-is-no-edge"),
+    pytest.param(
+        ("areas", "tail", "edges"),
+        [
+            {"upstream": "r95", "downstream": "r96"},
+            {"upstream": "r95", "downstream": "r97"},
+        ],
+        id="edges-within-area",
+    ),
+    pytest.param(
+        ("areaEdges",),
+        [
+            {"upstream": "core", "downstream": "edge"},
+            {"upstream": "edge", "downstream": "tail"},
+        ],
+        id="area-edges-reduced",
+    ),
+    pytest.param(("areas", "tail", "row"), 2, id="area-row-longest-path"),
+    pytest.param(
+        ("areas", "tail", "cards", "r95"),
+        {
+            "id": "r95",
+            "ref": "R95",
+            "title": "Fork",
+            "status": "pending",
+            "milestones": [],
+            "needs": ["R91", "R92"],
+            "row": 0,
+            "column": 0,
+            "span": [0, 1],
+            "forked": False,
+        },
+        id="card-spans-its-fork",
+    ),
+    pytest.param(("areas", "tail", "cards", "r97", "column"), 1, id="fork-side"),
+    pytest.param(("areas", "tail", "cards", "r97", "forked"), True, id="forked"),
+    pytest.param(("areas", "edge", "cards", "r93", "column"), 2, id="side-by-side"),
+    pytest.param(
+        ("milestones", "M91", "prerequisites"),
+        [
+            {"ref": "M90", "title": "First release", "status": "pending", "detail": ""},
+            {
+                "ref": "R91.b",
+                "title": "Second slice",
+                "status": "next_up",
+                "detail": "",
+                "card": "r91",
+            },
+            {
+                "ref": "R92",
+                "title": "Side",
+                "status": "pending",
+                "detail": "Detail.",
+                "card": "r92",
+            },
+        ],
+        id="milestone-prerequisites",
+    ),
+    pytest.param(
+        ("history",),
         [
             {
-                "afterStage": "m90",
-                "inputs": [{"step": "r90", "label": "needs the base"}],
-                "output": {"step": "r92", "label": "R92"},
-            }
+                "when": "2 Jan 2026",
+                "badge": "v9.0.0",
+                "title": "Release",
+                "url": "https://example.com/org/repo/releases/tag/v9.0.0",
+            },
+            {"when": "1 Jan 2026", "badge": "R90", "title": "Base"},
+            {
+                "when": "2026",
+                "badge": "v8.0.0",
+                "title": "1 earlier release",
+                "url": "https://example.com/org/repo/releases",
+            },
         ],
-        id="bridge-across-lanes",
+        id="history-newest-first",
     ),
-    pytest.param(
-        ("schedule", "outcomes", "m93"),
-        {
-            "id": "m93",
-            "afterStep": "r93",
-            "title": "Preview",
-            "detail": "Maybe ship.",
-            "proposed": True,
-        },
-        id="proposed-outcome",
-    ),
-    pytest.param(
-        ("schedule", "outcomes", "m91", "proposed"), False, id="final-outcome"
-    ),
-    pytest.param(("history", 0, "when"), "1 Jan 2026", id="history-day"),
 ]
 
 
@@ -1813,3 +1899,126 @@ class TestBuildForwardTrack:
         assert list(problems) == [
             "next-up phases ['R91', 'R92'] are not the focus phase R91 alone"
         ]
+
+    def test_unknown_area_edge_end_is_a_problem(self):
+        edges = [{"upstream": "core", "downstream": "nowhere"}]
+        problems = gen_forward_track_problems({**_build_track(), "areaEdges": edges})
+        assert list(problems) == ["area edge names unknown area nowhere"]
+
+
+FORWARD_TRACK_PAGE_MARKUP = [
+    pytest.param(
+        '<a href="https://example.com/org/repo/blob/abc1234/'
+        f'{GAMEPLANS_DIR.relative_to(ROOT_DIR).as_posix()}/plan.md?plain=1#L17" '
+        'title="plan.md › R91 › R91.a">R91.a · First slice</a>',
+        id="work-links-its-paragraph",
+    ),
+    pytest.param('<span class="w-title">R92 · ADD</span>', id="unlinked-work"),
+    pytest.param('<span class="tag">S90</span>', id="rider-tag"),
+    pytest.param('<span class="w-status">Deferred</span>', id="deferred-label"),
+    pytest.param(
+        '<section class="lane area" id="area-core"><h3>Core work</h3>', id="area-box"
+    ),
+    pytest.param('<span class="needs">Depends on R91, R92</span>', id="needs-pill"),
+    pytest.param(
+        '<span class="badges"><span class="badge m90">M90</span>'
+        '<span class="badge m91">M91</span></span>',
+        id="milestone-badges",
+    ),
+    pytest.param('<a href="#r92"><b>R92</b> Side</a>', id="gate-row-links-card"),
+    pytest.param(
+        '<article class="gate" id="gate-m91" data-open="detail-M91"',
+        id="gate-opens-its-dialog",
+    ),
+    pytest.param(
+        '<a class="plan" href="https://example.com/org/repo/blob/abc1234/'
+        f'{GAMEPLANS_DIR.relative_to(ROOT_DIR).as_posix()}/plan.md#m91-final-release">'
+        "Read the plan ↗</a></dialog>",
+        id="milestone-dialog-links-its-plan",
+    ),
+    pytest.param(
+        '<a href="#r92"><b>R92</b> Side</a><p>Detail.</p></li>',
+        id="milestone-dialog-prerequisite-detail",
+    ),
+    pytest.param(
+        "<aside><b>Split question</b><p>Why split.</p></aside>", id="focus-decision"
+    ),
+    pytest.param(
+        '<time>1 Jun 2026</time><span class="badge here-badge">You are here</span>'
+        "<span><b>main</b> · abc1234 · v9.9.9 unreleased</span>",
+        id="you-are-here",
+    ),
+    pytest.param(
+        '<a href="https://example.com/org/repo/releases/tag/v9.0.0">Release</a>',
+        id="release-links-its-page",
+    ),
+    pytest.param("</title><style>", id="inline-style"),
+    pytest.param("<script>const SVG =", id="inline-script"),
+]
+FORWARD_TRACK_PAGE_WRAPPERS = [
+    pytest.param("<!doctype", id="doctype"),
+    pytest.param("<html", id="html"),
+    pytest.param("<head>", id="head"),
+    pytest.param("<head ", id="head-attrs"),
+    pytest.param("<body", id="body"),
+    pytest.param("<link", id="link"),
+    pytest.param("<script src", id="script-src"),
+]
+FORWARD_TRACK_PAGE_RUNS = [
+    pytest.param([], 0, True, id="writes-a-valid-view"),
+    pytest.param(["broken"], 1, False, id="refuses-a-broken-view"),
+]
+
+
+class TestBuildForwardTrackPage:
+    """The forward-track page built from the forward-track view."""
+
+    @pytest.mark.parametrize("needle", FORWARD_TRACK_PAGE_MARKUP)
+    def test_page_shows_the_view(self, needle):
+        assert needle in build_forward_track_page(_build_track())
+
+    def test_page_ids_are_unique_and_every_reference_resolves(self):
+        page = build_forward_track_page(_build_track())
+        ids = re.findall(r'\bid="([^"]+)"', page)
+        edges = re.findall(r'data-edges="([^"]*)"', page)
+        refs = {
+            *re.findall(r'data-open="([^"]+)"', page),
+            *re.findall(r'href="#([^"]+)"', page),
+            *(
+                end
+                for spec in edges
+                for pair in spec.split()
+                for end in pair.split(">")
+            ),
+        }
+        assert (len(ids), refs - set(ids)) == (len(set(ids)), set())
+
+    @pytest.mark.parametrize("needle", FORWARD_TRACK_PAGE_WRAPPERS)
+    def test_page_leaves_the_wrapper_to_its_host(self, needle):
+        assert needle not in build_forward_track_page(_build_track()).lower()
+
+    def test_text_is_escaped_and_code_spans_render(self):
+        track = _build_track()
+        found = track["phases"]
+        assert isinstance(found, list)
+        work = {"title": "<b>bold</b>", "body": "Uses `x`."}
+        phases = [
+            {**phase, "work": [{**phase["work"][0], **work}, *phase["work"][1:]]}
+            if phase["id"] == "R91"
+            else phase
+            for phase in found
+        ]
+        page = build_forward_track_page({**track, "phases": phases})
+        assert "&lt;b&gt;bold&lt;/b&gt;" in page
+        assert "Uses <code>x</code>." in page
+
+    @pytest.mark.parametrize(("problems", "status", "written"), FORWARD_TRACK_PAGE_RUNS)
+    def test_main_writes_only_a_valid_view(
+        self, problems, status, written, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        module = riko.cli._gen_forward_track
+        path = tmp_path / "output" / "page.html"
+        loaded = (_build_track(), problems)
+        monkeypatch.setattr(module, "HTML_PATH", path)
+        monkeypatch.setattr(module, "_load_forward_track", lambda: loaded)
+        assert (module.main(html=True), path.exists()) == (status, written)

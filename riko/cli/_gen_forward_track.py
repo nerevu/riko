@@ -1,13 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-Generates the forward-track view of the planning data as JSON.
+Generates the forward-track view of the planning data as JSON or as one HTML page.
 
 The forward track is one reviewer-facing view of the planning model: the planning
-phases on the main track, the accepted milestones, the release history, and a staged
-schedule of lanes and steps. It keeps only what its page contract can hold, so other
-tracks, edges to work outside that track, and the in-design state drop out. Run as a
-module to print the view for the current commit; it exits 1 when the view breaks its
-schema or one of the schema's cross-reference checks.
+phases on the main track, the accepted milestones, the release history, and the open
+planning phases as cards grouped into areas, each placed in a grid by its real
+dependencies. It keeps only what its page contract can hold, so other tracks, edges to
+work outside that track, chosen orders between cards, and the in-design state drop
+out. Run as a module to print the view for the current commit, or with ``--html`` to
+write it as a self-contained page instead; it exits 1 when the view breaks its schema
+or one of the schema's cross-reference checks, and then writes no page.
 """
 
 from __future__ import annotations
@@ -16,14 +18,18 @@ import json
 import re
 import sys
 import tomllib
+from argparse import ArgumentParser
 from collections import Counter
 from datetime import date
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
+import networkx as nx
 from fastjsonschema import JsonSchemaValueException
 from fastjsonschema import compile as fjs_compile
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from riko.base._guards import require_listlike, require_mapping
+from riko.base._iterutils import gen_non_null
 from riko.base._paths import INTERNAL_DOCS_DIR, ROOT_DIR, SEQUENCE_PATH, TRACKER_PATH
 from riko.base._require_guards import require_instance
 
@@ -31,28 +37,39 @@ from ._gen_planning import Snapshot, build_plan_url, load_snapshot, read_git
 from ._planning import Node, PlanFile, Section, load_planning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
-    from ._planning import EdgeKind, PlanningData, Slice
+    from ._planning import EdgeKind, PlanningData
 
-type _WorkStatus = Literal["planned", "next_up", "in_progress", "complete"]
+type _WorkStatus = Literal["planned", "next_up", "in_progress", "complete", "deferred"]
 type _Record = Mapping[str, object]
 type _Entry = tuple[str, str, str, str | None]
+type _Event = tuple[date, str, str, str, str | None]
 
 _PHASE = re.compile(r"R[0-9]+[A-Z]*")
 _MILESTONE = re.compile(r"M[0-9]+")
 _UNSAFE = re.compile(r"[^a-z0-9_-]+")
 _EXITS = ("add", "migrate", "delete")
-_LATER = "later"
+_PLAIN_RELEASE = re.compile(r"Version \S+ Release")
 _TAG_FORMAT = "%(refname:short)|%(creatordate:short)|%(contents:subject)"
 _WORK_STATUSES: dict[str, _WorkStatus] = {
     "complete": "complete",
     "in_progress": "in_progress",
     "in_design": "in_progress",
+    "deferred": "deferred",
+}
+_PREREQUISITE_STATUSES: dict[str, str] = {
+    "complete": "landed",
+    "settled": "landed",
+    "in_progress": "next_up",
+    "in_design": "next_up",
 }
 
 SCHEMA_PATH = INTERNAL_DOCS_DIR / "forward-track.schema.json"
 PAGE_PATH = INTERNAL_DOCS_DIR / "forward-track.toml"
+VIEW_DIR = INTERNAL_DOCS_DIR / "forward-track"
+HTML_PATH = ROOT_DIR / "output" / "forward-track.html"
 
 
 class Release(NamedTuple):
@@ -72,14 +89,11 @@ class Release(NamedTuple):
     title: str
 
 
-class _Step(NamedTuple):
-    id: str
-    ref: str
-    label: str | None
-    stage: str
-    lane: str
-    members: tuple[str, ...]
-    position: int
+class _Placement(NamedTuple):
+    row: int
+    column: int
+    span: tuple[int, int]
+    forked: bool
 
 
 def _get_title(data: PlanningData, ref: str) -> str:
@@ -112,6 +126,50 @@ def _get_link(snapshot: Snapshot, label: str, path: str) -> dict[str, object]:
     """Gets a labelled link to a repository file at the snapshot's commit."""
     url = f"{snapshot.repository}/blob/{snapshot.commit}/{path}"
     return {"label": label, "url": url}
+
+
+def _get_when(day: date) -> str:
+    """Gets a history event's display date, such as ``3 Nov 2026``."""
+    return f"{day.day} {day:%b %Y}"
+
+
+def _gen_release_events(repository: str, *history: Release) -> Iterator[_Event]:
+    """
+    Generates the history events for the tagged releases: each date, label, and link.
+
+    The latest release and every release whose tag message says more than its version
+    get a row each, linked to its release page; the other releases share one summary
+    row dated at the last of them and linked to the release list.
+
+    Examples:
+
+        >>> from datetime import date
+        >>>
+        >>> tags = ("v1.0", "v1.1", "v2.0")
+        >>> days = (date(2024, 1, 2), date(2025, 3, 4), date(2026, 5, 6))
+        >>> pairs = zip(tags, days, strict=True)
+        >>> history = [Release(t, d, f"Version {t} Release") for t, d in pairs]
+        >>> for event in _gen_release_events("https://host/repo", *history):
+        ...     print(*event[1:])
+        2024–2025 v1.0–v1.1 2 earlier releases https://host/repo/releases
+        6 May 2026 v2.0 Version v2.0 Release https://host/repo/releases/tag/v2.0
+
+    """
+    earlier = history[:-1]
+    plain = [
+        r for r in earlier if r.title == r.tag or _PLAIN_RELEASE.fullmatch(r.title)
+    ]
+    first, last = (plain[0], plain[-1]) if plain else (None, None)
+
+    if first is not None and last is not None:
+        years = sorted({first.day.year, last.day.year})
+        count = f"{len(plain)} earlier release{'' if len(plain) == 1 else 's'}"
+        span = first.tag if first is last else f"{first.tag}–{last.tag}"
+        yield last.day, "–".join(map(str, years)), span, count, f"{repository}/releases"
+
+    for release in (*(r for r in earlier if r not in plain), *history[-1:]):
+        url = f"{repository}/releases/tag/{release.tag}"
+        yield release.day, _get_when(release.day), release.tag, release.title, url
 
 
 def _gen_work_entries(data: PlanningData, node: Node) -> Iterator[_Entry]:
@@ -147,70 +205,66 @@ def _gen_work_entries(data: PlanningData, node: Node) -> Iterator[_Entry]:
                 yield item.ref, item.id, f"{node.id} · {item.id.upper()}", None
 
 
-def _build_work(
-    data: PlanningData, snapshot: Snapshot, entries: Iterable[_Entry]
-) -> tuple[str, list[dict[str, object]]]:
+def _gen_work_items(
+    data: PlanningData, snapshot: Snapshot, *entries: _Entry
+) -> Iterator[dict[str, object]]:
     """
-    Builds a planning phase's work kind and items from its work entries.
+    Generates a planning phase's work items from its work entries.
 
     Each item takes its status from the planning data, and an item with a Markdown
     home also links to its paragraph and names where it sits.
     """
     upcoming = frozenset(data.next_slices)
-    work: list[dict[str, object]] = []
-    keys: set[str] = set()
 
     for ref, key, label, tag in entries:
+        found = _WORK_STATUSES.get(data.get_status(ref), "planned")
         section = data.sections.get(ref)
-        location: dict[str, object] = {}
 
-        if section is not None:
-            within = section.heading if section.owner is None else section.owner
-            trail = (section.doc, within, section.id)
-            location = {
+        if section is None:
+            home: dict[str, str] = {}
+        else:
+            place = section.heading if section.owner is None else section.owner
+            parts = (section.doc, place, section.id)
+            home = {
                 "planUrl": build_plan_url(snapshot, section),
-                "location": " › ".join(part for part in trail if part is not None),
+                "location": " › ".join(gen_non_null(parts)),
             }
 
-        status = _WORK_STATUSES.get(data.get_status(ref), "planned")
-        keys.add(key)
-        work.append(
-            {
-                "id": _normalize_id(key),
-                **({} if tag is None else {"tag": tag}),
-                "title": label,
-                "status": "next_up" if ref in upcoming else status,
-                "body": _get_detail(data, ref),
-                **location,
-            }
-        )
-
-    kind = "implementation" if keys.issubset(_EXITS) else "slices"
-    return kind, work
+        yield {
+            "id": _normalize_id(key),
+            **({} if tag is None else {"tag": tag}),
+            "title": label,
+            "status": "next_up" if ref in upcoming else found,
+            "body": _get_detail(data, ref),
+            **home,
+        }
 
 
 def _build_dependency(
-    data: PlanningData, node: Node, targets: Mapping[str, str]
+    data: PlanningData, node: Node, shown: AbstractSet[str]
 ) -> dict[str, object]:
     """
-    Builds what a planning phase unlocks, keeping only targets the view shows.
+    Builds what a planning phase unlocks, keeping only refs the view shows.
 
-    A target reached through a real dependency and a chosen order counts as a real
+    A ref reached through a real dependency and a chosen order counts as a real
     dependency.
     """
-    kinds: dict[str, EdgeKind] = {}
-    reasons: list[str] = []
-
-    for unlock in data.get_unlocks(node.id):
-        container = unlock.ref.partition(".")[0]
-        shown = container != node.id and container in targets
-        reason = None if unlock.reason is None else unlock.reason.title
-
-        if shown and kinds.get(container) != "blocked_by":
-            kinds[container] = unlock.kind
-
-        if shown and reason is not None and reason not in reasons:
-            reasons.append(reason)
+    unlocks = [
+        (container, unlock)
+        for unlock in data.get_unlocks(node.id)
+        if (container := unlock.ref.partition(".")[0]) != node.id and container in shown
+    ]
+    kinds: dict[str, EdgeKind] = {
+        **{container: unlock.kind for container, unlock in unlocks},
+        **{c: u.kind for c, u in unlocks if u.kind == "blocked_by"},
+    }
+    reasons = list(
+        dict.fromkeys(
+            title
+            for _, u in unlocks
+            if u.reason is not None and (title := u.reason.title) is not None
+        )
+    )
 
     ordered = sorted(kinds, key=data.order.index)
     real = [
@@ -236,187 +290,197 @@ def _build_dependency(
         "kind": kind,
         "badge": badge,
         "detail": "; ".join(reasons) if reasons else ", ".join(titles),
-        "targets": [targets[ref] for ref in ordered],
     }
 
 
-def _gen_steps(
-    data: PlanningData, phases: Sequence[Node], milestones: Sequence[Node]
-) -> Iterator[_Step]:
+def _get_container(data: PlanningData, ref: str) -> str:
+    """Gets the container a slice or decision ref belongs to, or any other ref."""
+    item = data.slices.get(ref)
+    found = data.decisions.get(ref) if item is None else item
+    return ref if found is None else found.container
+
+
+def _build_condensation(
+    graph: nx.DiGraph[str],
+) -> tuple[nx.DiGraph[int], dict[str, int]]:
+    """Builds a graph's acyclic condensation, with each node's component index."""
+    groups = [set(group) for group in nx.strongly_connected_components(graph)]
+    members = {ref: index for index, group in enumerate(groups) for ref in group}
+    return nx.condensation(graph, scc=groups), members
+
+
+def _place(graph: nx.DiGraph[str], order: Sequence[str]) -> dict[str, _Placement]:
     """
-    Generates each schedule step, unordered.
+    Places each node of a dependency graph in a grid cell, row by row in ``order``.
 
-    A planning phase whose named slices lead to different milestones appears once per
-    milestone; its last appearance also carries its exit items. A milestone sits in
-    the lane holding most of its prerequisites.
+    A node's row is the longest path to it from a root, shared around a cycle. Its
+    column is the smallest of its placed parents' columns, else the first, moved right
+    while that cell is taken. Its span runs over its own and its descendants' columns,
+    so a parent centres over its children, and it is forked when one of its parents
+    has another child.
+
+    Examples:
+
+        >>> import networkx as nx
+        >>>
+        >>> graph = nx.DiGraph([("a", "b"), ("a", "c")])
+        >>> for ref, placement in _place(graph, "abc").items():
+        ...     print(ref, *placement)
+        a 0 0 (0, 1) False
+        b 1 0 (0, 0) True
+        c 1 1 (1, 1) True
+
     """
-    positions = {ref: index for index, ref in enumerate(data.order)}
-    lanes: dict[str, str] = {}
+    condensed, members = _build_condensation(graph)
+    generations = enumerate(nx.topological_generations(condensed))
+    depths = {index: depth for depth, found in generations for index in found}
+    rows = {ref: depths[members[ref]] for ref in order}
+    columns: dict[str, int] = {}
+    taken: set[tuple[int, int]] = set()
 
-    for node in phases:
-        named = [s for s in node.slices if s.id not in _EXITS and not s.deferred]
-        groups: dict[str | None, list[Slice]] = {}
+    for ref in sorted(order, key=rows.__getitem__):
+        parents = (columns[p] for p in graph.predecessors(ref) if p in columns)
+        column = min(parents, default=0)
 
-        for item in named:
-            groups.setdefault(data.get_leg(item.ref), []).append(item)
+        while (rows[ref], column) in taken:
+            column += 1
 
-        legs = list(groups) if len(groups) > 1 else [data.get_leg(node.id)]
-        lane = node.id if node.area is None else node.area
-        claimed: set[str] = set()
+        columns[ref] = column
+        taken.add((rows[ref], column))
 
-        for index, leg in enumerate(legs):
-            group = groups[leg] if len(legs) > 1 else []
-            rest = [item for item in node.slices if item.ref not in claimed]
-            slices = rest if index == len(legs) - 1 else group
-            claimed.update(item.ref for item in group)
-            members = (*(item.ref for item in slices), node.id)
-            ranked = (*(item.ref for item in slices if item.is_chained), node.id)
-            lanes.update(dict.fromkeys(members, lane))
-            yield _Step(
-                id=_normalize_id(f"{node.id}-{group[-1].id}" if group else node.id),
-                ref=node.id,
-                label=_get_title(data, group[-1].ref) if group else None,
-                stage=_LATER if leg is None else leg.lower(),
-                lane=lane,
-                members=members,
-                position=min(positions[ref] for ref in ranked),
-            )
-
-    for node in milestones:
-        found = Counter(lanes[ref] for ref in node.blocked_by if ref in lanes)
-        yield _Step(
-            id=_normalize_id(node.id),
-            ref=node.id,
-            label=None,
-            stage=node.id.lower(),
-            lane=next(iter(found.most_common(1)), (node.id, 0))[0],
-            members=(node.id,),
-            position=positions[node.id],
+    spans = {
+        ref: [columns[other] for other in (ref, *nx.descendants(graph, ref))]
+        for ref in order
+    }
+    return {
+        ref: _Placement(
+            row=rows[ref],
+            column=columns[ref],
+            span=(min(spans[ref]), max(spans[ref])),
+            forked=any(len(graph.succ[p]) > 1 for p in graph.predecessors(ref)),
         )
+        for ref in order
+    }
 
 
-def _index_steps(steps: Sequence[_Step]) -> tuple[dict[str, _Step], dict[str, _Step]]:
-    """Gets each member ref's last step, then each member ref's first step."""
-    last: dict[str, _Step] = {}
-    first: dict[str, _Step] = {}
-
-    for step in steps:
-        last.update(dict.fromkeys(step.members, step))
-
-        for ref in step.members:
-            first.setdefault(ref, step)
-
-    return last, first
-
-
-def _build_stages(
-    data: PlanningData, steps: Sequence[_Step], stages: Sequence[str]
-) -> list[dict[str, object]]:
-    """Builds each stage that holds a step, its steps grouped into one lane per area."""
-    built: list[dict[str, object]] = []
-
-    for stage in stages:
-        lanes: dict[str, list[_Step]] = {}
-
-        for step in (step for step in steps if step.stage == stage):
-            lanes.setdefault(step.lane, []).append(step)
-
-        if lanes:
-            built.append(
-                {
-                    "id": stage,
-                    "lanes": [
-                        {
-                            "title": _get_title(data, lane),
-                            "context": _get_detail(data, lane),
-                            "steps": [
-                                {
-                                    "id": step.id,
-                                    "ref": step.ref,
-                                    **(
-                                        {}
-                                        if step.label is None
-                                        else {"label": step.label}
-                                    ),
-                                }
-                                for step in members
-                            ],
-                        }
-                        for lane, members in lanes.items()
-                    ],
-                }
-            )
-
-    return built
-
-
-def _build_bridges(
-    data: PlanningData, steps: Sequence[_Step], stages: Sequence[str]
-) -> list[dict[str, object]]:
+def _build_areas(
+    data: PlanningData, *nodes: Node, **statuses: str
+) -> tuple[nx.DiGraph[str], dict[str, dict[str, object]]]:
     """
-    Builds the real dependencies that cross lanes, one bridge per dependent step.
+    Builds the graph of areas, then each area's open planning phase cards.
 
-    Each bridge sits after the stage of its latest input.
+    A card notes the open planning phases in other areas it really depends on, and an
+    area lists the real dependencies between its own cards; a landed upstream, a done
+    upstream slice, a settled decision, a chosen order, and an edge within one planning
+    phase are left out.
+    The area graph keeps each real dependency between areas that a longer chain of
+    areas does not already imply, and none inside a cycle of areas.
     """
-    inputs, outputs = _index_steps(steps)
-    ranks = {stage: index for index, stage in enumerate(stages)}
-    grouped: dict[str, tuple[_Step, dict[str, tuple[_Step, str]]]] = {}
-
-    for edge in data.edges:
-        source = inputs.get(edge.upstream)
-        target = outputs.get(edge.downstream)
-        downstream = edge.downstream.partition(".")[0]
-        reason = data.reasons.get((downstream, edge.upstream))
-        label = (
-            edge.upstream if reason is None or reason.title is None else reason.title
-        )
-
-        if (
-            edge.kind == "blocked_by"
-            and source is not None
-            and target is not None
-            and source.lane != target.lane
-        ):
-            ends = grouped.setdefault(target.id, (target, {}))[1]
-            ends.setdefault(source.id, (source, label))
-
-    ordered = sorted(grouped.values(), key=lambda pair: pair[0].position)
-    return [
-        {
-            "afterStage": max(
-                (source.stage for source, _ in ends.values()), key=ranks.__getitem__
-            ),
-            "inputs": [
-                {"step": source.id, "label": label} for source, label in ends.values()
-            ],
-            "output": {
-                "step": target.id,
-                "label": target.ref if target.label is None else target.label,
-            },
-        }
-        for target, ends in ordered
-    ]
-
-
-def _build_outcomes(
-    data: PlanningData, steps: Sequence[_Step], nodes: Sequence[Node]
-) -> list[dict[str, object]]:
-    """Builds each milestone shown after the schedule, after its latest prerequisite."""
-    inputs, _ = _index_steps(steps)
-    found = (
-        (node, [inputs[ref] for ref in node.blocked_by if ref in inputs])
-        for node in nodes
+    owners = {n.id: n.id if n.area is None else n.area for n in nodes}
+    areas = list(dict.fromkeys(owners.values()))
+    links: nx.DiGraph[str] = nx.DiGraph()
+    links.add_nodes_from(owners)
+    links.add_edges_from(
+        (upstream, downstream)
+        for edge in data.edges
+        if edge.kind == "blocked_by"
+        and (upstream := _get_container(data, edge.upstream)) in owners
+        and (downstream := _get_container(data, edge.downstream)) in owners
+        and upstream != downstream
+        and data.get_status(edge.upstream) not in {"complete", "settled"}
     )
-    return [
-        {
-            "id": _normalize_id(node.id),
-            "afterStep": max(prior or steps[-1:], key=lambda step: step.position).id,
-            "title": _get_title(data, node.id),
-            "detail": _get_detail(data, node.id),
-            "proposed": node.proposed,
+    crossing: nx.DiGraph[str] = nx.DiGraph()
+    crossing.add_nodes_from(areas)
+    crossing.add_edges_from(
+        (owners[u], owners[v]) for u, v in links.edges if owners[u] != owners[v]
+    )
+    condensed, members = _build_condensation(crossing)
+    reduced = nx.transitive_reduction(condensed)
+    drawn: nx.DiGraph[str] = nx.DiGraph()
+    drawn.add_nodes_from(areas)
+    drawn.add_edges_from(
+        (u, v) for u, v in crossing.edges if reduced.has_edge(members[u], members[v])
+    )
+    groups = {area: [ref for ref in owners if owners[ref] == area] for area in areas}
+    cells = {
+        ref: placement
+        for refs in groups.values()
+        for ref, placement in _place(links.subgraph(refs), refs).items()
+    }
+    open_legs = {
+        n.id: {
+            data.get_leg(item.ref)
+            for item in n.slices
+            if item.id not in _EXITS
+            and not item.deferred
+            and data.get_status(item.ref) != "complete"
         }
-        for node, prior in found
-    ]
+        or {data.get_leg(n.id)}
+        for n in nodes
+    }
+    cards = {
+        ref: {
+            "id": _normalize_id(ref),
+            "ref": ref,
+            "title": _get_title(data, ref),
+            "status": statuses[ref],
+            "milestones": sorted(gen_non_null(open_legs[ref]), key=data.order.index),
+            "needs": sorted(
+                (u for u in links.predecessors(ref) if owners[u] != owners[ref]),
+                key=data.order.index,
+            ),
+            "row": cells[ref].row,
+            "column": cells[ref].column,
+            "span": list(cells[ref].span),
+            "forked": cells[ref].forked,
+        }
+        for ref in owners
+    }
+
+    return drawn, {
+        area: {
+            "id": _normalize_id(area),
+            "title": _get_title(data, area),
+            "cards": [cards[ref] for ref in refs],
+            "edges": [
+                {"upstream": _normalize_id(u), "downstream": _normalize_id(v)}
+                for u, v in links.subgraph(refs).edges
+            ],
+        }
+        for area, refs in groups.items()
+    }
+
+
+def _gen_prerequisites(
+    data: PlanningData, node: Node, **statuses: str
+) -> Iterator[dict[str, object]]:
+    """
+    Generates a milestone's prerequisites in order, each with its Markdown reason.
+
+    A prerequisite that is a planning phase the view shows takes that phase's status;
+    any other counts as next up while it is in progress, in design, or one of the next
+    slices. A prerequisite in an open planning phase names that phase's card. The
+    reason is its prose, or its title while it has none.
+    """
+    upcoming = frozenset(data.next_slices)
+
+    for ref in node.blocked_by:
+        reason = data.reasons.get((node.id, ref))
+        parts = () if reason is None else (reason.detail, reason.title)
+        detail = next((part for part in parts if part is not None and part != ""), "")
+        found = _PREREQUISITE_STATUSES.get(data.get_status(ref), "pending")
+        guessed = "next_up" if ref in upcoming and found != "landed" else found
+        shown = statuses.get(ref)
+        phase = _get_container(data, ref)
+        is_open = statuses.get(phase, "landed") != "landed"
+        card = {"card": _normalize_id(phase)} if is_open else {}
+        yield {
+            "ref": ref,
+            "title": _get_title(data, ref),
+            "status": guessed if shown is None else shown,
+            "detail": detail,
+            **card,
+        }
 
 
 def build_forward_track(
@@ -429,9 +493,8 @@ def build_forward_track(
     Builds the forward-track view of the planning data.
 
     The focus is the first next slice that belongs to a main-track planning phase,
-    with that planning phase's first open decision when it has one. The last accepted
-    milestone that no later milestone depends on closes the schedule as an outcome,
-    beside the proposed milestones.
+    with that planning phase's first open decision when it has one. Each open planning
+    phase is a card in its area's grid, and the history runs newest first.
 
     Args:
 
@@ -443,7 +506,7 @@ def build_forward_track(
     Returns:
 
         The ``snapshot``, ``page``, ``focus``, ``phases``, ``milestones``,
-        ``history``, and ``schedule`` of the view.
+        ``history``, ``areas``, and ``areaEdges`` of the view.
 
     Raises:
 
@@ -460,8 +523,8 @@ def build_forward_track(
         >>> data = PlanningData.from_documents({"plan": plan}, {})
         >>> snapshot = Snapshot("main", "abc1234", date(2026, 1, 1), "https://host/repo")
         >>> track = build_forward_track(data, snapshot, {}, [])
-        >>> track["focus"]["phase"], track["phases"][0]["status"]
-        ('R90', 'next_up')
+        >>> track["focus"]["phase"], track["areas"][0]["cards"][0]["milestones"]
+        ('R90', ['M90'])
 
     """
     nodes = [n for ref in data.order if isinstance(n := data.containers.get(ref), Node)]
@@ -471,57 +534,56 @@ def build_forward_track(
     ]
     accepted = [n for n in milestones if not n.proposed]
     finals = [n for n in accepted if data.get_leg(n.id) is None]
-    final = finals[-1] if finals else None
-    outcomes = [n for n in milestones if n.proposed or n is final]
-    targets = {
-        **{n.id: n.id for n in [*phases, *accepted]},
-        **{n.id: _normalize_id(n.id) for n in milestones if n.proposed},
-    }
-    focus = next(
-        (
-            ref
-            for ref in data.next_slices
-            if _PHASE.fullmatch(data.slices[ref].container)
-            and data.slices[ref].container in targets
-        ),
-        None,
+    shown = {n.id for n in [*phases, *milestones]}
+    candidates = (
+        ref
+        for ref in data.next_slices
+        if _PHASE.fullmatch(data.slices[ref].container)
+        and data.slices[ref].container in shown
     )
+    focus = next(candidates, None)
 
     if focus is None:
         raise ValueError("no next slice belongs to a main-track planning phase")
 
     owner = data.slices[focus].container
-    legs = (
-        data.get_leg(focus),
-        data.get_leg(owner),
-        None if final is None else final.id,
+    legs = (data.get_leg(focus), data.get_leg(owner), finals[-1].id if finals else None)
+    open_decisions = (
+        ref
+        for ref, item in data.decisions.items()
+        if item.container == owner and item.settled is None
     )
-    decision = next(
-        (
-            ref
-            for ref, item in data.decisions.items()
-            if item.container == owner and item.settled is None
-        ),
-        None,
-    )
+    decision = next(open_decisions, None)
     landed = {n.id: "landed" for n in phases if data.get_status(n.id) == "complete"}
-    steps = sorted(
-        _gen_steps(data, phases, [n for n in accepted if n is not final]),
-        key=lambda step: step.position,
-    )
-    stages = [*(n.id.lower() for n in accepted), _LATER]
-    events = sorted(
-        [
-            *((release.day, release.tag, release.title) for release in history),
-            *(
-                (landed_on, n.id, _get_title(data, n.id))
-                for n in phases
-                if (landed_on := data.get_landed(n.id)) is not None
-            ),
-        ],
-        key=lambda event: event[0],
-    )
+    current = {n.id: "next_up" for n in phases if n.id == owner}
+    statuses = {**{n.id: "pending" for n in phases}, **current, **landed}
     repository = snapshot.repository.rstrip("/")
+    releases = _gen_release_events(repository, *history)
+    landings = (
+        (landed_on, _get_when(landed_on), n.id, _get_title(data, n.id), None)
+        for n in phases
+        if (landed_on := data.get_landed(n.id)) is not None
+    )
+    ranked = sorted(
+        enumerate([*releases, *landings]),
+        key=lambda pair: (pair[1][0], pair[0]),
+        reverse=True,
+    )
+    events = [event for _, event in ranked]
+    not_landed = (n for n in phases if statuses[n.id] != "landed")
+    drawn, areas = _build_areas(data, *not_landed, **statuses)
+    boxes = _place(drawn, list(areas))
+    entries = {n.id: list(_gen_work_entries(data, n)) for n in phases}
+    exits = {
+        ref for ref, found in entries.items() if {e[1] for e in found}.issubset(_EXITS)
+    }
+
+    if decision is None:
+        open_decision: dict[str, dict[str, str]] = {}
+    else:
+        heading, body = _get_title(data, decision), _get_detail(data, decision)
+        open_decision = {"decision": {"heading": heading, "body": body}}
+
     return {
         "snapshot": {
             "branch": snapshot.branch,
@@ -540,32 +602,21 @@ def build_forward_track(
         "page": dict(page),
         "focus": {
             "phase": owner,
-            "milestone": next((leg for leg in legs if leg is not None), None),
+            "milestone": next(gen_non_null(legs), None),
             "heading": _get_title(data, focus),
             "summary": _get_detail(data, focus),
-            **(
-                {}
-                if decision is None
-                else {
-                    "decision": {
-                        "heading": _get_title(data, decision),
-                        "body": _get_detail(data, decision),
-                    }
-                }
-            ),
+            **open_decision,
         },
         "phases": [
             {
                 "id": n.id,
                 "title": _get_title(data, n.id),
                 "purpose": _get_detail(data, n.id),
-                "status": landed.get(n.id, "next_up" if n.id == owner else "pending"),
+                "status": statuses[n.id],
                 "planUrl": _get_plan_url(data, snapshot, n),
-                "dependency": _build_dependency(data, n, targets),
-                "workKind": (
-                    work := _build_work(data, snapshot, _gen_work_entries(data, n))
-                )[0],
-                "work": work[1],
+                "dependency": _build_dependency(data, n, shown),
+                "workKind": "implementation" if n.id in exits else "slices",
+                "work": list(_gen_work_items(data, snapshot, *entries[n.id])),
             }
             for n in phases
         ],
@@ -574,21 +625,29 @@ def build_forward_track(
                 "id": n.id,
                 "title": _get_title(data, n.id),
                 "summary": _get_detail(data, n.id),
-                "prerequisiteLabel": " · ".join(n.blocked_by) or "No prerequisites",
+                "prerequisites": list(_gen_prerequisites(data, n, **statuses)),
                 "planUrl": _get_plan_url(data, snapshot, n),
                 **({} if n.landed is None else {"date": n.landed.isoformat()}),
             }
             for n in accepted
         ],
         "history": [
-            {"when": f"{day.day} {day:%b %Y}", "badge": badge, "title": title}
-            for day, badge, title in events
+            {
+                "when": when,
+                "badge": badge,
+                "title": title,
+                **({} if url is None else {"url": url}),
+            }
+            for _, when, badge, title, url in events
         ],
-        "schedule": {
-            "stages": _build_stages(data, steps, stages),
-            "bridges": _build_bridges(data, steps, stages),
-            "outcomes": _build_outcomes(data, steps, outcomes),
-        },
+        "areas": [
+            {**area, "row": boxes[key].row, "column": boxes[key].column}
+            for key, area in areas.items()
+        ],
+        "areaEdges": [
+            {"upstream": _normalize_id(u), "downstream": _normalize_id(v)}
+            for u, v in drawn.edges
+        ],
     }
 
 
@@ -603,7 +662,7 @@ def _get_text(record: _Record, key: str) -> str:
     return require_instance(str, record.get(key), key, error=ValueError)
 
 
-def _gen_duplicates(kind: str, ids: Sequence[str]) -> Iterator[str]:
+def _gen_duplicates(kind: str, *ids: str) -> Iterator[str]:
     """Generates one message per id that appears more than once."""
     counts = Counter(ids)
     yield from (
@@ -632,53 +691,39 @@ def gen_forward_track_problems(doc: _Record) -> Iterator[str]:
 
     """
     phases = _get_records(doc, "phases")
+    milestones = _get_records(doc, "milestones")
     focus = require_mapping(doc.get("focus", {}), "focus", error=ValueError)
-    schedule = require_mapping(doc.get("schedule", {}), "schedule", error=ValueError)
-    stages = _get_records(schedule, "stages")
-    steps = [
-        step
-        for stage in stages
-        for lane in _get_records(stage, "lanes")
-        for step in _get_records(lane, "steps")
-    ]
+    areas = _get_records(doc, "areas")
+    cards = [card for area in areas for card in _get_records(area, "cards")]
     phase_ids = [_get_text(phase, "id") for phase in phases]
-    milestone_ids = [_get_text(item, "id") for item in _get_records(doc, "milestones")]
-    outcome_ids = [_get_text(item, "id") for item in _get_records(schedule, "outcomes")]
-    nodes = {*phase_ids, *milestone_ids}
-    stage_ids = {_get_text(stage, "id") for stage in stages}
-    step_ids = {_get_text(step, "id") for step in steps}
+    milestone_ids = [_get_text(item, "id") for item in milestones]
+    area_ids = [_get_text(area, "id") for area in areas]
+    card_ids = [_get_text(card, "id") for card in cards]
+    card_refs = {_get_text(card, "ref") for card in cards}
     next_up = [_get_text(p, "id") for p in phases if p.get("status") == "next_up"]
     focus_phase, focus_milestone = focus.get("phase"), focus.get("milestone")
-    endpoints = [
-        (_get_text(end, "step"), "bridge")
-        for bridge in _get_records(schedule, "bridges")
-        for end in [
-            *_get_records(bridge, "inputs"),
-            require_mapping(bridge.get("output"), "output", error=ValueError),
-        ]
+    needs = [
+        (_get_text(card, "ref"), need)
+        for card in cards
+        for need in require_listlike(card.get("needs", ()), "needs", error=ValueError)
     ]
-    afters = [
-        *(
-            (_get_text(o, "afterStep"), "outcome")
-            for o in _get_records(schedule, "outcomes")
-        ),
-        *endpoints,
+    named = [
+        (_get_text(item, "id"), prerequisite.get("card"))
+        for item in milestones
+        for prerequisite in _get_records(item, "prerequisites")
     ]
-    yield from _gen_duplicates("node", [*phase_ids, *milestone_ids, *outcome_ids])
-    yield from _gen_duplicates("stage", [_get_text(stage, "id") for stage in stages])
-    yield from _gen_duplicates("step", [_get_text(step, "id") for step in steps])
+    ends = [
+        _get_text(edge, key)
+        for edge in _get_records(doc, "areaEdges")
+        for key in ("upstream", "downstream")
+    ]
+    yield from _gen_duplicates("node", *phase_ids, *milestone_ids)
+    yield from _gen_duplicates("area", *area_ids)
+    yield from _gen_duplicates("card", *card_ids)
 
     for phase, phase_id in zip(phases, phase_ids, strict=True):
-        work = [_get_text(item, "id") for item in _get_records(phase, "work")]
-        yield from _gen_duplicates(f"phase {phase_id} work", work)
-        dependency = require_mapping(phase.get("dependency", {}), "dependency")
-        targets = require_listlike(dependency.get("targets", ()), "targets")
-        known = nodes.union(outcome_ids)
-        yield from (
-            f"phase {phase_id} names unknown target {target}"
-            for target in targets
-            if target not in known
-        )
+        work = (_get_text(item, "id") for item in _get_records(phase, "work"))
+        yield from _gen_duplicates(f"phase {phase_id} work", *work)
 
     if focus_phase not in phase_ids:
         yield f"focus phase {focus_phase} names no phase"
@@ -689,19 +734,17 @@ def gen_forward_track_problems(doc: _Record) -> Iterator[str]:
         yield f"focus milestone {focus_milestone} names no milestone"
 
     yield from (
-        f"step {_get_text(step, 'id')} names unknown ref {step.get('ref')}"
-        for step in steps
-        if step.get("ref") not in nodes
+        f"card {ref} needs unknown card {need}"
+        for ref, need in needs
+        if need not in card_refs
     )
     yield from (
-        f"bridge after unknown stage {stage}"
-        for bridge in _get_records(schedule, "bridges")
-        if (stage := bridge.get("afterStage")) not in stage_ids
+        f"milestone {milestone} names unknown card {card}"
+        for milestone, card in named
+        if card is not None and card not in card_ids
     )
     yield from (
-        f"{kind} names unknown step {step}"
-        for step, kind in afters
-        if step not in step_ids
+        f"area edge names unknown area {end}" for end in ends if end not in area_ids
     )
 
 
@@ -721,13 +764,54 @@ def load_validator() -> Callable[[object], object]:
     return fjs_compile(dict(schema))
 
 
-def main() -> int:
+def build_forward_track_page(doc: _Record) -> str:
     """
-    Prints the forward-track view of the planning data for the current commit.
+    Builds the forward-track page from a forward-track view.
 
-    The view is printed even when it breaks its schema or a cross-reference check;
-    the problems go to standard error and the exit status is 1.
+    The page inlines its style sheet and script and leaves out the document wrapper
+    (``<html>``, ``<head>``, and ``<body>``), which the page's host supplies.
+
+    Args:
+
+        doc: A forward-track view that passes its schema and cross-reference checks.
+
+    Returns:
+
+        The page's HTML, starting with its ``<title>``.
+
+    Examples:
+
+        >>> from datetime import date
+        >>> from riko.cli._gen_planning import Snapshot
+        >>> from riko.cli._planning import PlanningData
+        >>>
+        >>> milestones = {"M90": {"blocked_by": ["R90"]}}
+        >>> plan = {"phases": {"R90": {"area": "core"}}, "milestones": milestones}
+        >>> data = PlanningData.from_documents({"plan": plan}, {})
+        >>> snapshot = Snapshot("main", "abc1234", date(2026, 1, 1), "https://host/repo")
+        >>> keys = ("title", "subtitle", "historyCaption", "outlook")
+        >>> page = {**dict.fromkeys(keys, ""), "documentTitle": "Track"}
+        >>> track = build_forward_track(data, snapshot, page, [])
+        >>> build_forward_track_page(track).startswith("<title>Track</title>")
+        True
+
     """
+    env = Environment(
+        loader=FileSystemLoader(VIEW_DIR),
+        autoescape=True,
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    env.filters["zip"] = zip
+    env.filters["when"] = lambda text: _get_when(date.fromisoformat(text))
+    css = (VIEW_DIR / "style.css").read_text()
+    js = (VIEW_DIR / "controls.js").read_text()
+    return env.get_template("index.html.j2").render(**doc, css=css, js=js)
+
+
+def _load_forward_track() -> tuple[dict[str, object], list[str]]:
+    """Loads the forward-track view for the current commit, with its problems."""
     snapshot = load_snapshot()
     page: _Record = tomllib.loads(PAGE_PATH.read_text())
     lines = read_git(
@@ -747,13 +831,45 @@ def main() -> int:
     else:
         problems = list(gen_forward_track_problems(doc))
 
-    print(json.dumps(doc, indent=2))
+    return doc, problems
+
+
+def main(html: bool = False) -> int:
+    """
+    Prints the forward-track view of the planning data for the current commit.
+
+    The view is printed even when it breaks its schema or a cross-reference check;
+    the problems go to standard error and the exit status is 1. With ``html``, the
+    view is written as the forward-track page instead and its path printed, but only
+    when it has no problems.
+
+    Kwargs:
+
+        html: Whether to write the page rather than print the view.
+
+    Returns:
+
+        The exit status: 1 when the view has a problem, else 0.
+
+    """
+    doc, problems = _load_forward_track()
 
     for problem in problems:
         print(problem, file=sys.stderr)
+
+    if not html:
+        print(json.dumps(doc, indent=2))
+    elif not problems:
+        HTML_PATH.parent.mkdir(parents=True, exist_ok=True)
+        HTML_PATH.write_text(build_forward_track_page(doc))
+        print(HTML_PATH)
 
     return 1 if problems else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = ArgumentParser(description="Generate the forward-track view.")
+    parser.add_argument(
+        "--html", action="store_true", help="write the view as a self-contained page"
+    )
+    raise SystemExit(main(html=parser.parse_args().html))

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Riko Forward Track snapshot",
-  "description": "Content contract for the existing roadmap layout. Arrays preserve display order. The renderer supplies visual styles, status captions, controls, standard headings, and the snapshot marker; it derives counts and filters from phase status. Work-item status is independent of phase status. Strings are plain text with optional inline backticks, never executable HTML.",
-  "$comment": "Application checks: phase, milestone, and outcome IDs are unique and all dependency targets resolve to one of them. Focus references resolve; focus.phase is the sole next_up phase. Work IDs are unique within a phase. Stage IDs and step IDs are unique in their respective namespaces. Every step ref resolves to a phase or milestone. Bridge and outcome references resolve to their stage/step; input steps precede their dependent in the dependency graph. Check cycles across ordered lane steps and bridge connections. Parallel stage layout alone does not impose dependencies across lanes.",
+  "description": "Content contract for the forward-track page. Arrays preserve display order. The renderer supplies visual styles, status captions, controls, standard headings, and the snapshot marker; it derives counts and filters from phase status. Work-item status is independent of phase status. Strings are plain text with optional inline backticks, never executable HTML.",
+  "$comment": "Application checks: phase and milestone IDs are unique, as are area IDs and card IDs. Focus references resolve; focus.phase is the sole next_up phase. Work IDs are unique within a phase. Every card need names a card ref, every prerequisite card names a card ID, and every area edge names area IDs.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -11,10 +11,11 @@
     "focus": {"$ref": "#/$defs/focus"},
     "phases": {"type": "array", "items": {"$ref": "#/$defs/phase"}, "minItems": 1},
     "milestones": {"type": "array", "items": {"$ref": "#/$defs/milestone"}, "minItems": 1},
-    "history": {"type": "array", "items": {"$ref": "#/$defs/historyEvent"}, "minItems": 0},
-    "schedule": {"$ref": "#/$defs/schedule"}
+    "history": {"type": "array", "items": {"$ref": "#/$defs/historyEvent"}, "minItems": 0, "description": "Newest first."},
+    "areas": {"type": "array", "items": {"$ref": "#/$defs/area"}, "minItems": 0},
+    "areaEdges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "minItems": 0, "description": "Real dependencies between areas, transitively reduced."}
   },
-  "required": ["snapshot", "page", "focus", "phases", "milestones", "history", "schedule"],
+  "required": ["snapshot", "page", "focus", "phases", "milestones", "history", "areas", "areaEdges"],
   "$defs": {
     "link": {
       "type": "object", "additionalProperties": false,
@@ -39,22 +40,13 @@
     "page": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "brand": {"type": "string", "minLength": 1},
         "documentTitle": {"type": "string", "minLength": 1},
-        "sectionLabel": {"type": "string", "minLength": 1},
         "title": {"type": "string", "minLength": 1},
         "subtitle": {"type": "string", "minLength": 1},
         "historyCaption": {"type": "string", "minLength": 1},
-        "outlook": {
-          "type": "object", "additionalProperties": false,
-          "properties": {
-            "heading": {"type": "string", "minLength": 1},
-            "body": {"type": "string", "minLength": 1}
-          },
-          "required": ["heading", "body"]
-        }
+        "outlook": {"type": "string", "minLength": 1}
       },
-      "required": ["brand", "documentTitle", "sectionLabel", "title", "subtitle", "historyCaption", "outlook"]
+      "required": ["documentTitle", "title", "subtitle", "historyCaption", "outlook"]
     },
     "focus": {
       "type": "object", "additionalProperties": false,
@@ -80,9 +72,8 @@
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "Unique within its phase. The slice tag may repeat."},
         "tag": {"type": "string", "minLength": 1, "description": "Optional display tag, e.g. bounded-split."},
         "title": {"type": "string", "minLength": 1},
-        "status": {"enum": ["planned", "next_up", "in_progress", "complete", "phase_landed"]},
+        "status": {"enum": ["planned", "next_up", "in_progress", "complete", "deferred"]},
         "body": {"type": "string", "minLength": 1},
-        "acceptance": {"type": "string", "minLength": 1, "description": "Acceptance text; use inline backticks for exact test names and code."},
         "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://", "description": "Link to the item's paragraph at the snapshot commit."},
         "location": {"type": "string", "minLength": 1, "description": "Location trail, e.g. implementation-sequence.md › R7 › R7.fan-in."}
       },
@@ -93,10 +84,9 @@
       "properties": {
         "kind": {"enum": ["unlocks", "scheduled_before", "proposed"]},
         "badge": {"type": "string", "minLength": 1, "description": "Compact card label, e.g. Before R6."},
-        "detail": {"type": "string", "minLength": 1, "description": "Full explanation shown in the dialog."},
-        "targets": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+        "detail": {"type": "string", "minLength": 1, "description": "Full explanation shown in the dialog."}
       },
-      "required": ["kind", "badge", "detail", "targets"]
+      "required": ["kind", "badge", "detail"]
     },
     "phase": {
       "type": "object", "additionalProperties": false,
@@ -118,11 +108,22 @@
         "id": {"type": "string", "pattern": "^M[0-9]+$"},
         "title": {"type": "string", "minLength": 1},
         "summary": {"type": "string", "minLength": 1},
-        "prerequisiteLabel": {"type": "string", "minLength": 1},
         "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
-        "date": {"type": "string", "format": "date"}
+        "date": {"type": "string", "format": "date"},
+        "prerequisites": {"type": "array", "items": {"$ref": "#/$defs/prerequisite"}}
       },
-      "required": ["id", "title", "summary", "prerequisiteLabel", "planUrl"]
+      "required": ["id", "title", "summary", "planUrl"]
+    },
+    "prerequisite": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["landed", "next_up", "pending"]},
+        "detail": {"type": "string"},
+        "card": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "The open phase card the ref belongs to."}
+      },
+      "required": ["ref", "title", "status", "detail"]
     },
     "historyEvent": {
       "type": "object", "additionalProperties": false,
@@ -130,72 +131,45 @@
         "when": {"type": "string", "minLength": 1, "description": "Display precision as recorded, including ranges, relative gaps or By 14 Nov."},
         "badge": {"type": "string", "minLength": 1},
         "title": {"type": "string", "minLength": 1},
-        "summary": {"type": "string", "minLength": 1}
+        "url": {"type": "string", "format": "uri", "pattern": "^https?://", "description": "Release page, or the release list for the collapsed row."}
       },
       "required": ["when", "badge", "title"]
     },
-    "step": {
+    "edge": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "Unique across the schedule. Distinct occurrences of R11 have distinct step IDs."},
-        "ref": {"oneOf": [{"type": "string", "pattern": "^R[0-9]+[A-Z]*$"}, {"type": "string", "pattern": "^M[0-9]+$"}]},
-        "label": {"type": "string", "minLength": 1}
+        "upstream": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "downstream": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"}
       },
-      "required": ["id", "ref"]
+      "required": ["upstream", "downstream"]
     },
-    "lane": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "title": {"type": "string", "minLength": 1},
-        "context": {"type": "string", "minLength": 1},
-        "steps": {"type": "array", "items": {"$ref": "#/$defs/step"}, "minItems": 1}
-      },
-      "required": ["title", "context", "steps"]
-    },
-    "stage": {
+    "card": {
       "type": "object", "additionalProperties": false,
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
-        "lanes": {"type": "array", "items": {"$ref": "#/$defs/lane"}, "minItems": 1}
+        "ref": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["next_up", "pending"]},
+        "milestones": {"type": "array", "items": {"type": "string", "pattern": "^M[0-9]+$"}},
+        "needs": {"type": "array", "items": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"}, "description": "Open phases in other areas this card really depends on."},
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0},
+        "span": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2, "description": "First and last column of the card and its descendants."},
+        "forked": {"type": "boolean", "description": "A parent of the card has another child."}
       },
-      "required": ["id", "lanes"]
+      "required": ["id", "ref", "title", "status", "milestones", "needs", "row", "column", "span", "forked"]
     },
-    "endpoint": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "step": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
-        "label": {"type": "string", "minLength": 1}
-      },
-      "required": ["step", "label"]
-    },
-    "bridge": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "afterStage": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
-        "inputs": {"type": "array", "items": {"$ref": "#/$defs/endpoint"}, "minItems": 1},
-        "output": {"$ref": "#/$defs/endpoint"}
-      },
-      "required": ["afterStage", "inputs", "output"]
-    },
-    "outcome": {
+    "area": {
       "type": "object", "additionalProperties": false,
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
-        "afterStep": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
         "title": {"type": "string", "minLength": 1},
-        "detail": {"type": "string", "minLength": 1},
-        "proposed": {"type": "boolean"}
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0},
+        "cards": {"type": "array", "items": {"$ref": "#/$defs/card"}, "minItems": 1},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "description": "Real dependencies between this area's cards."}
       },
-      "required": ["id", "afterStep", "title", "detail", "proposed"]
-    },
-    "schedule": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "stages": {"type": "array", "items": {"$ref": "#/$defs/stage"}, "minItems": 1},
-        "bridges": {"type": "array", "items": {"$ref": "#/$defs/bridge"}, "minItems": 0},
-        "outcomes": {"type": "array", "items": {"$ref": "#/$defs/outcome"}, "minItems": 0}
-      },
-      "required": ["stages", "bridges", "outcomes"]
+      "required": ["id", "title", "row", "column", "cards", "edges"]
     }
   }
 }

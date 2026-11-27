@@ -348,8 +348,8 @@ owner = "user"
 [lanes.planning-data]
 owner = "user"
 slices = [
-  { id = "forward-track-links" },
-  { id = "html-view" },
+  { id = "forward-track-links", started = 2026-11-27, landed = 2026-11-27 },
+  { id = "html-view", started = 2026-11-27, landed = 2026-11-27 },
   { id = "step-1", started = 2026-11-25 },
   { id = "timing" },
   { id = "step-3" },
