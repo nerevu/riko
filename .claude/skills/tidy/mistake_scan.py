@@ -300,11 +300,11 @@ CLASS_HISTORY = {
             "stream, splitter cascade at node start; cancellation window, failed "
             "iter); 909a7369 (11-22 async-only hand-through); 909a7369 (11-23 native "
             "async inputs, seed and root wrappers run-owned); 909a7369 (11-23 callable "
-            "stream wrappers own their input); cc8af8f0 (11-25 cancelled aauto_close "
-            "aclose stops before later closers; cancellation mid-close); cc8af8f0 "
+            "stream wrappers own their input); 6f4187b9 (11-25 cancelled aauto_close "
+            "aclose stops before later closers; cancellation mid-close); 6f4187b9 "
             "(11-25 auto_close source whose iterator is a separate object; no close "
-            "call); cc8af8f0 (11-25 auto_close skipped an async-only close silently); "
-            "cc8af8f0 (11-26 maybe_closing async-only)"
+            "call); 6f4187b9 (11-25 auto_close skipped an async-only close silently); "
+            "6f4187b9 (11-26 maybe_closing async-only)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -344,7 +344,7 @@ CLASS_HISTORY = {
             "async HTTP status; status handling); 6dba2fe3 (11-17 split branches in "
             "both colors; branch behavior, no keyword drift); none RM801-shaped "
             "(source shape, status handling, not keyword drift); 6ad28467 (11-21 twin "
-            "type/subtype/identity; attributes, not keywords); cc8af8f0 (11-25 native "
+            "type/subtype/identity; attributes, not keywords); 6f4187b9 (11-25 native "
             "splitter list branches; branch type, not keywords)"
         ),
         (
@@ -437,7 +437,7 @@ CLASS_HISTORY = {
         (
             "cdbeda1a (10-31 port spellings); ededc9ce (11-03 regex field case); "
             "83630c28 (11-03 dotted/case rename fields); 9bbcf0ab (11-14 ModuleName "
-            "resolvers); 466a3477 (11-23 split phrasal-verb ban); bbdd385b (11-27 "
+            "resolvers); 466a3477 (11-23 split phrasal-verb ban); 33525cef (11-27 "
             "Decimal negative zero identity)"
         ),
         (
@@ -455,7 +455,7 @@ CLASS_HISTORY = {
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
             "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
             "61aaa929 (11-21 failed close on a failed build); b2eceb31 (11-26 tee "
-            "interrupted copy left the close failure off the interrupt); 34a7ef31 "
+            "interrupted copy left the close failure off the interrupt); 53e28632 "
             "(11-27 failed run close left the run unfinished)"
         ),
         (
@@ -540,7 +540,7 @@ CLASS_HISTORY = {
     ),
     "serializer-framing": BugClass(
         (
-            "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline); 6a47419b "
+            "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline); a6a9fd07 "
             "(11-27 export appended a second JSON document)"
         ),
         (
