@@ -55,6 +55,10 @@ ASYNC_CLEANUP_MSG = (
     "an async resource cleanup runs under `for` only for a value an async factory "
     "produced. Make the factory async, or iterate with `async for`"
 )
+ASYNC_CLOSE_MSG = (
+    "a value whose only close is async cannot be closed under `for`; produce it "
+    "with an async resource factory or lifecycle, or iterate with `async for`"
+)
 
 
 def _protocol_signature(method: Func[object]) -> Signature:
@@ -138,21 +142,6 @@ def _is_statically_absent(obj: object, name: str) -> bool:
     return not (isinstance(obj, type) or in_type or name in instance)
 
 
-def _get_bound_method(cls: type, name: str) -> object:
-    """Gets ``cls``'s method ``name`` as an instance of ``cls`` would see it."""
-    attr = getattr(cls, name, None)
-    static = getattr_static(cls, name, None)
-
-    if isfunction(attr) and isfunction(static):
-        method: object = MethodType(attr, MISSING)
-    elif isinstance(static, MethodDescriptorType):
-        method = MethodType(static, MISSING)
-    else:
-        method = attr
-
-    return method
-
-
 def _check_strict(
     is_member: bool, protocol: type, get_method: Callable[[str], object], *methods: str
 ) -> bool:
@@ -214,7 +203,21 @@ def _check_strict_protocol(obj: object, protocol: type, *methods: str) -> bool:
 
 @lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _check_strict_type(cls: type, protocol: type, *methods: str) -> bool:
-    get_method = partial(_get_bound_method, cls)
+    """Checks ``cls``'s methods as an instance of ``cls`` would see them."""
+
+    def get_method(name: str) -> object:
+        attr = getattr(cls, name, None)
+        static = getattr_static(cls, name, None)
+
+        if isfunction(attr) and isfunction(static):
+            method: object = MethodType(attr, MISSING)
+        elif isinstance(static, MethodDescriptorType):
+            method = MethodType(static, MISSING)
+        else:
+            method = attr
+
+        return method
+
     return _check_strict(issubclass(cls, protocol), protocol, get_method, *methods)
 
 
@@ -250,6 +253,10 @@ def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
 
 def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
     return attrs.has(type(value)) and not is_mapping(value)
+
+
+def is_subclass[T](candidate: object, cls: type[T]) -> TypeIs[type[T]]:
+    return isinstance(candidate, type) and issubclass(candidate, cls)
 
 
 @overload
@@ -347,7 +354,7 @@ def is_listlike(value: object) -> bool:
 
 
 def is_sequence(val: object) -> TypeIs[Sequence[object]]:
-    return isinstance(val, (list, tuple)) or (
+    return is_known_sequence(val) or (
         not isinstance(val, (int, float)) and isinstance(val, Sequence)
     )
 
@@ -556,16 +563,21 @@ class SyncClosable(Protocol):
     def close(self) -> object | None: ...
 
 
+@runtime_checkable
+class AsyncClosable(Protocol):
+    async def aclose(self) -> object | None: ...
+
+
 @lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _has_async_close(cls: type) -> bool:
     """Whether instances of ``cls`` close asynchronously through their type."""
     return is_async_callable(getattr(cls, "close", None))
 
 
-def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
-    """Whether ``owner``'s ``close`` is async."""
-    if is_type_bound(owner, "close"):
-        result = _has_async_close(type(owner))
+def _is_async_close(close: object, source: object) -> TypeGuard[AsyncFunc[object]]:
+    """Whether ``source``'s ``close`` is async."""
+    if is_type_bound(source, "close"):
+        result = _has_async_close(type(source))
     else:
         result = is_async_callable(close)
 
@@ -600,6 +612,40 @@ def get_sync_closer(value: object) -> Func[object] | None:
     is_sync_closable = isinstance_strict(value, SyncClosable)
 
     if is_sync_closable and not _is_async_close(value.close, value):
+        closer = value.close
+
+    return closer
+
+
+def get_async_closer(value: object) -> AsyncFunc[object] | None:
+    """
+    Gets the method that closes ``value`` on an event loop.
+
+    ``aclose`` is preferred over an async def ``close``.
+
+    Args:
+
+        value: The value to inspect.
+
+    Returns:
+
+        The value's ``aclose`` or async ``close``, or ``None`` when it has neither.
+
+    Examples:
+
+        >>> class Client:
+        ...     async def close(self):
+        ...         pass
+        >>>
+        >>> get_async_closer(Client()).__name__, get_async_closer(1)
+        ('close', None)
+
+    """
+    closer = None
+
+    if isinstance_strict(value, AsyncClosable):
+        closer = value.aclose
+    elif isinstance_strict(value, SyncClosable) and _is_async_close(value.close, value):
         closer = value.close
 
     return closer

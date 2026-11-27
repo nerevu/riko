@@ -14,9 +14,12 @@ size on purpose (the dependency canaries are cited by path and stay one file).
 Every bound in a test file or a ``tests/_*.py`` helper (a ``timeout`` marker, a
 ``fail_after``/``move_on_after`` bound, or a ``wait``/``join``/``result``/
 ``communicate`` timeout, by keyword or position) must sit on the bound ladder (1, 2, 3,
-5, 8, 10, 15, 20, 30 seconds). An inner bound must stay below its function's outer one,
-which is its smallest ``timeout`` marker, its class's, or else the ``pyproject.toml``
-backstop.
+5, 8, 10, 15, 20, 30 seconds). A ``wait``/``join``/``result``/``communicate`` call
+inside a function or class a test defines in its body (a fake) is the blocking work
+under test, not a bound, so only a test's own path counts; one directly in a test, in
+a module-level helper, or in a ``tests/_*.py`` helper stays on the ladder. An inner
+bound must stay below its function's outer one, which is its smallest ``timeout``
+marker, its class's, or else the ``pyproject.toml`` backstop.
 
 A ``sleep`` on a function's own path (outside nested functions) must never
 last as long as that outer bound. A plain ``timeout`` marker never equals the backstop,
@@ -46,13 +49,14 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
+from itertools import chain
 from operator import itemgetter
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 from riko.base._iterutils import gen_instances, gen_non_null
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
-from ._import_graph import FUNCTION_NODES, FunctionNode
+from ._import_graph import FUNCTION_NODES, FunctionNode, load_ast
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -207,13 +211,16 @@ def gen_module_constants(tree: ast.Module) -> Iterator[tuple[str, Seconds]]:
             yield target.id, number
 
 
-def get_seconds(node: ast.expr, constants: dict[str, Seconds]) -> Seconds | None:
+def get_seconds(node: ast.expr, /, **constants: Seconds) -> Seconds | None:
     """
     Gets the seconds a bound expression holds, or ``None`` when it is not known.
 
     Args:
 
         node: A number literal or the name of a module-level constant.
+
+    Kwargs:
+
         constants: The module's number constants by name.
 
     Returns:
@@ -275,22 +282,28 @@ class Bound(NamedTuple):
         cls,
         node: ast.Call,
         arg: ast.expr | None,
-        constants: dict[str, Seconds],
         keyword: str | None = None,
+        /,
+        **constants: Seconds,
     ) -> Bound | None:
         """Builds the bound ``arg`` sets on ``node``, or ``None`` when it is unknown."""
         bound = None
 
-        if arg is not None and (seconds := get_seconds(arg, constants)) is not None:
+        if arg is not None and (seconds := get_seconds(arg, **constants)) is not None:
             prefix = "" if keyword is None else f"{keyword}="
             text = f"{get_leaf(node.func)}({prefix}{ast.unparse(arg)})"
             bound = cls(node.lineno, text, seconds)
 
         return bound
 
+    @classmethod
+    def from_first_arg(cls, node: ast.Call, /, **constants: Seconds) -> Bound | None:
+        """Builds the bound ``node``'s first positional argument sets, if known."""
+        return cls.from_arg(node, next(iter(node.args), None), **constants)
+
 
 def _gen_timeouts(
-    decorators: Iterable[ast.expr], constants: dict[str, Seconds]
+    decorators: Iterable[ast.expr], /, **constants: Seconds
 ) -> Iterator[tuple[Bound, bool]]:
     """Generates each ``timeout`` marker with whether it is a plain decorator."""
     for decorator in decorators:
@@ -298,7 +311,7 @@ def _gen_timeouts(
             is_marker = isinstance(node, ast.Call) and get_leaf(node.func) == "timeout"
 
             if is_marker and isinstance(node, ast.Call):
-                bound = Bound.from_arg(node, next(iter(node.args), None), constants)
+                bound = Bound.from_first_arg(node, **constants)
 
                 if bound is not None:
                     yield bound, node is decorator
@@ -312,29 +325,31 @@ def _gen_own_path(node: ast.AST) -> Iterator[ast.AST]:
             yield from _gen_own_path(child)
 
 
-def _get_inner_bound(node: ast.AST, constants: dict[str, Seconds]) -> Bound | None:
-    """Gets the bound a call sets, or ``None`` when it sets no known one."""
+def _get_inner_bound(
+    node: ast.AST, names: frozenset[str], /, **constants: Seconds
+) -> Bound | None:
+    """Gets the bound a call named in ``names`` sets, or ``None`` for no known one."""
     leaf = get_leaf(node.func) if isinstance(node, ast.Call) else None
     bound = None
 
-    if isinstance(node, ast.Call) and leaf in BOUND_CALLS | TIMEOUT_CALLS:
+    if isinstance(node, ast.Call) and leaf in names:
         keywords = (k.value for k in node.keywords if k.arg == "timeout")
         timeout = next(keywords, None) if leaf in TIMEOUT_CALLS else None
 
         if timeout is None:
-            bound = Bound.from_arg(node, next(iter(node.args), None), constants)
+            bound = Bound.from_first_arg(node, **constants)
         else:
-            bound = Bound.from_arg(node, timeout, constants, keyword="timeout")
+            bound = Bound.from_arg(node, timeout, "timeout", **constants)
 
     return bound
 
 
-def _get_blocking_call(node: ast.AST, constants: dict[str, Seconds]) -> Bound | None:
+def _get_blocking_call(node: ast.AST, /, **constants: Seconds) -> Bound | None:
     """Gets the blocking ``sleep`` a call makes, or ``None`` when it makes none."""
     bound = None
 
     if isinstance(node, ast.Call) and get_leaf(node.func) in BLOCKING_CALLS:
-        bound = Bound.from_arg(node, next(iter(node.args), None), constants)
+        bound = Bound.from_first_arg(node, **constants)
 
     return bound
 
@@ -374,30 +389,46 @@ class Scope(NamedTuple):
 
         return outer
 
-    def gen_inner_bounds(self, constants: dict[str, Seconds]) -> Iterator[Bound]:
-        """Generates the bounds the scope's function body sets."""
-        nodes = () if self.function is None else ast.walk(self.function)
+    def gen_inner_bounds(self, /, **constants: Seconds) -> Iterator[Bound]:
+        """
+        Generates the bounds the scope's function body sets.
+
+        In a test, a ``wait``/``join``/``result``/``communicate`` call inside a function
+        or class the test defines in its body is the work under test, not a bound.
+        """
+        function = self.function
+        nodes = () if function is None else ast.walk(function)
+        own = None
+
+        if function is not None and function.name.startswith("test"):
+            own = {id(node) for node in _gen_own_path(function)}
 
         for node in nodes:
-            if (bound := _get_inner_bound(node, constants)) is not None:
+            is_fake = own is not None and id(node) not in own
+            names = BOUND_CALLS if is_fake else BOUND_CALLS | TIMEOUT_CALLS
+
+            if (bound := _get_inner_bound(node, names, **constants)) is not None:
                 yield bound
 
-    def gen_sleeps(self, constants: dict[str, Seconds]) -> Iterator[Bound]:
+    def gen_sleeps(self, /, **constants: Seconds) -> Iterator[Bound]:
         """Generates the ``sleep`` calls on the scope function's own path."""
         nodes = () if self.function is None else _gen_own_path(self.function)
 
         for node in nodes:
-            if (bound := _get_blocking_call(node, constants)) is not None:
+            if (bound := _get_blocking_call(node, **constants)) is not None:
                 yield bound
 
 
-def gen_scopes(tree: ast.Module, constants: dict[str, Seconds]) -> Iterator[Scope]:
+def gen_scopes(tree: ast.Module, /, **constants: Seconds) -> Iterator[Scope]:
     """
     Generates each top-level function, class, and method of a module.
 
     Args:
 
         tree: The parsed test module.
+
+    Kwargs:
+
         constants: The module's number constants by name.
 
     Yields:
@@ -407,14 +438,14 @@ def gen_scopes(tree: ast.Module, constants: dict[str, Seconds]) -> Iterator[Scop
     """
     for node in tree.body:
         if isinstance(node, FUNCTION_NODES):
-            markers = list(_gen_timeouts(node.decorator_list, constants))
+            markers = list(_gen_timeouts(node.decorator_list, **constants))
             yield Scope(node.name, node, markers, [])
         elif isinstance(node, ast.ClassDef):
-            enclosing = list(_gen_timeouts(node.decorator_list, constants))
+            enclosing = list(_gen_timeouts(node.decorator_list, **constants))
             yield Scope(node.name, None, enclosing, [])
 
             for method in gen_instances(node.body, FUNCTION_NODES):
-                markers = list(_gen_timeouts(method.decorator_list, constants))
+                markers = list(_gen_timeouts(method.decorator_list, **constants))
                 owner = f"{node.name}::{method.name}"
                 yield Scope(owner, method, markers, enclosing)
 
@@ -425,7 +456,8 @@ def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
 
     The owner is ``Class::method`` for a method, ``Class`` for a class marker, and the
     function's name for a top-level function. A bound held in a module-level constant
-    is read through it; ``sleep`` calls are not bounds.
+    is read through it; ``sleep`` calls are not bounds, and neither is a ``wait`` or
+    ``join`` inside a function or class a test defines.
 
     Args:
 
@@ -446,11 +478,11 @@ def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
     """
     constants = dict(gen_module_constants(tree))
 
-    for scope in gen_scopes(tree, constants):
+    for scope in gen_scopes(tree, **constants):
         for bound, _ in scope.markers:
             yield scope.owner, bound, True
 
-        for bound in scope.gen_inner_bounds(constants):
+        for bound in scope.gen_inner_bounds(**constants):
             yield scope.owner, bound, False
 
 
@@ -466,7 +498,7 @@ def _gen_bound_issues(
     """Finds the bounds in one file that leave the ladder or misnest."""
     constants = dict(gen_module_constants(tree))
 
-    for scope in gen_scopes(tree, constants):
+    for scope in gen_scopes(tree, **constants):
         seconds, label = scope.get_outer(backstop)
         limit = f"its {label} ({seconds} s)"
 
@@ -477,14 +509,14 @@ def _gen_bound_issues(
                 msg = f"{bound.text} equals the pyproject timeout; drop the marker"
                 yield LayoutIssue(path, bound.lineno, msg)
 
-        for inner in scope.gen_inner_bounds(constants):
+        for inner in scope.gen_inner_bounds(**constants):
             if inner.seconds not in TIMEOUT_LADDER:
                 yield _build_ladder_issue(path, inner)
             elif inner.seconds >= seconds:
                 msg = f"{inner.text} must stay below {limit}"
                 yield LayoutIssue(path, inner.lineno, msg)
 
-        for blocking in scope.gen_sleeps(constants):
+        for blocking in scope.gen_sleeps(**constants):
             if blocking.seconds >= seconds:
                 msg = f"{blocking.text} outlasts {limit}; the test can end only by its "
                 yield LayoutIssue(path, blocking.lineno, msg + "backstop")
@@ -516,15 +548,6 @@ def _gen_subprocess_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue
             yield LayoutIssue(path, node.lineno, message)
 
 
-def _has_await(function: FunctionNode) -> bool:
-    """Checks whether a function awaits anything on its own path."""
-    return any(
-        isinstance(node, AWAIT_NODES)
-        or (isinstance(node, ast.comprehension) and bool(node.is_async))
-        for node in _gen_own_path(function)
-    )
-
-
 def _is_bare_strict_xfail(node: ast.Call) -> bool:
     """Checks whether a call is a strict ``xfail`` mark that sets no ``raises=``."""
     keywords = {keyword.arg: keyword.value for keyword in node.keywords}
@@ -543,48 +566,58 @@ def _gen_xfail_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
 
 
 def _gen_idle_async_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
-    """Finds the ``async def`` tests in one file that await nothing."""
+    """
+    Finds the ``async def`` tests in one file that await nothing.
+
+    Only a test's own path counts: an await in a nested function or class does not.
+    """
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
-            for method in node.body:
-                if (
-                    isinstance(method, ast.AsyncFunctionDef)
-                    and method.name.startswith("test")
-                    and not _has_await(method)
-                ):
+            tests = (
+                method
+                for method in node.body
+                if isinstance(method, ast.AsyncFunctionDef)
+                and method.name.startswith("test")
+            )
+
+            for method in tests:
+                awaits = any(
+                    isinstance(child, AWAIT_NODES)
+                    or (isinstance(child, ast.comprehension) and bool(child.is_async))
+                    for child in _gen_own_path(method)
+                )
+
+                if not awaits:
                     message = f"{method.name} awaits nothing; make it a plain def"
                     yield LayoutIssue(path, method.lineno, message)
 
 
-def _gen_chain_parts(node: ast.expr) -> Iterator[ast.expr]:
-    """Generates the operands of a ``/`` path chain, left to right."""
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        yield from _gen_chain_parts(node.left)
-        yield from _gen_chain_parts(node.right)
-    else:
-        yield node
-
-
-def _is_doc_name(name: str) -> bool:
-    """Checks whether a path string names a tracked doc or doc folder."""
-    folder = name.partition("/")[0]
-
-    return (
-        name.endswith(DOC_SUFFIXES)
-        or name in DOC_DIRS
-        or ("/" in name and folder in DOC_DIRS)
-    )
-
-
 def _is_doc_chain(node: ast.BinOp) -> bool:
-    """Checks whether a ``/`` path chain reaches a tracked doc from the repository."""
+    """
+    Checks whether a ``/`` path chain reaches a tracked doc from the repository.
+
+    A string operand of the chain reaches a doc when it names a tracked doc or doc
+    folder.
+    """
     names = {name.id for name in ast.walk(node) if isinstance(name, ast.Name)}
-    strings = (
-        part.value
-        for part in _gen_chain_parts(node)
-        if isinstance(part, ast.Constant) and isinstance(part.value, str)
+    pending: list[ast.expr] = [node]
+    strings: list[str] = []
+
+    while pending:
+        part = pending.pop()
+
+        if isinstance(part, ast.BinOp) and isinstance(part.op, ast.Div):
+            pending.extend([part.left, part.right])
+        elif isinstance(part, ast.Constant) and isinstance(part.value, str):
+            strings.append(part.value)
+
+    docs = (
+        string.endswith(DOC_SUFFIXES)
+        or string in DOC_DIRS
+        or ("/" in string and string.partition("/")[0] in DOC_DIRS)
+        for string in strings
     )
-    has_doc = "DOCS_DIR" in names or any(map(_is_doc_name, strings))
+    has_doc = "DOCS_DIR" in names or any(docs)
     return bool(names & REPO_ROOTS) and has_doc
 
 
@@ -634,19 +667,21 @@ def _gen_file_issues(
             yield LayoutIssue(path, node.lineno, message)
 
     if public:
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    if alias.name.startswith("_"):
-                        message = f"public tests import supported names: {alias.name}"
-                        yield LayoutIssue(path, node.lineno, message)
+        imports = gen_instances(ast.walk(tree), ast.ImportFrom)
+
+        for node in imports:
+            for alias in node.names:
+                if alias.name.startswith("_"):
+                    message = f"public tests import supported names: {alias.name}"
+                    yield LayoutIssue(path, node.lineno, message)
 
     if path.name in SIZE_EXEMPT:
         pass
     elif lines > SPLIT_LINES:
         message = (
-            f"{lines} lines; move its largest Test<Subject> class into its own file, "
-            "then check both files for overlaps, misfits, and move candidates"
+            f"{lines} lines; move its largest concept (the subject rows that share it) "
+            "into a file named for that concept, then check both files for overlaps, "
+            "misfits, and move candidates"
         )
         yield LayoutIssue(path, 1, message, fatal=False)
     elif lines < MERGE_LINES:
@@ -656,23 +691,19 @@ def _gen_file_issues(
 
 def _gen_helper_issues(path: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     """Finds the bounds, ``subprocess`` calls, and ``xfail`` marks in a helper."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = load_ast(path)
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
     yield from _gen_xfail_issues(path, tree)
 
 
-def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
+def _gen_tier_issues(tier: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     init = tier / "__init__.py"
+    owners: dict[str, str] = {}
 
     if generate_tier_index(tier) != init.read_text(encoding="utf-8"):
         message = "the index is stale; run `manage codegen --tests`"
         yield LayoutIssue(init, 1, message)
-
-
-def _gen_tier_issues(tier: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
-    yield from _gen_index_issues(tier)
-    owners: dict[str, str] = {}
 
     for path in sorted(tier.glob("*.py")):
         if path.name == "__init__.py":
@@ -739,9 +770,10 @@ def gen_layout_issues(tests_dir: Path, backstop: Seconds) -> Iterator[LayoutIssu
 
 def _gen_tier_trees(tests_dir: Path) -> Iterator[tuple[Path, ast.Module]]:
     """Generates each tier test file with its syntax tree."""
-    for tier in TIERS:
-        for path in sorted((tests_dir / tier).glob("test_*.py")):
-            yield path, ast.parse(path.read_text(encoding="utf-8"))
+    for path in chain.from_iterable(
+        sorted((tests_dir / tier).glob("test_*.py")) for tier in TIERS
+    ):
+        yield path, load_ast(path)
 
 
 def _get_inline_table(node: ast.Call) -> ast.List | ast.Tuple | None:

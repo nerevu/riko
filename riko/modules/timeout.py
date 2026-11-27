@@ -57,6 +57,29 @@ MS_PER_SECOND = 1_000
 
 
 class AsyncTimeoutIterator[T](AsyncIterator[T]):
+    """
+    Iterates a stream asynchronously until a deadline passes.
+
+    The deadline starts at the first item and is checked between items. Awaiting the
+    iterator collects the items that arrive before the deadline.
+
+    Args:
+
+        elements: The sync or async stream to bound.
+
+    Kwargs:
+
+        timeout_ms: Milliseconds to keep iterating; 0 or less never times out.
+
+    Examples:
+
+        >>> from riko.bado import alist, run
+        >>>
+        >>> run(alist, AsyncTimeoutIterator(range(3), timeout_ms=1000))
+        [0, 1, 2]
+
+    """
+
     aiter: AsyncIterator[T]
     timeout: float
 
@@ -89,6 +112,26 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
 
 
 class TimeoutIterator[T](Iterator[T]):
+    """
+    Iterates a stream until a deadline passes.
+
+    The deadline starts at the first item and is checked between items.
+
+    Args:
+
+        elements: The stream to bound.
+
+    Kwargs:
+
+        timeout_ms: Milliseconds to keep iterating; 0 or less never times out.
+
+    Examples:
+
+        >>> list(TimeoutIterator(range(3), timeout_ms=1000))
+        [0, 1, 2]
+
+    """
+
     timeout: float
 
     def __init__(self, elements: Iterable[T], timeout_ms: int = 0) -> None:

@@ -44,6 +44,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | Feed-native parser migration/streaming memory/streaming write implementation | `feed-native-streaming.md` | parser inference from callable owner; effect semantics from `effects.md` |
 | connector sessions, transport lifecycle, credential references/resolution, concrete Target adapters | `connectors.md` | provider/protocol credential implementations |
 | REST pagination, endpoint dependencies, cursor extraction/encoding, source-filter pushdown | `rest-incremental.md` | provider-specific REST vocabulary |
+| generic entity resolution / record linkage: match layers, scored/explained match results, review thresholds, linkage adapters | `entity-resolution.md` | domain match precedence and identity fields |
 | recurring source observation/bootstrap/dedupe/change/anomaly policy | `feed-monitoring.md` | source-specific observation/cursor payload meaning |
 | generic `Change`, `ChangeFeedSemantics`, tombstones, replay/history/order guarantees | `feed-monitoring.md` | source-specific mapping into shared change envelope |
 | Pipeline batch semantics/backend negotiation | `execution-semantics.md` | representation-specific conversion details |

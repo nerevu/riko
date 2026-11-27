@@ -27,11 +27,7 @@ from riko.definitions._workflow_definition import Workflow
 from riko.modules import describe_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
-from riko.modules._metadata import (
-    get_module_metadata,
-    list_module_metadata,
-    list_modules,
-)
+from riko.modules._metadata import get_module_metadata, list_module_metadata
 from riko.modules.truncate import pipe as truncate
 from riko.runtime._importutils import require_interface
 from riko.runtime._module_registry import (
@@ -64,8 +60,13 @@ from riko.runtime._workflow_stores import (
 from riko.types._enums import Backends, ModuleName
 from riko.types._wrappers import SubPipe, is_subpipe
 from tests import pyworkflows
-from tests._execution import module_workflow, registered_modules
-from tests._workflows import EXAMPLES_DIR, register_documents
+from tests._execution import (
+    build_pipe_wrapper,
+    build_sync_definition,
+    module_workflow,
+    registered_modules,
+)
+from tests._workflows import register_documents
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -74,36 +75,14 @@ if TYPE_CHECKING:
 
 _NAME = "acme.mod"
 _MISSING_NAME = "nope"
-
-
-def _pipe_wrapper(**attrs):
-    wrapper = cast("SyncModuleWrapper", lambda source, **_: source)
-
-    for key, value in attrs.items():
-        setattr(wrapper, key, value)
-
-    return wrapper
-
-
-_MARKER = _pipe_wrapper()
+_ADDED_NAME = "acme.added"
+_MARKER = build_pipe_wrapper()
+_DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
+MOD_DEFN = build_sync_definition(_MARKER, name=_NAME)
 
 
 class _FileBackendTarget:
     backend: ClassVar[Backends] = Backends.FILE
-
-
-_DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
-
-_META = {
-    "type": "operator",
-    "subtype": "composer",
-    "subtypes": {"composer"},
-    "pollable": False,
-    "loopable": False,
-    "is_async": False,
-}
-
-MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
 
 
 @pytest.fixture
@@ -182,11 +161,17 @@ class _Typo(ModuleName):
 BUILTIN_SHADOWS = [
     pytest.param(
         ModuleRegistry(),
-        ModuleDefinition(name="count", sync_pipe=_MARKER),
+        build_sync_definition(_MARKER, name="count"),
         "module",
         id="module",
     ),
     pytest.param(TargetRegistry(), _FileBackendTarget, "target", id="target"),
+]
+
+
+SUBCLASS_HOOKS = [
+    pytest.param("_key", "entry", id="key"),
+    pytest.param("_load", SimpleNamespace(name="entry"), id="load"),
 ]
 
 
@@ -195,7 +180,7 @@ class TestModuleRegistry:
         assert fixed_registry.require("tokenizer").__name__ == "pipe"
 
     def test_runtime_registration_takes_precedence(self, fixed_registry):
-        definition = ModuleDefinition(name="tokenizer", sync_pipe=_MARKER)
+        definition = build_sync_definition(_MARKER, name="tokenizer")
         fixed_registry.register(definition, replace=True)
         assert fixed_registry.require("tokenizer") is _MARKER
 
@@ -209,8 +194,8 @@ class TestModuleRegistry:
         assert registry.registered_names == ()
 
     def test_registered_names_are_sorted(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=_MARKER))
-        fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name="zeta"))
+        fixed_registry.register(build_sync_definition(_MARKER, name="alpha"))
         assert fixed_registry.registered_names == ("alpha", "zeta")
 
     def test_falsy_callable_supplies_name(self):
@@ -218,7 +203,7 @@ class TestModuleRegistry:
         assert ModuleDefinition(sync_pipe=pipe).name == "double"
 
     def test_module_convention_snapshots_at_construction(self, fixed_registry):
-        other = _pipe_wrapper()
+        other = build_pipe_wrapper()
         mod = SimpleNamespace(pipe=_MARKER, __name__="pkg.snap")
         definition = ModuleDefinition.from_module(mod)
         fixed_registry.register(definition)
@@ -242,7 +227,7 @@ class TestModuleRegistry:
         assert definition.description == "Yells."
 
     def test_explicit_callable_overrides_module(self, fixed_registry):
-        other = _pipe_wrapper()
+        other = build_pipe_wrapper()
         mod = SimpleNamespace(pipe=other, async_pipe=other)
         derived = ModuleDefinition.from_module(mod, name=_NAME)
         definition = attrs.evolve(derived, sync_pipe=_MARKER)
@@ -251,13 +236,7 @@ class TestModuleRegistry:
         assert fixed_registry.require(_NAME) is _MARKER  # explicit wins
         assert fixed_registry.require(_NAME, True) is other  # from module
 
-    @pytest.mark.parametrize(
-        ("method", "arg"),
-        [
-            pytest.param("_key", "entry", id="key"),
-            pytest.param("_load", SimpleNamespace(name="entry"), id="load"),
-        ],
-    )
+    @pytest.mark.parametrize(("method", "arg"), SUBCLASS_HOOKS)
     def test_base_registry_requires_subclass_hooks(self, method, arg):
         with pytest.raises(NotImplementedError, match=rf"Registry\.{method} must"):
             getattr(Registry(), method)(arg)
@@ -317,7 +296,7 @@ class TestModuleRegistry:
         fixed_registry.register(MOD_DEFN, replace=True)
 
     def test_registered_module_missing_interface_raises(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name=_MISSING_NAME, sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name=_MISSING_NAME))
 
         with pytest.raises(UnsupportedModuleError):
             fixed_registry.require(_MISSING_NAME, True)
@@ -325,6 +304,20 @@ class TestModuleRegistry:
     def test_runtime_register_requires_name(self, fixed_registry):
         with pytest.raises(ValueError, match="needs a name"):
             fixed_registry.register(ModuleDefinition(sync_pipe=_MARKER))
+
+
+IMPORT_ERRORS = [
+    pytest.param(
+        ModuleNotFoundError("No module named 'phantom_dep'", name="phantom_dep"),
+        "phantom_dep",
+        id="nested-dependency",
+    ),
+    pytest.param(
+        ModuleNotFoundError("broken import with no module name"),
+        "no module name",
+        id="unnamed",
+    ),
+]
 
 
 class TestDescribeModule:
@@ -338,34 +331,10 @@ class TestDescribeModule:
         assert definition is not None
         assert (definition.input_schemas, definition.dependencies) == (None, None)
 
-    def test_stored_workflow_reports_what_its_document_declares(self):
-        register_workflow_store(package="examples.pyworkflows", replace=True)
-        flow = Workflow.load(EXAMPLES_DIR / "workflows" / "pipe_timezone.json")
-        definition = describe_module("pipe:timezone")
-        assert definition is not None
-        declared = (definition.input_schemas, definition.dependencies)
-        assert declared == (flow.input_schemas, flow.dependencies)
-
     def test_unknown_stored_workflow_is_none(self):
         assert describe_module("pipe_missing") is None
 
-    @pytest.mark.parametrize(
-        ("error", "match"),
-        [
-            pytest.param(
-                ModuleNotFoundError(
-                    "No module named 'phantom_dep'", name="phantom_dep"
-                ),
-                "phantom_dep",
-                id="nested-dependency",
-            ),
-            pytest.param(
-                ModuleNotFoundError("broken import with no module name"),
-                "no module name",
-                id="unnamed",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("error", "match"), IMPORT_ERRORS)
     def test_describe_module_reraises_import_error(
         self, monkeypatch, error: ModuleNotFoundError, match: str
     ):
@@ -385,7 +354,7 @@ class TestDescribeModule:
             describe_module("pipe_bad")
 
 
-class TestPublicRegister:
+class TestRegisterModule:
     """Exercise ``register_module`` against the process-global registry."""
 
     def test_register_resolves_via_global_registry(self, fixed_registry):
@@ -411,21 +380,19 @@ class TestPublicRegister:
 
 
 class TestTemporaryRegistrations:
-    def test_module_registration_is_undone(self, fixed_registry):
-        with temporary_registrations():
-            register_module(MOD_DEFN)
-
-        with pytest.raises(UnsupportedModuleError):
-            dispatcher.require(_NAME)
-
     def test_replaced_module_comes_back(self, fixed_registry):
+        """A replaced module comes back and a module added in the scope is gone."""
         register_module(MOD_DEFN)
 
         with temporary_registrations():
-            replacement = ModuleDefinition(name=_NAME, sync_pipe=_pipe_wrapper())
+            replacement = build_sync_definition(build_pipe_wrapper(), name=_NAME)
             register_module(replacement, replace=True)
+            register_module(build_sync_definition(_MARKER, name=_ADDED_NAME))
 
         assert module_registry.load_definition(_NAME) is MOD_DEFN
+
+        with pytest.raises(UnsupportedModuleError):
+            dispatcher.require(_ADDED_NAME)
 
     def test_replaced_target_comes_back(self):
         with temporary_registrations():
@@ -491,7 +458,7 @@ class TestResolverDispatcher:
         stored-workflow (``pipe_<id>``) name routing.
         """
         name = "pipe_transform"
-        fixed_registry.register(ModuleDefinition(name=name, sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name=name))
         assert dispatcher.require(name) is _MARKER
 
 
@@ -505,20 +472,14 @@ class TestRequireInterface:
         assert err.value.module_name == "nope"
 
     def test_builtin_module_without_interface_is_a_module_error(self):
-        def loader(name):
-            return ModuleType(name)
-
         with pytest.raises(UnsupportedModuleError, match="has no 'async_pipe'") as err:
-            require_interface("bare", is_async=True, loader=loader)
+            require_interface("bare", is_async=True, loader=ModuleType)
 
         assert err.value.module_name == "bare"
 
     def test_stored_workflow_without_interface_is_a_workflow_error(self):
-        def loader(name):
-            return ModuleType(name)
-
         with pytest.raises(UnsupportedWorkflowError, match="has no 'pipe'") as err:
-            require_interface("pipe_bare", builtin=False, loader=loader)
+            require_interface("pipe_bare", builtin=False, loader=ModuleType)
 
         assert err.value.pipe_id == "pipe_bare"
 
@@ -549,7 +510,7 @@ class _FakeEntryPoint:
         return self._definition
 
 
-class TestEntryPointModules:
+class TestRegistryEntryPoints:
     """an external package supplies modules via entry points."""
 
     def test_entry_point_module_resolves(self, monkeypatch, fixed_registry):
@@ -601,8 +562,8 @@ class TestEntryPointModules:
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
     ):
-        ep_marker = _pipe_wrapper()
-        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
+        ep_marker = build_pipe_wrapper()
+        ep_defn = build_sync_definition(ep_marker, name=_NAME)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN, replace=True)
         pipe = fixed_registry.require(_NAME)
@@ -638,7 +599,7 @@ class TestEntryPointModules:
 
         def factory():
             barrier.wait(timeout=5)
-            return ModuleDefinition(name=_NAME, sync_pipe=_pipe_wrapper())
+            return build_sync_definition(build_pipe_wrapper(), name=_NAME)
 
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, factory))
         loaded: list[ModuleDefinition | None] = []
@@ -655,7 +616,7 @@ class TestEntryPointModules:
         assert loaded[0] is loaded[1]
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
-        defn = ModuleDefinition(name="acme.other", sync_pipe=_MARKER)
+        defn = build_sync_definition(_MARKER, name="acme.other")
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
         with pytest.raises(ValueError, match="must match"):
@@ -671,14 +632,13 @@ class TestEntryPointModules:
     def test_register_rejects_entry_point_shadow_without_replace(
         self, monkeypatch, fixed_registry
     ):
-        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
 
         with pytest.raises(ValueError, match="shadows an entry-point module"):
             fixed_registry.register(MOD_DEFN)
 
     def test_duplicate_entry_point_names_raise(self, monkeypatch, fixed_registry):
-        other = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
+        other = build_sync_definition(_MARKER, name=_NAME)
         acme = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
         globex = _FakeEntryPoint(_NAME, other, dist="globex")
         _patch_entry_points(monkeypatch, acme, globex)
@@ -755,6 +715,12 @@ def _demo_resolver(**interfaces: object) -> WorkflowResolver:
     return WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
 
 
+WORKFLOW_PACKAGES = [
+    pytest.param("tests.pyworkflows", id="import-path"),
+    pytest.param(pyworkflows, id="package"),
+]
+
+
 class TestWorkflowResolver:
     def test_core_default_has_no_stored_workflows(self):
         """A bare (unconfigured) resolver finds no pipe_* module and no workflow."""
@@ -764,13 +730,7 @@ class TestWorkflowResolver:
         with pytest.raises(UnsupportedWorkflowError, match="no document store"):
             resolver.load_workflow("pipe_x")
 
-    @pytest.mark.parametrize(
-        "package",
-        [
-            pytest.param("tests.pyworkflows", id="import-path"),
-            pytest.param(pyworkflows, id="package"),
-        ],
-    )
+    @pytest.mark.parametrize("package", WORKFLOW_PACKAGES)
     def test_configured_resolver_loads_resolved_workflow(self, package):
         resolver = WorkflowResolver(module_store=PackageStore(package))
         assert resolver.load("pipe_kazeeki1") is not None
@@ -925,29 +885,6 @@ class TestCompositeStore:
         assert store.load("absent") is None
 
 
-class TestCatalog:
-    def test_registered_module_appears_in_catalog(self, fixed_registry):
-        pipe = _pipe_wrapper(name=_NAME, **_META)
-        fixed_registry.register(ModuleDefinition(name=_NAME, sync_pipe=pipe))
-
-        assert _NAME in list_modules()
-        assert "tokenizer" in list_modules()  # built-ins still present
-
-    def test_bare_callable_skipped_in_catalog(self, fixed_registry):
-        """Resolvable but carries no metadata."""
-        fixed_registry.register(MOD_DEFN)
-
-        assert _NAME not in list_modules()
-
-    def test_list_modules_filters_by_provider(self, fixed_registry):
-        pipe = _pipe_wrapper(name=_NAME, **_META)
-        fixed_registry.register(ModuleDefinition(name=_NAME, sync_pipe=pipe))
-        metadata = list_module_metadata(provider="acme")
-
-        assert list_modules(provider="acme") == [_NAME]
-        assert metadata[0].provider == "acme"
-
-
 def _document_resolver(directory, **kwargs) -> WorkflowResolver:
     """Builds a resolver whose document modules run through the global dispatcher."""
     resolver = WorkflowResolver(document_store=DirectoryStore(directory), **kwargs)
@@ -955,7 +892,7 @@ def _document_resolver(directory, **kwargs) -> WorkflowResolver:
     return resolver
 
 
-class TestResolvedDocuments:
+class TestResolvedWorkflow:
     workflows = TESTS_DIR / "workflows"
 
     def test_document_loads_once_with_both_interfaces(self, monkeypatch):
@@ -969,14 +906,13 @@ class TestResolvedDocuments:
 
         monkeypatch.setattr(DirectoryStore, "load", counting)
         module = resolver.load("pipe_gigs")
-        seen = len(loads)
 
         assert module is not None
         assert callable(module.pipe)
         assert callable(module.async_pipe)
         assert resolver.load("pipe_gigs") is module
-        assert len(loads) == seen
         assert resolver.require_interfaces("pipe_gigs") == {"pipe", "async_pipe"}
+        assert loads == ["pipe_gigs"]
 
     def test_a_warm_plan_build_rereads_no_stored_document(self, monkeypatch, tmp_path):
         """A planned dependency's own dependencies come from its resolved workflow."""

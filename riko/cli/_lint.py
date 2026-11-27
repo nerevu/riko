@@ -26,11 +26,12 @@ from ._lint_basenames import gen_basename_issues
 from ._lint_bindings import gen_binding_issues
 from ._lint_deps import gen_hook_pin_issues, gen_import_issues
 from ._lint_escapes import ESCAPES, gen_escape_counts
+from ._lint_helpers import KEPT_HELPERS, ChainReport
 from ._lint_literals import gen_literal_issues
+from ._lint_ownership import gen_ownership_issues
 from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
 from ._lint_tests import (
-    LayoutIssue,
     gen_global_bound_issues,
     gen_inline_tables,
     gen_layout_issues,
@@ -158,17 +159,13 @@ _lint_literals = partial(_run_text_lint, gen_literal_issues)
 _lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
-def _ratchet_sites(key: str, noun: str, *sites: LayoutIssue) -> int:
-    """Checks a count of test sites against its ceiling and prints them when over it."""
-    if code := ratchet_ceiling(PYPROJECT, "tests", key, len(sites), noun):
-        for site in sites:
-            print(site)
-
-    return code
-
-
 def _lint_tests() -> int:
-    """Checks the test suite against its tier layout, generated indexes, and bounds."""
+    """
+    Checks the test suite against its tier layout, generated indexes, and bounds.
+
+    Each count of test sites is checked against its ceiling, and the sites are
+    printed when the count is over it.
+    """
     text = PYPROJECT.read_text(encoding="utf-8")
 
     if (backstop := get_backstop(text)) is None:
@@ -182,14 +179,21 @@ def _lint_tests() -> int:
     for issue in issues:
         print(issue)
 
-    tables = gen_inline_tables(TESTS_DIR)
-    rows = gen_rows_without_id(TESTS_DIR)
-    noun = "inline multi-line parametrize tables"
-    codes = [
-        1 if any(issue.fatal for issue in issues) else 0,
-        _ratchet_sites("inline-tables", noun, *tables),
-        _ratchet_sites("rows-without-id", "`pytest.param` rows without `id=`", *rows),
+    tables = tuple(gen_inline_tables(TESTS_DIR))
+    rows = tuple(gen_rows_without_id(TESTS_DIR))
+    ratchets = [
+        ("inline-tables", "inline multi-line parametrize tables", tables),
+        ("rows-without-id", "`pytest.param` rows without `id=`", rows),
     ]
+    codes = [1 if any(issue.fatal for issue in issues) else 0]
+
+    for key, noun, sites in ratchets:
+        if code := ratchet_ceiling(PYPROJECT, "tests", key, len(sites), noun):
+            for site in sites:
+                print(site)
+
+        codes.append(code)
+
     return max(codes)
 
 
@@ -207,6 +211,33 @@ def _lint_escapes() -> int:
         for escape in ESCAPES
     ]
     return max(codes)
+
+
+def _lint_helpers() -> int:
+    """Checks the package's single-use helpers against their ceiling and keep-list."""
+    keep = frozenset((PACKAGE_DIR.parent / path, name) for path, name in KEPT_HELPERS)
+    report = ChainReport.from_roots(PACKAGE_DIR, keep=keep)
+    noun = "single-use helpers"
+    code = ratchet_ceiling(PYPROJECT, "helpers", "chains", report.helper_count, noun)
+
+    if code:
+        print("\n".join(report.issues))
+
+    if report.stale:
+        print("Kept helpers that are no longer single-use helpers:")
+        print("\n".join(report.stale))
+
+    return max(code, int(bool(report.stale)))
+
+
+def _lint_ownership(where: str | None = "") -> int:
+    """Checks the execution layer for streams that no owner closes."""
+    if where:
+        roots = [Path(p) for p in where.split(" ")]
+    else:
+        roots = [PACKAGE_DIR / "execution"]
+
+    return _report_text_lint(gen_ownership_issues, *roots)
 
 
 def _lint_deps() -> int:
@@ -263,13 +294,15 @@ def _gen_yaml_files() -> Iterable[str]:
 
 
 def _lint_actions(*where: str) -> int:
-    """Validates GitHub Actions workflows with actionlint and shellcheck."""
+    """Validates GitHub Actions workflows (default: all of them) with actionlint."""
     if not _actionlint:
         raise RuntimeError("actionlint not found")
     elif not _shellcheck:
         raise RuntimeError("shellcheck not found")
 
-    return call([_actionlint, *where])
+    workflows = (glob(str(_WORKFLOW_DIR / f"*.{ext}")) for ext in ("yml", "yaml"))
+    paths = where or tuple(chain.from_iterable(workflows))
+    return call([_actionlint, *paths])
 
 
 def _lint_yaml(*where: str) -> int:
@@ -281,21 +314,21 @@ def _lint_yaml(*where: str) -> int:
     return call([_yamlfmt, "-lint", *paths])
 
 
-def _load_staged(suffix: str) -> list[str]:
-    """Lists staged files with ``suffix`` that were added, copied, or modified."""
-    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
-    staged = check_output(args, text=True).splitlines()
-    return [name for name in staged if name.endswith(suffix)]
-
-
 def _lint_staged() -> int:
-    """Lints staged Python files with ruff and staged Markdown files with rumdl."""
+    """
+    Lints staged Python files with ruff and staged Markdown files with rumdl.
+
+    Only files that were added, copied, or modified are linted.
+    """
     if not _ruff:
         raise RuntimeError("ruff not found")
     elif not _rumdl:
         raise RuntimeError("rumdl not found")
 
-    files, documents = _load_staged(".py"), _load_staged(".md")
+    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
+    staged = check_output(args, text=True).splitlines()
+    files = [name for name in staged if name.endswith(".py")]
+    documents = [name for name in staged if name.endswith(".md")]
     codes = [0]
 
     if files:
@@ -375,6 +408,12 @@ def _check_command() -> None:
     help="Check Any and cast uses against their recorded ceilings",
     is_flag=True,
 )
+@click.option(
+    "--helpers", help="Check single-use helpers against their ceiling", is_flag=True
+)
+@click.option(
+    "--ownership", help="Check execution streams reach an owner", is_flag=True
+)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
@@ -403,6 +442,8 @@ def _lint_command(
     tests: bool = False,
     basenames: bool = False,
     escapes: bool = False,
+    helpers: bool = False,
+    ownership: bool = False,
     all_: bool = False,
     parallel: bool = False,
 ) -> None:
@@ -427,72 +468,78 @@ def _lint_command(
                 tests,
                 basenames,
                 escapes,
+                helpers,
+                ownership,
                 all_,
             )
         )
-        return_codes: list[int] = []
-
-        if all_ or not has_selector:
-            codes = _lint_python(_where, unsafe_fixes), _lint_markdown(_where)
-            return_codes.extend(codes)
-
-        if rst or all_:
-            return_codes.append(lint_rst(_where))
-
-        if docs or all_:
-            return_codes.append(lint_docs())
-
-        if docstrings or all_:
-            return_codes.append(_lint_docstrings(_where))
-
-        if terms or all_:
-            return_codes.append(_lint_terms(_where))
-
-        if literals or all_:
-            return_codes.append(_lint_literals(_where))
-
-        if deps or all_:
-            return_codes.append(_lint_deps())
-
-        if bindings or all_:
-            return_codes.append(_lint_bindings(_where))
-
-        if tests or all_:
-            return_codes.append(_lint_tests())
-
-        if basenames or all_:
-            return_codes.append(_lint_basenames())
-
-        if escapes or all_:
-            return_codes.append(_lint_escapes())
-
-        if actions or all_:
-            exts = ["yml", "yaml"]
-            paths = (glob(str(_WORKFLOW_DIR / f"*.{ext}")) for ext in exts)
-            return_codes.append(_lint_actions(*chain.from_iterable(paths)))
-
-        if yaml or all_:
-            return_codes.append(_lint_yaml(*where))
-
-        if all_:
-            return_codes.append(run_import_checks(PACKAGE_DIR, *IMPORT_CHECKS))
-
-        if dist:
-            return_codes.append(twine_check())
-
-        if check_types:
-            return_codes.append(_lint_types(_where))
-
-        if verify_types:
-            return_codes.append(_verify_types(_where))
-
-        if strict:
-            return_codes.append(_lint_python_strict(parallel))
-
+        lints_default = all_ or not has_selector
+        checks = (
+            (lints_default, partial(_lint_python, _where, unsafe_fixes)),
+            (lints_default, partial(_lint_markdown, _where)),
+            (rst or all_, partial(lint_rst, _where)),
+            (docs or all_, lint_docs),
+            (docstrings or all_, partial(_lint_docstrings, _where)),
+            (terms or all_, partial(_lint_terms, _where)),
+            (literals or all_, partial(_lint_literals, _where)),
+            (deps or all_, _lint_deps),
+            (bindings or all_, partial(_lint_bindings, _where)),
+            (tests or all_, _lint_tests),
+            (basenames or all_, _lint_basenames),
+            (escapes or all_, _lint_escapes),
+            (helpers or all_, _lint_helpers),
+            (ownership or all_, partial(_lint_ownership, _where)),
+            (actions or all_, _lint_actions),
+            (yaml or all_, partial(_lint_yaml, *where)),
+            (all_, partial(run_import_checks, PACKAGE_DIR, *IMPORT_CHECKS)),
+            (dist, twine_check),
+            (check_types, partial(_lint_types, _where)),
+            (verify_types, partial(_verify_types, _where)),
+            (strict, partial(_lint_python_strict, parallel)),
+        )
+        return_codes = [check() for enabled, check in checks if enabled]
         exit(max(return_codes, default=0))
 
 
 _lint_command.add_command(IMPORTS_COMMAND)
+
+
+def _format_python(
+    ruff: str, where: tuple[str, ...], sort: bool, unsafe_fixes: bool
+) -> int:
+    """Formats Python files with ruff, then sorts imports and applies fixes."""
+    cmd = [ruff, "format"]
+
+    if where:
+        cmd.extend(where)
+
+    try:
+        check_call(cmd)
+    except CalledProcessError as e:
+        return_code = e.returncode
+    else:
+        return_code = 0
+
+    if sort and not return_code:
+        sort_cmd = [ruff, "check", "--select", "I", "--fix"]
+        style_cmd = [ruff, "check", "--fix"]
+
+        if unsafe_fixes:
+            style_cmd.append("--unsafe-fixes")
+
+        if where:
+            sort_cmd.extend(where)
+            style_cmd.extend(where)
+
+        try:
+            check_call(sort_cmd)
+            check_call(style_cmd)
+        except CalledProcessError as e:
+            return_code = e.returncode
+        else:
+            return_code = 0
+
+    return return_code
 
 
 @click.command(name="prettify")
@@ -513,36 +560,7 @@ def _prettify_command(
     if yaml:
         return_code = _format_yaml(*where)
     elif _ruff:
-        cmd = [_ruff, "format"]
-
-        if where:
-            cmd.extend(where)
-
-        try:
-            check_call(cmd)
-        except CalledProcessError as e:
-            return_code = e.returncode
-        else:
-            return_code = 0
-
-        if sort and not return_code:
-            sort_cmd = [_ruff, "check", "--select", "I", "--fix"]
-            style_cmd = [_ruff, "check", "--fix"]
-
-            if unsafe_fixes:
-                style_cmd.append("--unsafe-fixes")
-
-            if where:
-                sort_cmd.extend(where)
-                style_cmd.extend(where)
-
-            try:
-                check_call(sort_cmd)
-                check_call(style_cmd)
-            except CalledProcessError as e:
-                return_code = e.returncode
-            else:
-                return_code = 0
+        return_code = _format_python(_ruff, where, sort, unsafe_fixes)
 
         if not return_code:
             return_code = _format_markdown(*where)

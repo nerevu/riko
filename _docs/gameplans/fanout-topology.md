@@ -184,15 +184,15 @@ list(events)
 independently creates a fresh execution. A subscription definition is not a replay
 buffer: items published in one execution are observed through the subscription's `func=`
 or an explicit effect inside the attached branch, never by draining the subscription
-afterwards (decided 2026-10-10; the `TestSubscriptions` tripwires and the Cookbook
-fan-out examples are written against this form). Until R7 lands, those examples stay
-plain code blocks beside "Pending." notes: the three `publish`/`subscribe`/`split`
+afterwards (decided 2026-10-10; the `TestPipelineSubscriptions` tripwires and the
+Cookbook fan-out examples are written against this form). Until R7 lands, those examples
+stay plain code blocks beside "Pending." notes: the three `publish`/`subscribe`/`split`
 blocks in `docs/COOKBOOK.rst` and the fan-out block in `docs/FAQ.rst`. Their tripwires
 are the `PUBSUB_PENDING` strict xfail in `tests/public/test_pipeline.py`
-("Pipeline.subscribe()/publish() are not available yet") and `SPLIT_METHOD_PENDING`
-in `tests/_workflows.py` ("Pipeline.split() is not available yet"). R7 promotes each
-block to a doctest with its observed output and drops the note; `manage lint --rst`
-flags a plain Python block that keeps neither marker.
+("Pipeline.subscribe()/publish() are not available yet") and `SPLIT_METHOD_PENDING` in
+`tests/_workflows.py` ("Pipeline.split() is not available yet"). R7 promotes each block
+to a doctest with its observed output and drops the note; `manage lint --rst` flags a
+plain Python block that keeps neither marker.
 
 A possible future extension is an explicit, opt-in *retaining* subscription mode that
 buffers published items for a later drain. It is not the default, is not part of R7, and
@@ -359,11 +359,12 @@ arrive in a later slice with the execution-scoped task group.
   possible false positive at EOF). Strict validates splitter cardinality/counts only
   (no per-item provenance ids), applies to managed execution only (direct module
   splitters are non-strict), defaults off, and early close never forces extra upstream
-  reads to finish validation (R7 Slice B; knob in execution-semantics § 6.5).
+  reads to finish validation (the `strict` knob lands in R7 Slice B, its enforcement in
+  Slice C's shared walk; knob in execution-semantics § 6.5).
 - Limits: low-level `Tee`/`AsyncTee` default to unlimited and never read global
   settings; managed execution passes its effective `branch_buffer` explicitly at every
   tee site (explicit splitters, implicit shared-port fan-out, and the async splitter
-  input tee); direct `riko.modules.split` calls keep the process default (Slice B).
+  input tee); direct `riko.modules.split` calls keep the process default (Slice C).
   Unlimited stays `inf`: `RIKO_BRANCH_BUFFER` accepts whole numbers of at least 1 or
   `inf`, `0` keeps being rejected with a warning, and there is no `None` normalization.
 - Close: natural exhaustion closes the source promptly and buffered values still drain
@@ -371,30 +372,52 @@ arrive in a later slice with the execution-scoped task group.
   upstream advance is in flight defers the source close to the advancer and returns
   promptly; a blocking sync `next()` that cannot be interrupted gets deferred cleanup
   with failures logged (no public waiting API). A closed branch ends normally (no
-  replayed cancellation); cancelling one async consumer is branch-local. Branches
+  replayed cancellation). Cancelling an async consumer that is only waiting on another
+  task's read is branch-local; cancelling the consumer whose task is reading upstream
+  interrupts that read and latches a `PipelineError` caused by the cancellation, which
+  siblings raise after draining what they queued. Closing a branch early never stops
+  its siblings (they keep reading to the end); a caller wanting all-or-nothing closes
+  the whole pipeline. Branches
   expose only `close()`/`aclose()`, with no weakref/GC cleanup. A fatal read is
   published (siblings notified) before the source closes, so a blocking close never
   holds drained siblings; the close-failure note therefore lands on the shared
   exception after a sibling may already have raised it (visible on later inspection).
-  `Tee._advance` publishes in a `finally` from an empty default read (user
+  `Tee._pull` publishes in a `finally` from an empty default read (user
   2026-11-17), so a second interrupt (Ctrl-C) landing inside its `except BaseException`
   arm still releases `_advancer` and sibling waiters never hang; they may then end
   without an error instead (`tests/internal/test_tee.py`
   `TestTee::test_second_interrupt_while_handling_the_first_releases_the_read`).
 - Cleanup failures beside a primary error keep the primary type, attach via
   `Exception.add_note`, and log the traceback; there is no tee-specific
-  `ExceptionGroup` (the general resource-unwind rule is unchanged).
-- Lock shape (fewest locks, least deadlock surface): `AsyncTee` keeps no state lock
-  (single-loop deque reads/appends); one `anyio.Lock` serializes only upstream
-  advancement, buffered reads never take it, a waiter re-checks its buffer after
-  acquiring, and AnyIO's same-task reacquire `RuntimeError` surfaces as the reentrancy
-  error. `Tee` uses one `threading.Lock` plus one `Condition` over it, never held
-  across `next(source)`; an advancing flag plus the advancer's thread id serialize
-  advancement and detect reentrancy, and every state transition (item, EOF, read
-  error, fatal, close) notifies waiters. `Tee` registers branches and re-reads the
-  live sibling set after an upstream read without the lock, snapshotting dicts with
-  one `tuple()` call and relying on GIL atomicity (CI has no free-threaded leg). No
-  new generic synchronization framework.
+  `ExceptionGroup` (the general resource-unwind rule is unchanged). An interrupted
+  read's close failure is noted on the interrupt, which each sibling's latched error
+  carries as its `__cause__`, so the note is one hop away and prints in tracebacks; it
+  is not copied onto the sibling error (`tests/internal/test_tee.py`
+  `TestTee::test_interrupted_copy_notes_a_failed_close_on_the_interrupt`).
+- Lock shape (fewest locks, least deadlock surface; `AsyncTee` revised 2026-11-23
+  (user), replacing its advancement `anyio.Lock`): `AsyncTee` takes no lock at all
+  (single-loop deque reads/appends). Reader election is an `_advancer` task id claimed
+  with no await between the buffer check and the claim; other readers wait on one
+  `anyio.Event` created lazily by the first waiter of the active read (an uncontended
+  pull allocates neither lock nor event), and `_publish` publishes the read, clears
+  `_advancer`, then sets and drops the event so every woken waiter re-checks its own
+  buffer against published state. A same-task read of an empty buffer while advancing
+  raises the reentrancy error. The advancer owns a close requested during its read
+  (closing it after publishing, like `Tee._advance`), so a cancelled waiter has no
+  cleanup obligation (`tests/internal/test_tee.py`
+  `TestAsyncTee::test_cancelling_a_waiter_leaves_the_owed_close_to_the_reader`). A
+  detached read task owned by the execution (a Web-Streams-style tee, where one branch's
+  deadline cannot interrupt a shared read) is to be reconsidered once Slice C's
+  execution task group lands; Slice C's design also aims for no riko-owned mutex (user,
+  2026-11-23): `Tee`'s lock is then the last one, removable once the driver task
+  confines each tee to one thread and hands items to branch workers through queues
+  (which also retires its GIL reliance). `Tee` uses one `threading.Lock` plus one
+  `Condition` over it, never held across `next(source)`; an advancing flag plus the
+  advancer's thread id serialize advancement and detect reentrancy, and every state
+  transition (item, EOF, read error, fatal, close) notifies waiters. `Tee` registers
+  branches and re-reads the live sibling set after an upstream read without the lock,
+  snapshotting dicts with one `tuple()` call and relying on GIL atomicity (CI has no
+  free-threaded leg). No new generic synchronization framework.
 - Source wrapper (decided 2026-11-16 (user), landed 2026-11-17): `Tee` wraps its source
   in `auto_close` (moved to `riko/base/_iterutils.py`, with `get_sync_closer`/
   `require_value` in `riko/base/_guards.py`), so an undrained, unclosed `Tee` closes its
@@ -403,7 +426,7 @@ arrive in a later slice with the execution-scoped task group.
   `ResourceWarning` only when a closable is a resource (`has_open_resource`: anything
   with `close`/`aclose` other than a generator or another wrapper), so hand-composed
   `split` feeding an early-stopping pipe no longer warns; a file-backed leak still does
-  (`tests/internal/test_io.py::TestAutoClose::test_dropping_an_unclosed_wrapper_of_streams_does_not_warn`).
+  (`tests/internal/test_stream_helpers.py::TestAutoClose::test_dropping_an_unclosed_wrapper_of_streams_does_not_warn`).
   `auto_close.close()` closes every value, then raises the single failure or an
   `ExceptionGroup` (execution-semantics § cleanup). `auto_close.close()` claims its
   close with one atomic pop of a one-item list, so concurrent closes (a deferred reader
@@ -415,11 +438,11 @@ arrive in a later slice with the execution-scoped task group.
   `_TeeState`. Each read of either tee publishes one `TeeRead` built by
   `from_lag`/`from_interrupt`/`from_item` and delivered by `deliver`; both tees re-read
   live siblings after the read, publish before closing, and share the plain helpers
-  `require_idle`/`is_lagging`/`log_cleanup_failure` in `riko/base/_iterutils.py` (no
-  base class). Branches are `TeeBranch`/`AsyncTeeBranch` classes (a generator branch
-  cannot drop its buffer when closed unstarted, or end a wait closed from another
-  thread). The advancing branch publishes its own value into its own buffer, so no
-  item/marker union is returned (enums need at least three members).
+  `require_idle`/`is_lagging`/`log_failure` in `riko/base/_iterutils.py` (no base
+  class). Branches are `TeeBranch`/`AsyncTeeBranch` classes (a generator branch cannot
+  drop its buffer when closed unstarted, or end a wait closed from another thread). The
+  advancing branch publishes its own value into its own buffer, so no item/marker union
+  is returned (enums need at least three members).
 
 ### 7.1 Branch isolation
 

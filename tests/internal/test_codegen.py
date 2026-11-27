@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import ast
 import dataclasses
 import importlib.util
 import json
@@ -66,7 +65,6 @@ from riko.cli._gen_user_agents import (
     load_user_agents,
 )
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
-from riko.definitions._context import Context
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
@@ -80,7 +78,6 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.types._enums import UserAgent
-from riko.types._workflow import Endpoint
 from riko.types._wrappers import WrapperMeta, require_wrapper_meta
 from riko.types.modules import (
     ConfArg,
@@ -90,7 +87,7 @@ from riko.types.modules import (
     SortRawRule,
 )
 from tests import TESTS_DIR, async_test, is_installed
-from tests._workflows import EXAMPLES_DIR, run_document, run_workflow
+from tests._workflows import EXAMPLES_DIR, TEST_CONTEXT, run_document, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -258,7 +255,7 @@ def _compile_fixtures(unrunnable: bool = False) -> list[Any]:
 async def _arun_document(flow: Workflow) -> list[Item]:
     items: list[Item] = []
 
-    async with AsyncExecution(context=Context(test=True)) as execution:
+    async with AsyncExecution(context=TEST_CONTEXT) as execution:
         stream = await execution.arun(ExecutionPlan.from_workflow(flow, dispatcher))
         items = [item async for item in stream]
 
@@ -296,7 +293,7 @@ class TestWorkflowModule:
         """Each workflow module yields the items its workflow document yields."""
         flow = Workflow.parse(path.read_text())
         module = _build(flow, path.stem, tmp_path)
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
+        assert list(module.pipe(context=TEST_CONTEXT)) == run_workflow(flow)
 
     @pytest.mark.parametrize("path", _compile_fixtures(unrunnable=True))
     def test_generated_matches_document_failure(self, path: Path, tmp_path: Path):
@@ -305,7 +302,7 @@ class TestWorkflowModule:
 
         def run_generated() -> list[object]:
             module = _build(flow, path.stem, tmp_path)
-            return list(module.pipe(context=Context(test=True)))
+            return list(module.pipe(context=TEST_CONTEXT))
 
         generated = _failure(run_generated)
         assert generated == _failure(lambda: run_workflow(flow))
@@ -317,7 +314,7 @@ class TestWorkflowModule:
         path = TESTS_DIR / "workflows" / f"{stem}.json"
         flow = Workflow.parse(path.read_text())
         module = _build(flow, stem, tmp_path, is_async=True)
-        stream = module.async_pipe(context=Context(test=True))
+        stream = module.async_pipe(context=TEST_CONTEXT)
         assert [item async for item in stream] == await _arun_document(flow)
 
     @pytest.mark.parametrize(("source", "expected"), GENERATED_INPUTS)
@@ -392,7 +389,7 @@ class TestCompileWorkflow:
         flow = Workflow.from_raw({"nodes": [{"name": "itembuilder", "conf": conf}]})
         module = _build(flow, "pipe_verbatim", tmp_path)
         assert module.flow == flow
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
+        assert list(module.pipe(context=TEST_CONTEXT)) == run_workflow(flow)
 
     def test_generation_is_deterministic(self):
         """Generating the same workflow twice produces identical source."""
@@ -405,6 +402,12 @@ class TestCompileWorkflow:
             flow, "pipe_twice"
         )
 
+    def test_generation_is_stable_across_processes_with_different_hash_seeds(
+        self, hash_seed_probes
+    ):
+        compiled = {probes["compiled"] for probes in hash_seed_probes.values()}
+        assert len(compiled) == 1
+
     def test_empty_fields_are_left_out(self, tmp_path: Path):
         """A workflow without edges or input schemas generates neither keyword."""
         flow = Pipeline.from_module("hash").workflow
@@ -413,17 +416,15 @@ class TestCompileWorkflow:
         assert "input_schemas=" not in source
         assert _load(source, "pipe_bare", tmp_path).flow == flow
 
-    def test_generated_source_parses(self, tmp_path: Path):
-        """The generated source is valid Python and imports without running."""
+    def test_generated_source_imports_back_to_the_same_flow(self, tmp_path: Path):
+        """The generated source of an edged flow imports back to the same flow."""
         flow = (
             Pipeline.from_module("itembuilder")
             .pipe("rename", conf=RENAME_CONF)
             .workflow
         )
         source = compile_workflow(flow, "pipe_parsed")
-        ast.parse(source)
-        module = _load(source, "pipe_parsed", tmp_path)
-        assert module.flow.outputs["default"] == Endpoint("rename-1", "out")
+        assert _load(source, "pipe_parsed", tmp_path).flow == flow
 
 
 class TestPythonise:
@@ -481,14 +482,10 @@ class TestModuleCategory:
         assert list_modules(category="sink") == []
 
 
-class TestGeneratedNamesDrift:
+class TestGenerateModuleNames:
     def test_generated_names_match(self):
         entries = gen_catalog_entries()
-        name_lines = MODULE_NAMES_PATH.read_text().splitlines()
-        generated_lines = generate_module_names(*entries).splitlines()
-
-        for actual, expected in zip(name_lines, generated_lines, strict=True):
-            assert actual == expected
+        assert MODULE_NAMES_PATH.read_text() == generate_module_names(*entries)
 
 
 class TestGenerateModuleIds:
@@ -515,7 +512,7 @@ USER_AGENT_ENTRIES = [
 @pytest.mark.skipif(
     not is_installed("fake_useragent"), reason="fake-useragent is not installed"
 )
-class TestUserAgentCodegen:
+class TestGenerateUserAgents:
     """Run ``manage codegen --user-agents`` to update the random user-agent pools."""
 
     def test_user_agents_match_generated(self):
@@ -607,7 +604,7 @@ def _run_probe(package: str, name: str) -> list[object]:
     if package.startswith("examples"):
         stream = module.pipe(test=True)
     else:
-        stream = module.pipe(context=Context(test=True))
+        stream = module.pipe(context=TEST_CONTEXT)
 
     return list(stream)
 
@@ -812,7 +809,7 @@ VERB_TABLE_MARKERS = [
 ]
 
 
-class TestVerbTables:
+class TestGenerateVerbTables:
     """Generated function-name verb tables."""
 
     @pytest.mark.parametrize(("fmt", "text", "row"), VERB_TABLE_MARKERS)

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import as_async
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_arg
@@ -99,9 +100,10 @@ async def async_parser(
     sent = []
 
     try:
-        async for item in as_async(stream):
-            await async_hub.publish(others, item, timeout=timeout)
-            sent.append(item)
+        async with maybe_aclosing(as_async(stream)) as items:
+            async for item in items:
+                await async_hub.publish(others, item, timeout=timeout)
+                sent.append(item)
     finally:
         await async_hub.complete(others)
 

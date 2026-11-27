@@ -584,9 +584,9 @@ Pipeline lifecycle
 ^^^^^^^^^^^^^^^^^^
 
 A ``Pipeline`` is an immutable *definition*, not a ``stream``. Every call starts a fresh
-one-shot run. Running a ``pipeline`` twice iterates the seed twice. The run owns its
-resources. Exhausting it or leaving its ``with pipeline.open(...)`` block early tears
-the run down.
+one-shot run. Running a ``pipeline`` twice iterates the seed twice. The run closes its
+resources when it is exhausted or when its ``with pipeline.open(...)`` block exits
+early.
 
 .. code-block:: python
 

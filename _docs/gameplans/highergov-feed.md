@@ -229,7 +229,8 @@ class SchemaDriftReport(TypedDict):
 
 Rename behavior: Airtable stable field IDs can identify authoritative renames. CSV/API
 sources report removed + added; fuzzy similarity may be advisory only and must never
-remap automatically.
+remap automatically. The generic review-not-merge rule is owned by
+[entity-resolution.md](entity-resolution.md).
 
 Added columns normally warn. Removed required columns fail before transformation.
 Removed optional columns warn unless a source-specific contract requires them.

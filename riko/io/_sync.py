@@ -272,8 +272,10 @@ def buffer(
         max_size=STREAMING_THRESHOLD, mode=mode
     )
 
-    if first is not None:
-        spool.write(cast("bytes", first).decode(encoding) if decode else first)
+    if isinstance(first, bytes) and decode:
+        spool.write(first.decode(encoding))
+    elif first is not None:
+        spool.write(first)
 
     for chunk in chunks:
         spool.write(cast("bytes", chunk).decode(encoding) if decode else chunk)
@@ -529,7 +531,7 @@ def opener(
                 response = StringIO(r.text)
             else:
                 encoding = r.encoding or encoding
-                response = TextReencoder(r.raw, encoding, owner=r)
+                response = TextReencoder(r.raw, encoding, closable=r)
         else:
             req = Request(url, headers=headers)  # noqa: S310
             r = urlopen(req, timeout=_timeout)  # noqa: S310
@@ -544,7 +546,7 @@ def opener(
                 response = buffer(r, encoding=encoding)
             else:
                 encoding = get_response_encoding(r, encoding or ENCODING)
-                response = TextReencoder(r.fp, encoding, owner=r)
+                response = TextReencoder(r.fp, encoding, closable=r)
 
         if not memoize:
             stack.pop_all()

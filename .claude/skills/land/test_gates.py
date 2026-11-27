@@ -25,6 +25,7 @@ import require_agents
 RUFF_GATES = frozenset({"tidy", "lint", "prettify"})
 TYPE_GATES = frozenset({"check-types", "verify-types"})
 ALL_GATES = RUFF_GATES | TYPE_GATES | {"test", "uncovered", "codegen"}
+CANONICAL = {gate: args for gate, args, *_ in gates.GATE_SEQUENCE}
 TREE_FILES = (
     ".claude/skills/SKILL.md",
     ".claude/skills/helper.py",
@@ -35,6 +36,11 @@ TREE_FILES = (
     "pyproject.toml",
     "typings/x.pyi",
 )
+
+
+def as_gate(gate: str, command: list[str]) -> list[str]:
+    """Ends ``command`` with ``gate``'s canonical arguments, which it ignores."""
+    return ["sh", "-c", shlex.join(command), "sh", *CANONICAL[gate]]
 
 
 @pytest.fixture
@@ -114,10 +120,13 @@ def test_run_records_then_skips_until_the_tree_changes(tmp_path, capsys):
     command = ["sh", "-c", f"echo x >> {marker}"]
 
     assert gates.check(path, "lint") == 1
-    assert gates.run(path, "lint", command, mutates=False, lock=False) == 0
+    assert (
+        gates.run(path, "lint", as_gate("lint", command), mutates=False, lock=False)
+        == 0
+    )
     assert gates.check(path, "lint") == 1  # the command itself edited the tree
     marker.write_text("")
-    command = ["true"]
+    command = as_gate("lint", ["true"])
     assert gates.run(path, "lint", command, mutates=False, lock=False) == 0
     assert gates.check(path, "lint") == 0
     (tmp_path / "a.py").write_text("a = 2\n")
@@ -187,10 +196,17 @@ def test_scope_leads_prints_each_lead_after_the_scope(tmp_path, capsys):
     out = capsys.readouterr().out
     leads = out.split("\n--- lint\n", 1)[1]
     assert "+a = 2" in out.split("--- lint")[0]
-    assert "lint --terms --literals --docstrings --bindings --tests" in leads
+    assert "lint --terms --literals --docstrings --bindings --tests --helpers" in leads
     assert "--- neighborhood\n" in leads
     assert "--context 2" in leads.split("--- neighborhood\n")[1]
     assert "--- mistake_scan\n" in leads
+    reuse_lead = leads.split("--- reuse_scan\n")[1].split("--- reuse_shapes\n")[0]
+    assert "--diff-file" in reuse_lead
+    assert "--tests" in reuse_lead
+    assert "--shapes" not in reuse_lead
+    shapes_lead = leads.split("--- reuse_shapes\n")[1]
+    assert "reuse_scan.py --diff-file" in shapes_lead
+    assert "--tests --shapes" in shapes_lead
     assert "--files tests/unit/test_a.py" in leads.split("--- overlap_scan\n")[1]
     assert "--- heading_drift" not in leads
     assert "+a = 2" in path.with_name("tidy-scope.diff").read_text()
@@ -238,7 +254,7 @@ def test_gen_new_sites_keeps_lint_lines_on_added_lines(tmp_path):
 @pytest.mark.usefixtures("repo")
 def test_scope_new_sites_prints_only_lint_lines_since_the_pass(tmp_path, capsys):
     path = gates.get_state_dir() / "gate-markers.json"
-    gates.run(path, "lint", ["true"], mutates=False, lock=False)
+    gates.run(path, "lint", as_gate("lint", ["true"]), mutates=False, lock=False)
     (tmp_path / "a.py").write_text("a = 1\nb = 2\n")
     lint = "a.py:1:1: E1 old\na.py:2:1: E2 new\n"
     capsys.readouterr()
@@ -258,7 +274,7 @@ def test_scope_new_sites_rejects_the_diff_modes():
 @pytest.mark.usefixtures("repo")
 def test_mutating_gate_records_the_tree_it_left(tmp_path):
     path = gates.get_state_dir() / "gate-markers.json"
-    command = ["sh", "-c", f"echo 'a = 3' > {tmp_path / 'a.py'}"]
+    command = as_gate("prettify", ["sh", "-c", f"echo 'a = 3' > {tmp_path / 'a.py'}"])
 
     assert gates.run(path, "prettify", command, mutates=True, lock=False) == 0
     assert gates.check(path, "prettify") == 0
@@ -268,29 +284,54 @@ def test_mutating_gate_records_the_tree_it_left(tmp_path):
 def test_failed_command_records_nothing():
     path = gates.get_state_dir() / "gate-markers.json"
 
-    assert gates.run(path, "test", ["false"], mutates=False, lock=False) == 1
+    command = as_gate("test", ["false"])
+    assert gates.run(path, "test", command, mutates=False, lock=False) == 1
     assert gates.check(path, "test") == 1
+
+
+@pytest.mark.parametrize(
+    ("gate", "args", "rejected"),
+    [
+        pytest.param("lint", ("lint", "--fix"), True, id="mismatch"),
+        pytest.param("lint", CANONICAL["lint"], False, id="canonical"),
+        pytest.param("tidy", ("lint", "--fix"), False, id="other-gate"),
+    ],
+)
+@pytest.mark.usefixtures("repo")
+def test_run_takes_only_the_canonical_command_for_a_sequence_gate(
+    tmp_path, capsys, gate, args, rejected
+):
+    path = gates.get_state_dir() / "gate-markers.json"
+    ran = tmp_path / ".claude" / "ran"
+    command = ["sh", "-c", f"touch {ran}", "sh", *args]
+    code = gates.run(path, gate, command, mutates=False, lock=False)
+
+    assert ran.exists() is not rejected
+    assert gates.check(path, gate) == (1 if rejected else 0)
+    assert code == (gates.MISMATCH if rejected else 0)
+    assert ("rejected lint" in capsys.readouterr().out) is rejected
 
 
 @pytest.mark.usefixtures("repo")
 def test_locked_run_reports_busy_without_waiting():
     path = gates.get_state_dir() / "gate-markers.json"
+    command = as_gate("test", ["true"])
 
     with open(gates.get_lock_path(), "a") as held:
         fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        code = gates.run(path, "test", ["true"], mutates=False, lock=True)
+        code = gates.run(path, "test", command, mutates=False, lock=True)
 
     assert code == gates.BUSY
     assert gates.get_lock_path().parent.name == ".git"
-    assert gates.run(path, "test", ["true"], mutates=False, lock=True) == 0
+    assert gates.run(path, "test", command, mutates=False, lock=True) == 0
 
 
 @pytest.mark.usefixtures("repo")
 def test_cli_reads_flags_after_the_gate_and_the_command_after_the_separator():
-    argv = ["run", "lint", "--lock", "--", "sh", "-c", "exit 3"]
+    argv = ["run", "lint", "--lock", "--", *as_gate("lint", ["sh", "-c", "exit 3"])]
 
     assert gates.main(argv) == 3
-    assert gates.main(["run", "lint", "--lock", "--", "true"]) == 0
+    assert gates.main(["run", "lint", "--lock", "--", *as_gate("lint", ["true"])]) == 0
     assert gates.main(["check", "lint"]) == 0
 
 
@@ -298,7 +339,7 @@ def test_cli_reads_flags_after_the_gate_and_the_command_after_the_separator():
 def test_run_keeps_the_last_pytest_summary_line(capsys):
     path = gates.get_state_dir() / "gate-markers.json"
     output = "== 1 passed in 1s ==\\n=== 3 passed, 2 xfailed in 9s ===\\nratchet ok\\n"
-    command = ["printf", output]
+    command = as_gate("test", ["printf", output])
 
     assert gates.print_summary(path, "test") == 1
     assert gates.run(path, "test", command, mutates=False, lock=False) == 0
@@ -418,7 +459,8 @@ def test_prettify_carries_tidy_only_from_a_marked_tree(
         gates.main(argv)
 
     capsys.readouterr()
-    assert gates.main(["run", "prettify", "--mutates", "--", *command]) == 0
+    argv = ["run", "prettify", "--mutates", "--", *as_gate("prettify", command)]
+    assert gates.main(argv) == 0
     assert gates.check(path, "tidy") == (0 if carried else 1)
     assert "not recorded" not in capsys.readouterr().out
 
@@ -432,7 +474,8 @@ def test_skipped_prettify_leaves_tidy_marker_alone(tmp_path):
     gates.main(["record", "prettify"])
     command = ["sh", "-c", f"echo 'a = 3' > {tmp_path / 'a.py'}"]
 
-    assert gates.main(["run", "prettify", "--mutates", "--", *command]) == 0
+    argv = ["run", "prettify", "--mutates", "--", *as_gate("prettify", command)]
+    assert gates.main(argv) == 0
     assert gates.load_markers(path)["tidy"] == tidied
     assert (tmp_path / "a.py").read_text() == "a = 4\n"
 
@@ -485,7 +528,7 @@ def test_run_records_a_ratchet_lowering_its_ceiling(repo, tmp_path, ceiling, rec
     repo("commit", "-qm", "pyproject")
     script = "import pathlib, sys\npathlib.Path(sys.argv[1]).write_text(sys.argv[2])\n"
     text = f"[tool.riko.coverage]\n{ceiling}"
-    command = [sys.executable, "-c", script, str(pyproject), text]
+    command = as_gate("test", [sys.executable, "-c", script, str(pyproject), text])
 
     assert gates.run(path, "test", command, mutates=False, lock=False) == 0
     assert gates.check(path, "test") == (0 if recorded else 1)

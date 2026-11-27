@@ -24,7 +24,6 @@ from typing import (
 )
 
 from attrs import define, evolve, field, fields
-from typing_extensions import TypeVar
 
 from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
@@ -38,7 +37,7 @@ from riko.base._require_guards import (
 from riko.base._sentinels import MISSING, MissingType
 from riko.types._enums import IdentityMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
-from riko.types._streams import Item
+from riko.types._streams import Item, T_co
 from riko.types._workflow import OUT, Endpoint
 
 from ._context import Context
@@ -78,8 +77,6 @@ if TYPE_CHECKING:
     from ._write import Destination
 
 _EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, input_schemas={})
-
-T_co = TypeVar("T_co", covariant=True, default=Item)
 
 
 def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
@@ -126,7 +123,7 @@ _is_settings = validator_from_require(
 
 
 @define(frozen=True, slots=True, repr=False)
-class PipelineDefinition(Generic[T_co]):
+class PipelineDefinition(Generic[T_co]):  # noqa: UP046
     """
     An immutable, composable pipeline definition around a ``Workflow``.
 

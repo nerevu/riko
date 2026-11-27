@@ -27,7 +27,7 @@ from riko.types._enums import Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
 from tests import async_test, is_installed
-from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
+from tests._lifecycle import EXPECTED, HASHED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
@@ -62,6 +62,12 @@ TRANSACTIONS = [
 PARITY_WRITES = [
     pytest.param("json", JSON_BYTES, id="json"),
     pytest.param("csv", b"x\r\n0\r\n1\r\n2\r\n", id="csv"),
+]
+
+
+NESTED_DOTDICT_WRITES = [
+    pytest.param("json", b'[{"a": {"b": [1, {"c": 2}]}}]', id="json"),
+    pytest.param("jsonl", b'{"a": {"b": [1, {"c": 2}]}}', id="jsonl"),
 ]
 
 
@@ -133,13 +139,7 @@ class TestWrite:
         assert sync_path.read_bytes() == expected
         assert async_path.read_bytes() == expected
 
-    @pytest.mark.parametrize(
-        ("fmt", "expected"),
-        [
-            ("json", b'[{"a": {"b": [1, {"c": 2}]}}]'),
-            ("jsonl", b'{"a": {"b": [1, {"c": 2}]}}'),
-        ],
-    )
+    @pytest.mark.parametrize(("fmt", "expected"), NESTED_DOTDICT_WRITES)
     def test_nested_dotdict_items(self, tmp_path, fmt, expected):
         source = tmp_path / "nested.json"
         source.write_text('[{"a": {"b": [1, {"c": 2}]}}]')
@@ -281,15 +281,14 @@ class TestPipelineWrite:
 
     def test_leaf_write_produces_one_framed_document(self, tmp_path):
         path = tmp_path / "out.json"
-        pipeline = Pipeline().hash(options={"assign": "h"}).write(path)
+        pipeline = HASHED.write(path)
         assert len(list(pipeline(ITEMS))) == len(ITEMS)
         assert path.read_bytes().startswith(b"[")
         assert path.read_bytes().endswith(b"]")
 
     def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        hashed = Pipeline().hash(options={"assign": "h"})
-        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
-        assert through == list(hashed(ITEMS))
+        through = list(HASHED.write(tmp_path / "out.json")(ITEMS))
+        assert through == list(HASHED(ITEMS))
 
     def test_non_file_target_execution_unsupported(self):
         pipeline = Pipeline().write(RecordStore())
@@ -318,7 +317,7 @@ class TestPipelineWrite:
 
 class TestFormats:
     def test_format_values(self):
-        assert [f.value for f in Formats] == [
+        assert [f.value for f in Formats] == [  # reuse-ok: get_envelope_values
             "csv",
             "geojson",
             "json",
@@ -336,11 +335,21 @@ EXPORT_OPTIONS = [
 ]
 
 WRITER_OPTIONS = [
+    pytest.param("csv", {"mode": "w"}, id="mode"),
     pytest.param("csv", {"encoding": "utf8"}, id="encoding"),
     pytest.param("csv", {"chunksize": None}, id="chunksize"),
     pytest.param("csv", {"length": 0}, id="length"),
     pytest.param("csv", {"bar_len": 50}, id="bar_len"),
-    pytest.param("list", {"mode": "w"}, id="list"),
+]
+
+ITEM_EXPORT_OPTIONS = [
+    pytest.param("list", ("out.csv",), {}, "f", id="list-destination"),
+    pytest.param("tuple", (), {"skip_header": True}, "skip_header", id="tuple-option"),
+]
+
+WHOLE_DOCUMENT_APPENDS = [
+    pytest.param("json", "ab", id="json"),
+    pytest.param("geojson", "a", id="geojson"),
 ]
 
 
@@ -387,10 +396,26 @@ class TestExportFormats:
         export([{"x": 1}], "jsonl", str(path), mode="ab")
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
 
+    @pytest.mark.parametrize(("type_", "mode"), WHOLE_DOCUMENT_APPENDS)
+    def test_whole_document_append_raises(self, tmp_path, type_, mode):
+        path = tmp_path / f"out.{type_}"
+
+        with pytest.raises(ValueError, match="does not support append mode"):
+            export([{"x": 1}], type_, str(path), mode=mode)
+
+        assert not path.exists()
+
     @pytest.mark.parametrize(("type_", "kwargs"), WRITER_OPTIONS)
     def test_writer_option_without_a_destination_raises(self, type_, kwargs):
         with pytest.raises(TypeError, match=next(iter(kwargs))):
             export([{"x": 1}], type_, **kwargs)
+
+    @pytest.mark.parametrize(("type_", "args", "kwargs", "name"), ITEM_EXPORT_OPTIONS)
+    def test_item_export_with_a_writer_option_raises(self, type_, args, kwargs, name):
+        msg = f"Writer option(s) given with export type {type_}: {name}"
+
+        with pytest.raises(TypeError, match=re.escape(msg)):
+            export([{"x": 1}], type_, *args, **kwargs)
 
     def test_rejects_unknown_format(self):
         msg = "Invalid export type: 'xml'. Expected one of list, tuple, csv"
@@ -479,7 +504,7 @@ class TestAsyncWriteIterables:
         assert path.read_text(encoding="utf-8") == "héllo"
 
 
-class TestTempPath:
+class TestGetTempPath:
     """A kept temporary path starts unoccupied and survives the context's exit."""
 
     @pytest.fixture(autouse=True)
@@ -506,7 +531,8 @@ class TestTempPath:
 
 class TestWriteMode:
     def test_mode_values(self):
-        assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
+        modes = [m.value for m in WriteMode]  # reuse-ok: get_envelope_values
+        assert modes == ["append", "merge", "replace", "delete"]
 
 
 class TestWriteCapabilities:

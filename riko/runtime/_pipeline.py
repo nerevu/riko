@@ -52,13 +52,12 @@ from inspect import isawaitable
 from typing import TYPE_CHECKING, Concatenate, TypeGuard, overload
 
 from attrs import define
-from typing_extensions import TypeVar
 
 from riko.base._exceptions import EmptyPipelineError
 from riko.base._guards import is_mapping, is_streamlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._pipeline_definition import PipelineDefinition
-from riko.types._streams import AsyncStreamOf, Item
+from riko.types._streams import AsyncStreamOf, Item, T_co
 
 from ._resolver import dispatcher
 from ._run import _PipelineRun, _PipelineStream
@@ -75,9 +74,6 @@ if TYPE_CHECKING:
     from riko.types._streams import InputLike, PipelineRun, PipelineStream
     from riko.types._wrappers import Func
     from riko.types.modules import Conf
-
-
-T_co = TypeVar("T_co", covariant=True, default=Item)
 
 
 def _is_seed(value: object) -> TypeGuard[InputLike]:
@@ -124,8 +120,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
         Returns:
 
@@ -236,8 +232,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
         Returns:
 
@@ -428,8 +424,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
             default: The value returned when the pipeline produces no items.
 
@@ -476,8 +472,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
             default: The value returned when the pipeline produces no items.
 

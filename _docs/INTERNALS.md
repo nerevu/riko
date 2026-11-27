@@ -224,6 +224,41 @@ sync when source is moved between package groups.
   `any`/`cast` in `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as
   the coverage ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml`
   diff).
+- **Single-use helper ratchet.** `manage lint --helpers` (`riko/cli/_lint_helpers.py`)
+  finds each `A -> B -> C` chain under `riko/` whose `B` and `C` are called once: one
+  calling function each, never imported by another module, and, for a method, never
+  defined or used on `self`/`cls` by a subclass in another module (one whose bases,
+  matched by bare name or attribute tail, reach the method's class through scanned
+  classes; an unrelated class with a same-named method does not count). Methods are
+  keyed by class, and `self.x`/`cls.x` resolves through same-module base classes; any
+  other `obj.x` or identifier string in the same module, and any module- or class-level
+  use, counts as a non-function caller. A same-named attribute or string in *another*
+  module does not count. `KEPT_HELPERS` in the same file is the keep-list of
+  `(repo-relative path, qualified name)` helpers that stay by ruling (holds or sits
+  inside a try/except, passed by reference, `cached_property`, recursive, per-item
+  closing generator, or a sync/async twin); kept helpers are neither counted nor
+  printed, and an entry that is no longer a single-use helper fails the lint as stale.
+  It counts the remaining distinct single-use helpers `B` against
+  `[tool.riko.helpers] chains` through the same ratchet and prints the chains only when
+  the count exceeds the ceiling.
+- **Ownership lint.** `manage lint --ownership` (`riko/cli/_lint_ownership.py`, part of
+  `lint --all`) checks that every stream the execution layer (`riko/execution/*.py`)
+  builds reaches an owner: no `_Owned` wrapper; a run's `add` only inside its registrars
+  (`_register_port`, `build_envelope_stream`/`abuild_envelope_stream`, `_call_and_take`,
+  `_build_splitter_ports`/`_abuild_splitter_ports`, `_RunStream`);
+  and a stream factory's result (`amap`, `async_iter`, `as_async`, `to_async`,
+  `to_sync`, the unwrap and envelope adapters) is an owner's argument, returned or
+  yielded, a `with` context, set on a run attribute, or bound to a name one of those
+  later receives. Limits: it follows only direct arguments and the containers,
+  conditionals, and comprehensions around them, so a stream stored in another record is
+  reported; `as_async` counts as a factory whatever its argument; `for`/`async for`
+  directly over a factory call is reported; and a name counts as owned when any owner
+  receives it on or after the line that binds it, whichever branch. The runtime twin is
+  the autouse `no_leaked_async_generators` fixture in `conftest.py`, which fails a test
+  whose riko async generator reaches the loop's finalizer (`QUIET_LEAKS` exempts).
+  That detector sees only async generators: a sync wrapper dropped while holding a
+  resource raises `ResourceWarning` from `auto_close.__del__`, which the suite turns
+  into an error, and close-counting tests cover the rest.
 - **Ratchet staleness.** Recording or lowering a ceiling also records the day as
   `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
   holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that
@@ -275,15 +310,23 @@ sync when source is moved between package groups.
   line saying the file was deleted, retired, removed, dropped, merged, or superseded is
   exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
   The same documents' `path::Class[::test]` and `Class::test` citations must name a
-  current test class or test (`gen_stale_test_symbol_citations` over
-  `gen_test_symbols`); one whose file is missing is left to the file check, and a
-  citation must sit on one line to be checked. Likewise, a `` `name` (`riko/…py`) `` or
+  current test class or test, and a bare backticked `test_*` name (a `[param-id]`
+  suffix allowed) must be carried by a current test or test file
+  (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file is
+  missing is left to the file check, and a citation must sit on one line to be
+  checked. Likewise, a `` `name` (`riko/…py`) `` or
   `` `Class.member` (`riko/…py`) `` pair in the `riko/*.py` citation documents must name
   something that file binds at top level, imports included, or that its top-level class
   binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`). To cite a
   location rather than a definition, write `` `name` in `riko/…py` ``. An
   `` `a`/`b` (`riko/…py`) `` pair checks both names, and a bare `b` after a dotted `a`
-  takes `a`'s class (`` `C.x()`/`y()` `` cites `C.y`).
+  takes `a`'s class (`` `C.x()`/`y()` `` cites `C.y`). A bare backticked private name
+  (`` `_name` ``, `` `_name()` ``) in any tracked `_docs/` document outside `archive/`,
+  `research/`, and `MILESTONES.md` must be bound or read somewhere under `riko/` or
+  `tests/`, module names and `_`-prefixed string literals included
+  (`gen_stale_private_names` over `gen_private_names`); besides the history words, a
+  sentence that plans ahead (target, planned, next, future) and a paragraph carrying an
+  ISO date (a dated history note) are exempt.
 - **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS`
   phrase (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
   `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the

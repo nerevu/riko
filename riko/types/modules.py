@@ -218,6 +218,37 @@ def get_module_provider(name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class ModuleMetadata:
+    """
+    The discovery facts a module declares: its kind, capabilities, and pipes.
+
+    Attributes:
+
+        name: The module's registered name.
+        type: The runtime module type.
+        subtype: The primary subtype the module runs as.
+        subtypes: Every subtype the module can run as.
+        pollable: Whether the module can be polled for new items.
+        loopable: Whether the module can run per item inside a loop.
+        has_sync: Whether the module has a sync pipe.
+        has_async: Whether the module has an async pipe.
+
+    Examples:
+
+        >>> metadata = ModuleMetadata(
+        ...     name="count",
+        ...     type="operator",
+        ...     subtype="aggregator",
+        ...     subtypes=("aggregator", "composer"),
+        ...     pollable=False,
+        ...     loopable=False,
+        ...     has_sync=True,
+        ...     has_async=True,
+        ... )
+        >>> metadata.category, metadata.supports("composer")
+        ('transform', True)
+
+    """
+
     name: str
     type: ModuleType
     subtype: ModuleSubtype
@@ -255,6 +286,18 @@ class ModuleMetadata:
         return result
 
     def supports(self, subtype: ModuleSubtype) -> bool:
+        """
+        Reports whether the module can run as ``subtype``.
+
+        Args:
+
+            subtype: The subtype to check.
+
+        Returns:
+
+            True if ``subtype`` is one of the module's subtypes.
+
+        """
         return subtype in self.subtypes
 
 

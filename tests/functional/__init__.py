@@ -5,7 +5,6 @@ Provides functional tests: CLI commands, examples, and stored workflows end to e
 
 Index (file, then the subjects it owns, in file order):
 
-    test_basics.py    StoredWorkflows, WorkflowDocument
-    test_script.py    RunPipe, BuildWorkflow, Compile, Benchmark, SubprocessImports,
-                      ExamplePipelines
+    test_basics.py    StoredWorkflows, StoredWorkflowDocuments
+    test_script.py    RunPipe, BuildWorkflow, Compile, Benchmark, ExamplePipelines
 """

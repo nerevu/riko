@@ -8,7 +8,9 @@ Placing a test takes two lookups.
    ``examples`` pipeline, or a stored fixture workflow end to end; ``public`` when
    it uses only supported names (the stable, extension, and typing surfaces);
    ``internal`` otherwise. A code-generator check that sweeps every fixture stays
-   with the generator in ``internal``.
+   with the generator in ``internal``, and so does the sweep that runs each stored
+   workflow's typed probe module against its document
+   (``internal/test_codegen.py::TestWorkflowProbes::test_probe_matches_document``).
 2. File: find the subject (the riko name whose behavior the test asserts) in that
    tier's index, the ``__init__.py`` docstring of its folder. Each subject has
    exactly one file. When the subject is missing, add its ``Test<Subject>`` class
@@ -23,18 +25,20 @@ end through ``Pipeline``) needs no lower-level twin unless that twin checks
 something the other cannot reach.
 
 Inside a file, every test belongs to a ``Test<Subject>`` class (its async twin,
-``TestAsync<Subject>``, follows it). Five classes are named for a concept that spans
+``TestAsync<Subject>``, follows it). Fifteen classes are named for a concept that spans
 several riko names instead: ``TestOverloadTypes``, ``TestTimeouts``,
-``TestWorkflowFields``, ``TestAsyncOperatorLaziness``, and
-``TestSyncPipeAsyncInput``; every other class takes a riko name. Helpers sit
-directly above the one class that uses them, at the top of the file when several
-classes do, or in a ``tests/_*.py`` module when several files do. Module-level
-constants are the exception: every one except a ``pytest.param`` table sits at the
-top of the file, private names first, with any helper a constant needs above them.
-Code repeated inline three or more times becomes one such helper. Within a class,
-behavior tests come first, then rejection tables, then strict-xfail tripwires. A
-regression test goes in its subject's class; a tripwire goes where the real test
-will live once it flips. A strict xfail names the exception it fails with today in
+``TestWorkflowFields``, ``TestWorkflowFixtures``, ``TestRequireGuards``,
+``TestAsyncOperatorLaziness``, ``TestSyncPipeAsyncInput``, ``TestImportSurface``,
+``TestConfigCodegen``, ``TestMeza``, ``TestExamplePipelines``, ``TestConsoleScripts``,
+``TestDoctestSkips``, ``TestCapabilityFlags``, and ``TestBareDecorator``; every other
+class takes a riko name. Helpers sit directly above the one class that uses them, at the
+top of the file when several classes do, or in a ``tests/_*.py`` module when several
+files do. Module-level constants are the exception: every one except a ``pytest.param``
+table sits at the top of the file, private names first, with any helper a constant needs
+above them. Code repeated inline three or more times becomes one such helper. Within a
+class, behavior tests come first, then rejection tables, then strict-xfail tripwires. A
+regression test goes in its subject's class; a tripwire goes where the real test will
+live once it flips. A strict xfail names the exception it fails with today in
 ``raises=``, so a setup error cannot satisfy it.
 
 Tests that share setup and assertion and differ only in data are one
@@ -51,18 +55,18 @@ tests should leave the file shorter; if it grows, compact the rows.
 
 Every bound a test sets (``mark.timeout``, ``fail_after``, a ``wait``/``join``/
 ``result`` timeout, and the ``timeout``/``faulthandler_timeout`` globals in
-``pyproject.toml``) is the smallest feasible value, never a round guess: measure
-the worst ``call`` time over three ``pytest -n auto --durations=0`` runs and take
-the smallest of 1, 2, 3, 5, 8, 10, 15, 20, 30 seconds that is at least five
-times it, with a floor of 1 second. Every bound in a ``tests/_*.py`` helper sits
-on the same ladder. An inner bound stays below its outer one. A value that is the
-test's subject (``shutdown_timeout=0.05``) is not a bound. A
+``pyproject.toml``) is the smallest feasible value, never a round guess: measure the
+worst ``call`` time over three ``pytest -n auto --durations=0`` runs and take the
+smallest of 1, 2, 3, 5, 8, 10, 15, 20, 30 seconds that is at least five times it, with a
+floor of 1 second. Every bound in a ``tests/_*.py`` helper sits on the same ladder. An
+inner bound stays below its outer one. A value that is the test's subject
+(``shutdown_timeout=0.05``) is not a bound, and a ``wait``/``join`` inside a fake the
+test defines is blocking work under test, not a bound, so it is off the ladder. A
 ``timeout`` marker is a backstop for a true hang (``tests/_timeouts.py``): a test
-guarding "this stops promptly" blocks for longer than its elapsed-time assertion
-but shorter than the backstop, so a regression fails the assertion instead. A
-``timeout`` marker never equals the backstop, which already applies. Every
-``subprocess`` call sets ``timeout=``. An ``async def`` test awaits something;
-otherwise it is a plain ``def``.
+guarding "this stops promptly" blocks for longer than its elapsed-time assertion but
+shorter than the backstop, so a regression fails the assertion instead. A ``timeout``
+marker never equals the backstop, which already applies. Every ``subprocess`` call sets
+``timeout=``. An ``async def`` test awaits something; otherwise it is a plain ``def``.
 
 Files start coarse. Before splitting one past about 2000 lines, move out what
 belongs elsewhere and trim its overlaps; if it is still over, move its largest
@@ -84,7 +88,7 @@ import pickle  # noqa: S403
 import subprocess
 import sys
 from importlib.util import find_spec
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -92,16 +96,42 @@ from riko.bado._backend import is_sync
 from riko.base._funcutils import resolve_default
 from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
+from riko.types._frozendict import freeze
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+    from riko.types._feed import _ItemEnvelope
 
 SCRIPT_TIMEOUT = 5
+X_ROWS = freeze([{"x": 1}, {"x": 2}])
+X_ROW = X_ROWS[:1]
+TWO_NODES = freeze([{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}])
+FETCH_NODES = freeze([{"id": "a", "name": "fetch"}])
+SUBSCRIBED_NODES = freeze(
+    [*FETCH_NODES, {"id": "s", "name": "sub", "family": "subscribe"}]
+)
+FAN_IN_WIRES = freeze([["a", "u"], ["b", "u", "in:1"]])
+OUT_MODULE = freeze({"id": "_OUTPUT", "type": "output", "conf": {}})
+
+FAN_IN_MODULES = freeze(
+    [
+        {"id": "a", "name": "fetch"},
+        {"id": "b", "name": "fetch"},
+        {"id": "u", "name": "union"},
+    ]
+)
+
+FAN_IN_DAG = freeze({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
 
 
-def _pickle_round_trip[T](value: T) -> T:
+def pickle_round_trip[T](value: T) -> T:
+    """Rebuilds ``value`` from its pickled bytes."""
     return pickle.loads(pickle.dumps(value))  # noqa: S301
 
 
 ROUND_TRIPS = [
-    pytest.param(_pickle_round_trip, id="pickle"),
+    pytest.param(pickle_round_trip, id="pickle"),
     pytest.param(copy.copy, id="copy"),
     pytest.param(copy.deepcopy, id="deepcopy"),
 ]
@@ -120,6 +150,16 @@ def async_test(f):
 def is_installed(module: str) -> bool:
     """Check whether *module* is importable in this environment."""
     return find_spec(module) is not None
+
+
+def get_values(stream: Iterable[Mapping[str, Any]], key: str) -> list[Any]:
+    """Gets each item's ``key`` value from ``stream``, ``None`` where it is absent."""
+    return [item.get(key) for item in stream]
+
+
+def get_envelope_values[T](envelopes: Iterable[_ItemEnvelope[T]]) -> list[T]:
+    """Gets the value each of ``envelopes`` carries, in order."""
+    return [envelope.value for envelope in envelopes]
 
 
 def run_python(

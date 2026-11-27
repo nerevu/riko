@@ -4,14 +4,10 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 from riko.base import _api_surface
 from riko.base._paths import API_SURFACE_PATH
 from riko.base._strutils import get_codegen_note
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
 
 _NOTE = get_codegen_note("--api")
 API_SURFACE_BLOCK = re.compile(
@@ -19,15 +15,6 @@ API_SURFACE_BLOCK = re.compile(
     r"(?P<end>\n<!-- /api-surface:(?P=key) -->)",
     re.DOTALL,
 )
-
-
-def _fence(*lines: str) -> str:
-    body = "\n".join(lines)
-    return f"```python\n{body}\n```"
-
-
-def _sorted_repr(names: Iterable[str]) -> str:
-    return repr(sorted(names))
 
 
 def _render_block(key: str) -> str:
@@ -41,15 +28,16 @@ def _render_block(key: str) -> str:
     elif key == "bado-namespace":
         lines = [
             ">>> sorted(BADO)",
-            _sorted_repr(_api_surface.BADO),
+            repr(sorted(_api_surface.BADO)),
             ">>> BADO == set(riko.bado.__all__)",
             "True",
         ]
     else:
         name = key.upper().replace("-", "_")
-        lines = [f">>> sorted({name})", _sorted_repr(getattr(_api_surface, name))]
+        lines = [f">>> sorted({name})", repr(sorted(getattr(_api_surface, name)))]
 
-    return _fence(*lines)
+    body = "\n".join(lines)
+    return f"```python\n{body}\n```"
 
 
 def _replace(match: re.Match[str]) -> str:

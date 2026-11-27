@@ -37,7 +37,9 @@ by `.claude/skills/land/gates.py` (`G` below):
   `recorded <gate> on tree … (ratchet lowered a ceiling)`). Mutating gates
   (prettify, codegen) pass `--mutates`, which records the tree they left. A fix
   changes the tree id of every gate that reads the fixed file, so those gates
-  rerun on their own.
+  rerun on their own. For a gate in `/land`'s sequence, `run` refuses a command
+  that does not end with that gate's arguments below: it prints `rejected <gate>`,
+  exits 64, and runs and records nothing.
 - **No waiting, no deadlocks.** Only the full suite and `diff_uncovered.py` take
   `--lock`, a non-blocking OS lock on `riko-gate.lock` in the git common
   directory (shared by every worktree), which the OS drops when the process exits. When
@@ -107,14 +109,21 @@ for iterating on one gate alone.
    reubano/meza` (a merged or deleted branch reads "none yet" again). Name
    every deleted workaround in the report. The command itself runs in step 1's setup
    call.
+
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh `implementer`
    subagent (`model: "opus"`, so it never inherits a Fable session's model), never as an
    in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step 0),
+   `python .claude/skills/wrapup/repoint_hashes.py`,
    `python $G run prettify --mutates -- <manage> prettify` (step 2), then
    `python $G run codegen --mutates -- <manage> codegen --all` when step 3 applies, then
    `python $G check tidy` and `python .claude/skills/land/require_agents.py`. Prettify
    and codegen go before tidy so they never write a file tidy is editing, and before
-   `check tidy` so the check judges the tree they left; nothing records tidy here. When
+   `check tidy` so the check judges the tree they left; nothing records tidy here.
+   `repoint_hashes.py` repoints any doc, memory, or `CLASS_HISTORY` citation an
+   autosquash or rebase rewrote, so the user never does; its edits join the change. It
+   exits 1 only for a citation nothing resolves: resolve that line (rewrite it as an
+   `old → new` record, which it keeps, or describe the dropped commit) and rerun the
+   setup call. When
    `check tidy` exits 0, skip the agent (tidy already ran on this tree, in any session)
    and run `python $G all [--codegen]` in the foreground; when `require_agents.py`
    fails, stop and report its output (the user-level agent definitions are missing);
@@ -138,6 +147,7 @@ for iterating on one gate alone.
    the other gates, and only the gates tidy's edits invalidated rerun before it. Its
    judgment questions go to the user now, and phase-owned findings go through
    `/triage`.
+
 2. **Prettify first, always**: the gate sequence's first gate, run in step 1's setup
    call before tidy. Alone: `python $G run prettify --mutates -- <manage> prettify`.
    Never hand-fix formatting-class lint errors — formatting is prettify's job, before
@@ -146,6 +156,7 @@ for iterating on one gate alone.
    tidy skips its own prettify and record under `/land`, so once land has recorded
    tidy after its report, a format-only change does not reopen tidy's scope for the
    next session, and a prettify before tidy has run marks nothing.
+
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), pass
    `--codegen` to `all` (alone:
@@ -153,15 +164,18 @@ for iterating on one gate alone.
    on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
+
 4. **Lint**: in the gate sequence; alone, `python $G run lint -- <manage> lint --all`.
    It already runs Ruff, rumdl, the RST/docs/docstring/
-   terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and
-   every import contract, so do not rerun `--docs`, `--docstrings`, `--terms`,
-   `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes`
-   separately. It does **not** run the type gate. When a ratcheted check that prints
-   its sites as `path:line:` (the `--tests` ceilings) trips, pipe that check's output
-   to `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
+   terms/literals/deps/bindings/tests/basenames/escapes/helpers/ownership checks,
+   actionlint, YAML, and every import contract, so do not rerun `--docs`,
+   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
+   `--basenames`, `--escapes`, `--helpers`, or `--ownership` separately. It does
+   **not** run the type gate. When a ratcheted check that prints its sites as
+   `path:line:` (the `--tests` ceilings) trips, pipe that check's output to
+   `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
    lint last passed, separating the change's new violations from existing ones.
+
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
    suite, in the gate sequence or alone with
    `python $G run test --lock -- <manage> test --ratchet --quiet --parallel`, before
@@ -184,6 +198,7 @@ for iterating on one gate alone.
    When it lowers the ceiling, that `pyproject.toml` diff is part of the change — keep
    it. The ceiling is measured in the full dev environment (`--group dev --all-extras`,
    Python 3.12).
+
 6. **Types**: the gate sequence's two type gates, run beside lint; alone,
    `python $G run check-types -- <manage> lint --check-types` and
    `python $G run verify-types -- <manage> lint --verify-types`
@@ -227,6 +242,21 @@ to an agent, which repeats their work by hand for many minutes.
    the introducing commit from the `/triage` disposition, or find it with
    `git log -S`/`-G`. The fix is a new commit only when that commit is at or before the
    merge point.
+
+   An already-committed fix that belongs to an earlier branch commit becomes a
+   `fold <target> <mover>` plan step (or `--fold TARGET:MOVER[@ID,...]`), listing the
+   mover's ids from `split_hunks.py list --base M^ --head M` (none for the whole
+   commit). `fixup_map.py --fixes` lists leads: the branch commits that wrote the lines
+   each `[FIX]` commit removed. A lead is not a verdict (refactor moves show up too), so
+   confirm the bug existed at the target first. `rehearse_plan.py` replays the folds and
+   the pending fixups in one autosquash pass in a throwaway worktree; a conflict stops
+   it unless `--resolve PATH=ours|theirs|max` picks a side. The handover is
+   `git reset --keep <tip>` (plus `git push --force-with-lease` when pushed), and
+   `/wrapup`'s separate autosquash is then not needed unless the plan also has
+   working-tree fixups, which stay pending as usual. A `reword <sha> <msg-file>` step
+   (or `--reword SHA=FILE`) rewrites a branch commit's message in the same rehearsal,
+   such as a fold target's subject or a trimmed mover's.
+
 2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
    with step 3's hunk list in one Bash call:
 
@@ -245,6 +275,7 @@ to an agent, which repeats their work by hand for many minutes.
    on the change (an import used only by new code, a doc line describing new
    behavior). Read a hunk with `git diff` only when its excerpt does not settle its
    concept.
+
 3. **Write the plan**: the `split_hunks.py list --body 12` output from step 2's call
    lists the change's hunks by id (`-U0` by default, so mixed-concept regions split
    finely; `path:N` is the hunk starting on new-side line `N`; new, deleted, untracked,
@@ -274,6 +305,7 @@ to an agent, which repeats their work by hand for many minutes.
    (never a bullet that restates it), else at most five `-` bullets, one concept each,
    under 72 characters, never prose. A bullet for something the subject does not imply
    starts with "Also".
+
 4. **Rehearse it**:
 
    ```bash
@@ -293,6 +325,7 @@ to an agent, which repeats their work by hand for many minutes.
    hunk start lines when a step takes only part of a file). Fix the plan and rerun
    until every check and the autosquash pass. Leave its temp folders and
    worktrees where they are; never delete them.
+
 5. **Hand over the commands**: put `chain.txt` on the clipboard (`--copy`)
    and show the step table for reference; the chain stops at the first step
    that fails. Offer step-by-step lines from `commands.txt` instead only when
@@ -305,7 +338,8 @@ to an agent, which repeats their work by hand for many minutes.
    any time after handover. Only a working-tree edit or a new `HEAD` makes the
    chain stale; staging alone never calls for a re-rehearsal. **No rebase**: the
    `fixup!` commits stay pending; `/wrapup` hands over the autosquash as its very
-   last step.
+   last step. The exception is a fold: it hands over `git reset --keep <tip>`, whose
+   tip already squashes the pending fixups in the same pass.
 
 ## Report
 
@@ -322,7 +356,8 @@ End with:
   skills take `[DEV]`, and the files each step touches with their line counts and
   partial-hunk lines), the check and autosquash results, which chain is on the
   clipboard, any hunk dropped from a fixup and why, and that the autosquash waits for
-  `/wrapup`. These are commands for the user to run, never executed on their branch.
+  `/wrapup` (unless a fold's `git reset --keep <tip>` already squashed it). These are
+  commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents:
   any helper script written this session into the scratchpad or `/tmp` (inline heredoc
   scripts included), any scan, count, or cross-check run by hand three or more times,

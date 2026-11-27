@@ -17,6 +17,7 @@ riko-example-ext/
    built-in. Give it an explicit `-> Stream` (or `-> Iterator[...]`) return
    annotation so riko can infer its metadata. For an async pipe, only use `async def`
    when the parser itself awaits I/O).
+
 2. **Declare an entry point** under the `riko.modules` group in `pyproject.toml`,
    pointing it at the module itself:
 

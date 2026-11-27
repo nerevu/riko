@@ -38,15 +38,16 @@ from typing import (
 
 from attrs import define, fields_dict
 
-from riko.bado._util import as_awaitable, maybe_aclosing, maybe_closing
+from riko.bado._util import amap_values, as_awaitable, maybe_aclosing, maybe_closing
 from riko.bado.itertools import (
+    aauto_close,
     as_async,
-    async_flatten,
+    async_flat_map,
     async_iter,
-    async_map_ordered_stream,
     materialize,
 )
 from riko.base._guards import (
+    get_async_closer,
     is_async_callable,
     is_known_sequence,
     is_listlike,
@@ -62,7 +63,6 @@ from riko.execution._prepared import ExecutionExtras
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType, IdentityMode
-from riko.types._io import get_async_closer
 from riko.types._options import (
     Casted,
     ContextOverrides,
@@ -96,7 +96,7 @@ from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import PreparedModule, resolve_and_cast
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Generator, Iterable, Mapping
+    from collections.abc import Awaitable, Callable, Generator, Iterable
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
@@ -673,7 +673,7 @@ def _aprocess_stream[T](
         Each result of every item, in stream order.
 
     """
-    return async_flatten(async_map_ordered_stream(wrapper, items))
+    return async_flat_map(wrapper, items, ordered=True)
 
 
 async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
@@ -693,11 +693,11 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
         A new mapping with every async secondary input stream drained.
 
     """
-    return {key: await _materialize_terminal(value) for key, value in kwargs.items()}
+    return await amap_values(_materialize_terminal, kwargs)
 
 
 def _validate_opts(
-    module_type: ModuleType, supported: frozenset[str], kwargs: Mapping[str, object]
+    module_type: ModuleType, /, *supported: str, **kwargs: object
 ) -> None:
     """
     Rejects decoration options a decorator does not read.
@@ -711,6 +711,9 @@ def _validate_opts(
 
         module_type: The decorator name used in the error message.
         supported: Options this decorator reads at decoration time.
+
+    Kwargs:
+
         kwargs: The decoration keyword arguments to validate.
 
     Raises:
@@ -883,7 +886,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         return result
 
     def _start(
-        self, item: ItemOrValue, context: Context | None, extra: dict[str, object]
+        self, item: ItemOrValue, context: Context | None, /, **extra: object
     ) -> _ProcessorCall | StreamOrValueStream:
         """Prepares an item for its parser, or passes it through when skipped."""
         module, prepared = self.module, self.prepared
@@ -924,7 +927,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
             runs = map(self.run_item, repeat(context), repeat(extra), item)
             result = processed = chain.from_iterable(runs)
         else:
-            call = self._start(cast("ItemOrValue", item), context, extra)
+            call = self._start(cast("ItemOrValue", item), context, **extra)
 
             if isinstance(call, _ProcessorCall):
                 casted = call.casted
@@ -952,7 +955,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
             run = cast("AsyncItemProcessor", partial(self.arun_item, context, extra))
             processed = _aprocess_stream(run, as_async(item))
         else:
-            call = self._start(cast("ItemOrValue", item), context, extra)
+            call = self._start(cast("ItemOrValue", item), context, **extra)
 
             if isinstance(call, _ProcessorCall):
                 casted = call.casted
@@ -997,11 +1000,12 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         **extra: object,
     ) -> SyncOperatorWrapperOutput | AsyncOperatorWrapperOutput:
         if self.wrapper.is_async:
-            stream = self._agen(item, context, extra)
+            stream = self._agen(item, context, **extra)
             result = cast("AsyncOperatorWrapperOutput", stream)
         else:
             items = cast("SyncOperatorWrapperInput", item)
-            result = cast("SyncOperatorWrapperOutput", self._gen(items, context, extra))
+            _result = self._gen(items, context, **extra)
+            result = cast("SyncOperatorWrapperOutput", _result)
 
         return result
 
@@ -1028,9 +1032,9 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         self,
         items: SyncOperatorWrapperInput | None,
         context: Context | None,
-        extra: dict[str, object],
+        /,
+        **kwargs: object,
     ) -> SyncOperatorWrapperInternalOutput:
-        kwargs = dict(extra)
         _embed = kwargs.pop("embed", None)
         embed = cast("SyncProcessorWrapper | SyncSubPipe | None", _embed)
         prepared = self.prepared
@@ -1067,7 +1071,8 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         self,
         items: AsyncOperatorWrapperInput | None,
         context: Context | None,
-        extra: dict[str, object],
+        /,
+        **extra: object,
     ) -> AsyncOperatorWrapperInternalOutput:
         parser = self.parser
         async_native = is_async_callable(parser)
@@ -1084,10 +1089,9 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         else:
             input_ = self.module.normalize_input(items)
 
-        kwargs = dict(extra)
-        _embed = kwargs.pop("embed", None)
+        _embed = extra.pop("embed", None)
         embed = cast("AsyncProcessorWrapper | AsyncSubPipe | None", _embed)
-        kwargs = await _materialize_terminals(**kwargs)
+        kwargs = await _materialize_terminals(**extra)
         prepared = self.prepared
         field, count = self.field, self.count
         _context = _resolve_context(context)
@@ -1120,7 +1124,7 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
 
             processed = async_iter(auto_close(self._finish(result), result))
 
-        async with maybe_aclosing(processed) as iterator:
+        async with maybe_aclosing(aauto_close(processed, input_)) as iterator:
             async for item in iterator:
                 yield item
 
@@ -1314,7 +1318,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
             {'content': 'say "hello world" three times!'}
 
         """
-        _validate_opts(self.module_type, self.decoration_options, kwargs)
+        _validate_opts(self.module_type, *self.decoration_options, **kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, item: ItemOrValue) -> DotDict[RikoValue]:
@@ -1662,7 +1666,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
             {'content': 4}
 
         """
-        _validate_opts(self.module_type, self.decoration_options, kwargs)
+        _validate_opts(self.module_type, *self.decoration_options, **kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, items: SyncOperatorWrapperInput | None = None) -> Stream:
@@ -1919,8 +1923,8 @@ class operator[B: bool](Module[B]):  # noqa: N801
             output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             stream = cast("AsyncOperatorWrapperInternalOutput", output)
 
-            async with maybe_aclosing(stream) as iterator:
-                async for item in iterator:
+            async with maybe_aclosing(stream):
+                async for item in stream:
                     yield item
 
         def sync_wrapper(
@@ -2046,7 +2050,7 @@ class splitter[B: bool](Module[B]):  # noqa: N801
             {'x': 1}
 
         """
-        _validate_opts(self.module_type, self.decoration_options, kwargs)
+        _validate_opts(self.module_type, *self.decoration_options, **kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, items: Iterable[Item] | None = None) -> Stream:

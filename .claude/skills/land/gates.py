@@ -42,6 +42,11 @@ directory, so every worktree of the repository shares it; when another session
 holds it, ``run`` exits 75 at once instead of waiting. The OS releases the lock when
 the process exits, so it never goes stale.
 
+A gate ``all`` runs (prettify, codegen, lint, check-types, verify-types, test) only
+takes ``/land``'s command: when ``CMD`` does not end with that gate's arguments
+(``lint --all``, ``test --ratchet --quiet --parallel``, ...), ``run`` prints them,
+runs nothing, records nothing, and exits 64. Any other gate name takes any command.
+
 ``scope`` resolves what a gate still has to look at, in one call: the base it
 diffs from (the tree it last passed on when git still holds it, else the marker's
 ``HEAD`` when that is an ancestor, else the parent of the oldest unpushed commit,
@@ -62,13 +67,14 @@ base, so a tripped ratchet separates its new violations from existing ones; it e
 ``scope tidy --leads`` adds tidy's opening checks to the same call. It saves the
 raw diff to ``.claude/tidy-scope.diff`` and runs, side by side, the tidy lint
 selectors (``--manage`` plus ``lint --terms --literals --docstrings --bindings
---tests``), ``neighborhood.py --context 2``, and ``mistake_scan.py`` over that diff,
-plus ``heading_drift.py`` when a ``*.md`` file is touched, ``changelog_widows.py``
-when ``docs/CHANGES.rst`` is, and ``overlap_scan.py --files`` over each touched
-``tests/<tier>/test_*.py``. Each prints whole under its own ``--- <name>`` header
-(with its exit code when non-zero), in that order, after the scope. A diff over
-``--max-inline`` bytes first gets a hint to read ``--edits-only``. The exit code
-stays the scope's.
+--tests --helpers``), ``neighborhood.py --context 2``, ``mistake_scan.py``, and
+``reuse_scan.py --tests`` (as ``reuse_scan``, then again with ``--shapes`` as
+``reuse_shapes``) over that diff, plus ``heading_drift.py`` when a ``*.md``
+file is touched, ``changelog_widows.py`` when ``docs/CHANGES.rst`` is, and
+``overlap_scan.py --files`` over each touched ``tests/<tier>/test_*.py``. Each prints
+whole under its own ``--- <name>`` header (with its exit code when non-zero), in that
+order, after the scope. A diff over ``--max-inline`` bytes first gets a hint to read
+``--edits-only``. The exit code stays the scope's.
 
 ``run`` echoes the command's output and keeps its last pytest summary line
 (``1851 passed, 62 xfailed in 70s``) in the marker; ``summary`` prints it with
@@ -119,6 +125,7 @@ GIT = shutil.which("git") or "git"
 BUSY = 75
 UNRECORDED = 1
 EMPTY = 2
+MISMATCH = 64
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
 HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
@@ -149,13 +156,23 @@ SCOPE_EXCLUDES = (
 MANAGE = "uv run --active python -m riko.cli.manage"
 CARRIER = "prettify"
 TIDY_DIR = Path(__file__).resolve().parent.parent / "tidy"
-TIDY_LINT = ("lint", "--terms", "--literals", "--docstrings", "--bindings", "--tests")
+TIDY_LINT = (
+    "lint",
+    "--terms",
+    "--literals",
+    "--docstrings",
+    "--bindings",
+    "--tests",
+    "--helpers",
+)
 TEST_FILE = re.compile(r"^tests/[^/]+/test_[^/]*\.py$")
 CHANGELOG = "docs/CHANGES.rst"
 LEAD_NAMES = (
     "lint",
     "neighborhood",
     "mistake_scan",
+    "reuse_scan",
+    "reuse_shapes",
     "heading_drift",
     "changelog_widows",
     "overlap_scan",
@@ -414,6 +431,8 @@ def build_lead_prefixes(manage: list[str]) -> dict[str, list[str]]:
         "lint": manage,
         "neighborhood": python,
         "mistake_scan": ["uv", "run", "--active", "--no-sync", "python"],
+        "reuse_scan": python,
+        "reuse_shapes": python,
         "heading_drift": python,
         "changelog_widows": python,
         "overlap_scan": python,
@@ -426,6 +445,7 @@ def build_lead_commands(
     """Builds the command of each lead that applies to the ``touched`` paths."""
     tests = [name for name in touched if TEST_FILE.match(name)]
     script = {name: str(TIDY_DIR / f"{name}.py") for name in LEAD_NAMES}
+    script["reuse_shapes"] = script["reuse_scan"]
     commands = {
         "lint": [*prefixes["lint"], *TIDY_LINT],
         "neighborhood": [
@@ -441,6 +461,21 @@ def build_lead_commands(
             script["mistake_scan"],
             "--diff-file",
             str(diff_file),
+        ],
+        "reuse_scan": [
+            *prefixes["reuse_scan"],
+            script["reuse_scan"],
+            "--diff-file",
+            str(diff_file),
+            "--tests",
+        ],
+        "reuse_shapes": [
+            *prefixes["reuse_shapes"],
+            script["reuse_shapes"],
+            "--diff-file",
+            str(diff_file),
+            "--tests",
+            "--shapes",
         ],
     }
 
@@ -657,20 +692,27 @@ def run_gate(
     out: TextIO | None = None,
 ) -> Outcome:
     """Runs ``gate`` as ``run`` does, writing to ``out``, and returns its outcome."""
-    path.parent.mkdir(exist_ok=True)
+    canonical = next((args for name, args, *_ in GATE_SEQUENCE if name == gate), None)
 
-    with open(get_lock_path(), "a") as handle:
-        try:
-            if lock:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            print(
-                f"busy {gate}: another session holds the gate lock; rerun later",
-                file=out,
-            )
-            outcome = Outcome(BUSY, skipped=False, recorded=False, tree=None)
-        else:
-            outcome = _run_unlocked(path, gate, command, mutates=mutates, out=out)
+    if canonical is not None and tuple(command[-len(canonical) :]) != canonical:
+        expected = shlex.join(canonical)
+        print(f"rejected {gate}: the command must end with `{expected}`", file=out)
+        outcome = Outcome(MISMATCH, skipped=False, recorded=False, tree=None)
+    else:
+        path.parent.mkdir(exist_ok=True)
+
+        with open(get_lock_path(), "a") as handle:
+            try:
+                if lock:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                print(
+                    f"busy {gate}: another session holds the gate lock; rerun later",
+                    file=out,
+                )
+                outcome = Outcome(BUSY, skipped=False, recorded=False, tree=None)
+            else:
+                outcome = _run_unlocked(path, gate, command, mutates=mutates, out=out)
 
     return outcome
 
@@ -814,8 +856,8 @@ def run_all(
     return next((code for code in codes if code != 0), 0)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Parses the command line and runs the chosen subcommand."""
+def build_parser() -> argparse.ArgumentParser:
+    """Builds the command-line parser with one subparser per action."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("fingerprint", help="print the working tree's content tree id")
@@ -862,6 +904,35 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run only lint and the type gates, side by side",
     )
+    return parser
+
+
+def run_scope(
+    parser: argparse.ArgumentParser, path: Path, args: argparse.Namespace
+) -> int:
+    """Runs the scope action after rejecting flags it cannot combine."""
+    if args.leads and args.gate != "tidy":
+        parser.error("--leads applies to the tidy gate only")
+    elif args.new_sites and (args.leads or args.edits_only):
+        parser.error(
+            "--new-sites replaces the diff, so it takes no --leads or --edits-only"
+        )
+
+    lint = None if args.new_sites is None else read_lint(args.new_sites)
+    prefixes = build_lead_prefixes(shlex.split(args.manage))
+    return scope(
+        path,
+        args.gate,
+        args.max_inline,
+        edits_only=args.edits_only,
+        leads=prefixes if args.leads else None,
+        lint=lint,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parses the command line and runs the chosen subcommand."""
+    parser = build_parser()
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index("--") if "--" in argv else len(argv)
     args = parser.parse_args(argv[:split])
@@ -873,23 +944,8 @@ def main(argv: list[str] | None = None) -> int:
         code = 0
     elif args.action == "check":
         code = check(path, args.gate)
-    elif args.action == "scope" and args.leads and args.gate != "tidy":
-        parser.error("--leads applies to the tidy gate only")
-    elif args.action == "scope" and args.new_sites and (args.leads or args.edits_only):
-        parser.error(
-            "--new-sites replaces the diff, so it takes no --leads or --edits-only"
-        )
     elif args.action == "scope":
-        lint = None if args.new_sites is None else read_lint(args.new_sites)
-        prefixes = build_lead_prefixes(shlex.split(args.manage))
-        code = scope(
-            path,
-            args.gate,
-            args.max_inline,
-            edits_only=args.edits_only,
-            leads=prefixes if args.leads else None,
-            lint=lint,
-        )
+        code = run_scope(parser, path, args)
     elif args.action == "summary":
         code = print_summary(path, args.gate)
     elif args.action == "record":

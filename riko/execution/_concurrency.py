@@ -229,7 +229,7 @@ def require_process_safe(
 
     Args:
 
-        plan: The prepared workflow being run.
+        plan: The execution plan being run.
         output: The name of the workflow output being run.
         context: The run environment shipped to each worker.
 

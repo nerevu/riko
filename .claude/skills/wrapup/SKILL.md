@@ -76,13 +76,16 @@ current, run both as one call in the turn after the setup call.
 - Beside the launch: `git log --oneline -8`.
 - Beside the launch: the scanner's recall on this release's fixes,
   `bash .claude/skills/tidy/replay_fixes.sh $(git log --format=%h
-  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix with
-  0 leads as a scanner miss: a candidate rule, or a probe line for its class in
-  `mistake_scan.py`'s `CLASS_HISTORY`. Run `python .claude/skills/tidy/mistake_scan.py
-  --remap` beside it: it repoints refs a rebase or fold rewrote and writes each listed
-  fix's hash over the `uncommitted (MM-DD <what>)` ref that describes it. Place each
-  ref it prints by hand (a fix folded into a non-`[FIX]` commit), then run
-  `--unclassified` and cite each fix it still lists in a class or `NON_BEHAVIORAL`.
+  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix it
+  marks `unexplained` or `uncited` as a scanner miss: a candidate rule, or a `;` note
+  on its ref / a probe line for its class in `mistake_scan.py`'s `CLASS_HISTORY`. Run
+  `python .claude/skills/wrapup/repoint_hashes.py` beside it: it repoints every doc
+  and memory citation (the memory directory is its default `--paths`) a rebase or fold
+  rewrote, then runs `mistake_scan.py --remap`, which does the same for
+  `CLASS_HISTORY` and writes each listed fix's hash over the `uncommitted (MM-DD
+  <what>)` ref that describes it. Place each ref `--remap` prints by hand (a fix folded
+  into a non-`[FIX]` commit), then run `python .claude/skills/tidy/mistake_scan.py
+  --unclassified` and cite each fix it still lists in a class or `NON_BEHAVIORAL`.
 - Beside the launch: pending fixups,
   `git log --format='%h %s' HEAD --not --remotes`. Each
   `fixup! <subject>` line names its target by subject. A target may already be
@@ -252,7 +255,14 @@ a target was already pushed (`git branch -r --contains <target>` is non-empty),
 the rebase rewrites published history: append `&& git push --force-with-lease`
 to the clipboard line and say so in the report. In
 the handoff, record the fixups as "pending autosquash" with that line, so a
-session that starts before the user runs it knows to.
+session that starts before the user runs it knows to. The next `/land` or `/wrapup`
+repoints the hashes the autosquash rewrites automatically, in docs and memory alike, so
+the handoff never lists repointing as a user step. When `/land` handed over a
+fold-only chain (`git reset --keep <tip>` with no plan steps after it) and the user has
+not run it yet, that tip already squashes the pending fixups: put that chain on the
+clipboard instead of the autosquash line, and record it as the pending handover. A
+chain that resets to a fold tip and then runs plan steps leaves the autosquash here as
+usual.
 
 ## 6. Report
 

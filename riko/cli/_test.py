@@ -33,6 +33,33 @@ def _ratchet_coverage(report: Path) -> int:
     )
 
 
+def _build_pytest_opts(
+    stop: bool | None, report: Path | None, /, *where: str, **flags: object
+) -> str:
+    """Builds the pytest option string for the test command's flags."""
+    if flags.get("quiet"):
+        verbosity = "q"
+    elif flags.get("verbose"):
+        verbosity = "vv --tb=long -ra"
+    else:
+        verbosity = "v --tb=short -ra"
+
+    opts = f"-x{verbosity}" if stop else f"-{verbosity}"
+    opts += " --cov=riko" if flags.get("cov") or flags.get("ratchet") else " --no-cov"
+    opts += "" if report is None else f" --cov-report=json:{report}"
+    opts += "" if flags.get("capture") else " -s"
+    opts += " --last-failed" if flags.get("failed") else ""
+
+    if flags.get("watch") and flags.get("capture"):
+        opts += " --looponfail"
+
+    if flags.get("debug"):
+        opts += " --pdb -s"
+
+    opts += f" {' '.join(where)}" if where else ""
+    return opts
+
+
 @click.command(name="test")
 @click.argument("paths", nargs=-1)
 @click.option("-w", "--where", help="test path (repeatable)", multiple=True)
@@ -87,26 +114,7 @@ def _test_command(
     stack = ExitStack()
     report = stack.enter_context(get_temp_path("coverage.json")) if ratchet else None
 
-    if kwargs.get("quiet"):
-        verbosity = "q"
-    elif kwargs.get("verbose"):
-        verbosity = "vv --tb=long -ra"
-    else:
-        verbosity = "v --tb=short -ra"
-
-    opts = f"-x{verbosity}" if stop else f"-{verbosity}"
-    opts += " --cov=riko" if kwargs.get("cov") or ratchet else " --no-cov"
-    opts += "" if report is None else f" --cov-report=json:{report}"
-    opts += "" if kwargs.get("capture") else " -s"
-    opts += " --last-failed" if kwargs.get("failed") else ""
-
-    if kwargs.get("watch") and kwargs.get("capture"):
-        opts += " --looponfail"
-
-    if kwargs.get("debug"):
-        opts += " --pdb -s"
-
-    opts += f" {' '.join(_where)}" if _where else ""
+    opts = _build_pytest_opts(stop, report, *_where, **kwargs)
 
     with stack:
         try:

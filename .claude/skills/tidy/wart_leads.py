@@ -12,6 +12,7 @@ dead-definition draft; `KEPT_DEFS` lists the definitions rulings keep despite no
 import ast
 import re
 from collections import Counter
+from itertools import chain
 from pathlib import Path
 
 ROOT = Path("riko")
@@ -34,12 +35,11 @@ def section(title: str) -> None:
 # A. keyword knobs (bool / None default / enum default) never passed by name in riko/
 section("A. keyword knobs never passed by keyword inside riko/ (excl. own def)")
 kwpass = Counter()
-for t in trees.values():
-    for node in ast.walk(t):
-        if isinstance(node, ast.Call):
-            for kw in node.keywords:
-                if kw.arg:
-                    kwpass[kw.arg] += 1
+for node in chain.from_iterable(map(ast.walk, trees.values())):
+    if isinstance(node, ast.Call):
+        for kw in node.keywords:
+            if kw.arg:
+                kwpass[kw.arg] += 1
 knobs = []
 for p, t in trees.items():
     for node in ast.walk(t):
@@ -171,7 +171,8 @@ def scope_parts(fn: ast.AST) -> list[ast.AST]:
     if isinstance(fn, COMPS):
         elts = [fn.key, fn.value] if isinstance(fn, ast.DictComp) else [fn.elt]
         gens = fn.generators
-        return elts + [x for i, g in enumerate(gens) for x in [*g.ifs, *[g.iter][:i]]]
+        clauses = ([*g.ifs, *[g.iter][:i]] for i, g in enumerate(gens))
+        return elts + list(chain.from_iterable(clauses))
     return fn.body if isinstance(fn.body, list) else [fn.body]
 
 
@@ -184,10 +185,9 @@ def bound_names(fn: ast.AST) -> set[str]:
         a = fn.args
         extra = [x for x in (a.vararg, a.kwarg) if x]
         names |= {x.arg for x in [*a.posonlyargs, *a.args, *a.kwonlyargs, *extra]}
-    for part in scope_parts(fn):
-        for n in ast.walk(part):
-            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-                names.add(n.id)
+    for n in chain.from_iterable(map(ast.walk, scope_parts(fn))):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+            names.add(n.id)
     return names
 
 
@@ -210,12 +210,11 @@ for p, t in trees.items():
                 continue
             own = bound_names(inner)
             seen: dict[str, int] = {}
-            for part in scope_parts(inner):
-                for n in ast.walk(part):
-                    if isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load):
-                        chain = root_chain(n)
-                        if chain and chain[0] in outer_names - own:
-                            seen.setdefault(f"{chain[0]}.{chain[1]}", n.lineno)
+            for n in chain.from_iterable(map(ast.walk, scope_parts(inner))):
+                if isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load):
+                    parts = root_chain(n)
+                    if parts and parts[0] in outer_names - own:
+                        seen.setdefault(f"{parts[0]}.{parts[1]}", n.lineno)
             for key, line in seen.items():
                 if not any(o.startswith(f"{key}.") for o in seen):
                     kind = getattr(inner, "name", type(inner).__name__)

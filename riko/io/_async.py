@@ -266,7 +266,7 @@ class _AsyncURLStream[T: BytesIO | NamedTextIOWrapper]:
     """
     An awaitable, async-context-manager handle over a lazily opened buffer.
 
-    ``await``-ing it returns the opened buffer (the caller then owns closing it), while
+    ``await``-ing it returns the opened buffer (the caller then closes it), while
     ``async with`` yields the buffer and closes it on exit. Both paths open a fresh
     buffer. The handle is reusable, but not reentrant: entering it before the previous
     ``async with`` exits raises ``RuntimeError``.

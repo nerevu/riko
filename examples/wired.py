@@ -29,34 +29,32 @@ from riko.types.modules import (
 if TYPE_CHECKING:
     from riko.types import Item, Items, PipeDag
 
-in_test = ConfArg({"type": "bool", "value": "true"})
-format_conf = InputRawConf(
-    {
-        "name": {"type": "text", "value": "format_input"},
-        "prompt": {"type": "text", "value": "enter a date format"},
-        "type": {"type": "text", "value": "text"},
-        "default": {"type": "text", "value": "%B %d, %Y"},
-        "test": in_test,
-    }
-)
 
-date_conf = InputRawConf(
-    {
-        "name": {"type": "text", "value": "date_input"},
-        "prompt": {"type": "text", "value": "enter a date"},
-        "type": {"type": "text", "value": "date"},
-        "default": {"type": "text", "value": "5/4/82"},
-        "test": in_test,
-    }
+def text(value: str) -> ConfArg:
+    return ConfArg({"type": "text", "value": value})
+
+
+def build_input_conf(name: str, prompt: str, kind: str, default: str) -> InputRawConf:
+    return InputRawConf(
+        {
+            "name": text(name),
+            "prompt": text(prompt),
+            "type": text(kind),
+            "default": text(default),
+            "test": ConfArg({"type": "bool", "value": "true"}),
+        }
+    )
+
+
+format_conf = build_input_conf(
+    "format_input", "enter a date format", "text", "%B %d, %Y"
 )
+date_conf = build_input_conf("date_input", "enter a date", "date", "5/4/82")
 date_fmt_conf = DateFormatRawConf({"format": {"terminal": "format", "type": "text"}})
 build_conf = ItemBuilderRawConf(
     {
         "attrs": Param(
-            {
-                "value": {"terminal": "formatted", "type": "text"},
-                "key": {"type": "text", "value": "date"},
-            }
+            {"value": {"terminal": "formatted", "type": "text"}, "key": text("date")}
         )
     }
 )
@@ -81,12 +79,16 @@ dag: PipeDag = {
 }
 
 
+def build_pipeline() -> Pipeline:
+    return Pipeline(Workflow.parse(dag))
+
+
 def pipe(test: bool = False) -> list[Item]:
-    return list(Pipeline(Workflow.parse(dag)))
+    return list(build_pipeline())
 
 
 def async_pipe(test: bool = False) -> Pipeline:
-    return Pipeline(Workflow.parse(dag))
+    return build_pipeline()
 
 
 def print_results(result: Items) -> None:

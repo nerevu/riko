@@ -13,6 +13,7 @@ from subprocess import check_output
 from typing import TYPE_CHECKING
 
 from riko.base._paths import ARCHIVE_DIR, ROOT_DIR
+from riko.base._strutils import get_indent
 
 try:
     from docutils import nodes
@@ -42,17 +43,12 @@ UNRENDERED_LITERAL_MESSAGE = (
 )
 
 
-def _get_indent(line: str) -> int:
-    """Gets the indentation width of a line."""
-    return len(line) - len(line.lstrip())
-
-
 def _get_block_end(lines: list[str], start: int, indent: int) -> int:
     """Gets the index just past the directive body that starts at ``start``."""
     end = start
 
     while end < len(lines) and (
-        not lines[end].strip() or _get_indent(lines[end]) > indent
+        not lines[end].strip() or get_indent(lines[end]) > indent
     ):
         end += 1
 
@@ -64,23 +60,6 @@ def _is_pending_note(lines: list[str], index: int) -> bool:
     content = next((line for line in lines[index + 1 :] if line.strip()), "")
     note_match = _NOTE_RE.match(lines[index])
     return bool(note_match) and content.strip().startswith(_PENDING_NOTE)
-
-
-def _has_adjacent_pending_note(
-    lines: list[str], start: int, end: int, indent: int
-) -> bool:
-    """Checks whether a ``Pending.`` note immediately precedes or follows a block."""
-    before = start - 1
-
-    while before >= 0 and (
-        not lines[before].strip() or _get_indent(lines[before]) > indent
-    ):
-        before -= 1
-
-    after = next((i for i in range(end, len(lines)) if lines[i].strip()), len(lines))
-    preceded = before >= 0 and _is_pending_note(lines, before)
-    followed = after < len(lines) and _is_pending_note(lines, after)
-    return preceded or followed
 
 
 def gen_plain_block_lines(text: str) -> Iterator[int]:
@@ -120,7 +99,18 @@ def gen_plain_block_lines(text: str) -> Iterator[int]:
             body = [stripped for raw in block if (stripped := raw.strip())]
             runs = any(stripped.startswith(_PROMPT) for stripped in body)
             commented = bool(body) and body[0].startswith("#")
-            noted = _has_adjacent_pending_note(lines, index, end, indent)
+            before = index - 1
+
+            while before >= 0 and (
+                not lines[before].strip() or get_indent(lines[before]) > indent
+            ):
+                before -= 1
+
+            pos = (i for i in range(end, len(lines)) if lines[i].strip())
+            after = next(pos, len(lines))
+            preceded = before >= 0 and _is_pending_note(lines, before)
+            followed = after < len(lines) and _is_pending_note(lines, after)
+            noted = preceded or followed
 
             if not (runs or commented or noted):
                 yield index + 1
@@ -193,17 +183,12 @@ def get_anchor(text: str) -> str:
     return kept.replace(" ", "-")
 
 
-def _gen_tracked_docs() -> Iterator[str]:
-    """Lists the tracked RST files outside the archived internal docs."""
-    args = ["git", "ls-files", "*.rst"]
-
-    for name in check_output(args, cwd=ROOT_DIR, text=True).splitlines():
-        if not (path := ROOT_DIR / name).is_relative_to(ARCHIVE_DIR):
-            yield str(path)
-
-
 def _gen_doc_files(where: str | None) -> Iterator[str]:
-    """Resolves the RST files to check."""
+    """
+    Resolves the RST files to check.
+
+    Without ``where``, uses the tracked RST files outside the archived internal docs.
+    """
     if where:
         for location in where.split(" "):
             if isdir(location):
@@ -211,7 +196,11 @@ def _gen_doc_files(where: str | None) -> Iterator[str]:
             elif Path(location).suffix == ".rst":
                 yield str(location)
     else:
-        yield from _gen_tracked_docs()
+        args = ["git", "ls-files", "*.rst"]
+
+        for name in check_output(args, cwd=ROOT_DIR, text=True).splitlines():
+            if not (path := ROOT_DIR / name).is_relative_to(ARCHIVE_DIR):
+                yield str(path)
 
 
 def _render_rst(path: str) -> tuple[str, document]:
@@ -262,19 +251,12 @@ def _render_errors(path: str, doctree: document) -> list[str]:
         ]
 
 
-def _load_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
-    """Loads a document's anchors, rendering and caching it on first use."""
-    if path not in cache:
-        try:
-            cache[path] = _get_doc_anchors(_render_rst(path)[1])
-        except OSError:
-            cache[path] = set()
-
-    return cache[path]
-
-
 def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
-    """Collects internal RST hyperlinks whose target file or anchor is missing."""
+    """
+    Collects internal RST hyperlinks whose target file or anchor is missing.
+
+    Renders a target document and caches its anchors on first use.
+    """
     base_dir = dirname(path)
     errors: list[str] = []
 
@@ -291,7 +273,13 @@ def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[s
         elif anchor and not _LINE_ANCHOR_RE.match(anchor) and target.endswith(".rst"):
             where = ref_path or basename(path)
 
-            if anchor not in _load_path_anchors(target, cache):
+            if target not in cache:
+                try:
+                    cache[target] = _get_doc_anchors(_render_rst(target)[1])
+                except OSError:
+                    cache[target] = set()
+
+            if anchor not in cache[target]:
                 errors.append(f"{path}: unknown anchor '#{anchor}' in {where}")
 
     return errors

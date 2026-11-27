@@ -61,7 +61,7 @@ def gen_text(path: Path) -> Iterator[tuple[int, str]]:
             yield start + offset, line
 
 
-def gen_files(root: Path, excluded: frozenset[str]) -> Iterator[Path]:
+def gen_files(root: Path, *excluded: str) -> Iterator[Path]:
     """
     Expands a root into the Python and prose files to scan.
 
@@ -75,12 +75,13 @@ def gen_files(root: Path, excluded: frozenset[str]) -> Iterator[Path]:
         Each scannable file, in sorted path order.
 
     """
+    _excluded = frozenset(excluded)
     candidates = sorted(root.rglob("*")) if root.is_dir() else [root]
 
     for path in candidates:
         scannable = path.suffix == ".py" or path.suffix in _TEXT_SUFFIXES
 
-        if path.is_file() and scannable and path.name not in excluded:
+        if path.is_file() and scannable and path.name not in _excluded:
             yield path
 
 

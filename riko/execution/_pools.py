@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import deque
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
+from contextlib import contextmanager
 from math import inf
 from queue import SimpleQueue
 from typing import TYPE_CHECKING, Self
@@ -20,8 +21,10 @@ from attrs import define, field
 from riko.base._dateutils import Deadline
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Generator, Iterable, Iterator
     from types import TracebackType
+
+    from riko.types._wrappers import Func
 
 type AnyPool = Executor
 
@@ -66,7 +69,7 @@ def _map_unordered[T, R](
 @define(eq=False)
 class _PoolLifetime:
     """
-    Owns an execution's shared worker pool and decides how it is released.
+    Holds an execution's shared worker pool and decides how it is released.
 
     The pool waits out its pending work only when every mapped stream ran to exhaustion
     and no error is propagating. Otherwise read-ahead work is cancelled and busy worker
@@ -79,8 +82,9 @@ class _PoolLifetime:
         >>> from concurrent.futures import ThreadPoolExecutor
         >>>
         >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
-        ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))
-        [1, 1, 2, 2]
+        ...     with lifetime.track():
+        ...         lifetime.pool.submit(abs, -1).result()
+        1
 
     """
 
@@ -129,38 +133,68 @@ class _PoolLifetime:
                 worker.kill()
                 worker.join()
 
-    def flat_map[T](
-        self, func: Callable[[T], list[T]], source: Iterable[T], *, ordered: bool
-    ) -> Iterator[T]:
+    @contextmanager
+    def track(self) -> Generator[None]:
         """
-        Maps ``func`` over ``source`` on the pool and flattens the per-item results.
+        Counts a mapped stream as active while the block runs.
 
-        The source is pulled by the consumer, never ahead of it by more than the pool's
-        width. Mapped nodes can share one pool and chain freely.
-
-        Args:
-
-            func: Collects a node's per-item results.
-            source: The items to map.
-
-        Kwargs:
-
-            ordered: Whether items keep source order.
-
-        Yields:
-
-            Each result item, in source order when ``ordered`` and in
-            completion order otherwise.
-
+        A stream closed before it ends marks the pool abandoned, and one that fails
+        stays counted, so either way the pool is terminated rather than waited out.
         """
-        mapper = _map_ordered if ordered else _map_unordered
         self._active += 1
 
         try:
-            for results in mapper(self.pool, func, source, self.window):
-                yield from results
+            yield
         except GeneratorExit:
             self.abandoned = True
             raise
         else:
             self._active -= 1
+
+
+# TODO: make generic over an Executor and move to the iterator helpers (owned by the
+# planned streaming of a mapped node's per-item output)
+def flat_map[T, S](
+    func: Callable[[T], Iterable[S]],
+    source: Iterable[T],
+    *,
+    ordered: bool,
+    opener: Func[_PoolLifetime],
+) -> Iterator[S]:
+    """
+    Maps ``func`` over ``source`` on a worker pool and flattens the per-item results.
+
+    Opens the pool on the first pull through ``opener``. Pulls the source no more ahead
+    than the pool's window. Mapped nodes can share one pool and chain freely.
+
+    Args:
+
+        func: Collects a node's per-item results.
+        source: The items to map.
+
+    Kwargs:
+
+        ordered: Whether items keep source order.
+        opener: Opens the shared pool, or returns it once open.
+
+    Yields:
+
+        Each result item, in source order when ``ordered`` and in completion order
+        otherwise.
+
+    Examples:
+
+        >>> from concurrent.futures import ThreadPoolExecutor
+        >>>
+        >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
+        ...     opener = lambda: lifetime
+        ...     list(flat_map(lambda x: [x, x], [1, 2], ordered=True, opener=opener))
+        [1, 1, 2, 2]
+
+    """
+    lifetime = opener()
+    mapper = _map_ordered if ordered else _map_unordered
+
+    with lifetime.track():
+        for results in mapper(lifetime.pool, func, source, lifetime.window):
+            yield from results

@@ -102,11 +102,11 @@ def parse_diff(text: str) -> dict[str, FileChange]:
             definition = get_definition(line)
 
             if definition is not None:
-                side = (
-                    changes[current].removed
-                    if line[0] == "-"
-                    else changes[current].added
-                )
+                if line[0] == "-":
+                    side = changes[current].removed
+                else:
+                    side = changes[current].added
+
                 side.setdefault(*definition)
 
     return {

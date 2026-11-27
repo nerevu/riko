@@ -205,6 +205,11 @@ class Settings:
     branch_buffer: Limit = 1024
 
 
+def _warn_ignored(key: str, raw: object, expected: str) -> None:
+    """Logs that the ``key`` override ``raw`` is ignored, saying what was expected."""
+    logger.warning("ignoring %s=%r: %s", key, raw, expected)
+
+
 def _env_int[D: int | None](
     env: Mapping[str, str], key: str, default: D, *, minimum: int | None = None
 ) -> int | D:
@@ -213,16 +218,16 @@ def _env_int[D: int | None](
 
     A malformed value or one below ``minimum`` logs a warning and keeps ``default``.
     """
-    msg, value = "ignoring %s=%r: expected at least %d", default
+    value = default
 
     if (raw := env.get(key)) is not None:
         try:
             parsed = int(raw)
         except ValueError:
-            logger.warning("ignoring %s=%r: expected an integer", key, raw)
+            _warn_ignored(key, raw, "expected an integer")
         else:
             if minimum is not None and parsed < minimum:
-                logger.warning(msg, key, raw, minimum)
+                _warn_ignored(key, raw, f"expected at least {minimum}")
             else:
                 value = parsed
 
@@ -249,7 +254,7 @@ def _env_bound(
 
             value = require_limit(parsed, key, minimum=minimum)
         except (ValueError, TypeError) as error:
-            logger.warning("ignoring %s=%r: %s", key, raw, error)
+            _warn_ignored(key, raw, str(error))
 
     return value
 
@@ -269,14 +274,14 @@ def _env_float(
         try:
             parsed = float(raw)
         except ValueError:
-            logger.warning("ignoring %s=%r: expected a number", key, raw)
+            _warn_ignored(key, raw, "expected a number")
 
         if parsed is None:
             pass
         elif isnan(parsed) or parsed < 0:
-            logger.warning("ignoring %s=%r: expected a non-negative number", key, raw)
+            _warn_ignored(key, raw, "expected a non-negative number")
         elif positive and parsed == 0:
-            logger.warning("ignoring %s=%r: expected a positive number", key, raw)
+            _warn_ignored(key, raw, "expected a positive number")
         else:
             value = parsed
 
@@ -295,7 +300,7 @@ def _env_encoding(env: Mapping[str, str], key: str, default: str) -> str:
         try:
             codecs.lookup(raw)
         except LookupError:
-            logger.warning("ignoring %s=%r: unknown encoding", key, raw)
+            _warn_ignored(key, raw, "unknown encoding")
         else:
             value = raw
 

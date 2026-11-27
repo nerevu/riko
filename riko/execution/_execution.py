@@ -2,20 +2,23 @@
 """
 Shared state and plan checks for the private sync/async executions.
 
-A prepared workflow (an execution plan) is a reusable structural snapshot; running
-it creates a one-shot sync or async execution. Each owns the exit stack and sync/async
-bridge that scope a run's acquired resources and adapted work. These
-types are private to the runtime and belong to no supported surface.
+An execution plan is a reusable structural snapshot of a workflow. Running it creates a
+one-shot sync or async execution. Each keeps the exit stack and sync/async bridge that
+scope a run's acquired resources and adapted work.
 """
 
 from __future__ import annotations
 
-from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Never, overload
+from contextlib import AsyncExitStack, ExitStack, contextmanager
+from contextvars import ContextVar
+from functools import partial
+from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, overload
 
 from attrs import Factory, define, field
 
-from riko.bado._util import asyncify
+from riko.bado._backend import CapacityLimiter, Event, lowlevel
+from riko.bado._util import async_runner, asyncify
+from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._context import Context
@@ -23,28 +26,37 @@ from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._workflow import parse_port
 
 from ._adapt import select_embed
+from ._prepared import NodeInputs
 from ._provenance import PLACEHOLDER
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Awaitable, Callable, Generator, Mapping
     from contextlib import AbstractContextManager
+    from types import TracebackType
 
+    from anyio import CapacityLimiter as Limiter
     from anyio.from_thread import BlockingPortal
+    from anyio.lowlevel import RunVar
 
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
     from riko.types._feed import AsyncEnvelopeStream, EnvelopeStream, _ItemEnvelope
     from riko.types._frozendict import FrozenWorkflowEdges
-    from riko.types._workflow import PortKey, PortName, ResourceName
+    from riko.types._workflow import OutputName, PortKey, PortName, ResourceName
     from riko.types._wrappers import AnyModuleWrapper, Func
 
-    from ._adapt import Drain
+    from ._adapt import Drain, WorkerCall
     from ._prepared import ExecutionPlan, PreparedNode
 
 type SyncExecSteps[T] = dict[PortKey, list[EnvelopeStream[T]]]
 type AsyncExecSteps[T] = dict[PortKey, list[AsyncEnvelopeStream[T]]]
 type Acquisition[T] = _Acquired[T] | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition[Any]]
+
+_budgets: RunVar[_ThreadBudget] | None = (
+    None if lowlevel is None else lowlevel.RunVar("node_threads")
+)
+_on_node_thread: ContextVar[bool] = ContextVar("on_node_thread", default=False)
 
 
 class _NullEventSink:
@@ -65,30 +77,7 @@ class _NullEventSink:
 
 _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_ENVELOPES: tuple[_ItemEnvelope[object], ...] = (PLACEHOLDER,)
-
-
-class NodeInputs[V](NamedTuple):
-    """
-    The streams wired onto a node's input ports.
-
-    Attributes:
-
-        stream: The stream on the default input port.
-        named: The streams on the named input ports, keyed by port name.
-        others: The streams on the positional input ports, in port order.
-
-    Examples:
-
-        >>> inputs = NodeInputs(None, {"part": [1]}, None)
-        >>> inputs.stream
-        >>> list(inputs.named)
-        ['part']
-
-    """
-
-    stream: V | None
-    named: dict[PortName, V]
-    others: list[V] | None
+SHUTDOWN_MSG = "shutting down the execution"
 
 
 @define(frozen=True, slots=True)
@@ -113,6 +102,85 @@ class _FailedAcquisition:
         raise self.error
 
 
+@define(eq=False)
+class _ThreadBudget:
+    """
+    Shares one event loop's node threads among the executions running on it.
+
+    A run takes every thread it may hold at once before it reads anything. No run waits
+    for a thread while holding threads another run is waiting for.
+    """
+
+    total: int
+    available: int = field(
+        default=Factory(lambda self: self.total, takes_self=True), init=False
+    )
+    _restored: Event = field(factory=Event, init=False)
+
+    async def reserve(self, count: int) -> _Reservation:
+        """Waits until ``count`` node threads are free, then takes them all at once."""
+        while count and self.available < count:
+            await self._restored.wait()
+
+        self.available -= count
+        return _Reservation(self, count)
+
+    def restore(self, count: int) -> None:
+        """Gives back ``count`` node threads and wakes the runs waiting for them."""
+        self.available += count
+        restored, self._restored = self._restored, Event()
+        restored.set()
+
+
+@define(eq=False)
+class _Reservation:
+    """
+    The node threads one run holds until its output stream closes.
+
+    Its ``limiter`` caps the run's node threads at the number it reserved. It is built
+    on the event loop that reserves it.
+    """
+
+    budget: _ThreadBudget
+    count: int
+    held: bool = field(default=True, init=False)
+    limiter: Limiter = field(
+        init=False,
+        default=Factory(
+            lambda self: CapacityLimiter(max(self.count, 1)), takes_self=True
+        ),
+    )
+
+    def release(self) -> None:
+        """Gives the threads back to the budget. A repeated call does nothing."""
+        if self.held:
+            self.held = False
+            self.budget.restore(self.count)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.release()
+
+
+def _resolve_thread_budget() -> _ThreadBudget:
+    """Finds the running event loop's node-thread budget and starts it on first use."""
+    if _budgets is None:
+        msg = "anyio is required to run async executions"
+        raise RuntimeError(msg)
+    elif (budget := _budgets.get(None)) is None:
+        budget = _ThreadBudget(config.node_threads)
+        _budgets.set(budget)
+
+    return budget
+
+
 def _event_sink[S: (ExitStack, AsyncExitStack)](self: _BaseExecution[S]) -> EventSink:
     return resolve_default(self.settings.event_sink, _NULL_EVENT_SINK)
 
@@ -126,9 +194,10 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
     Shares the state and checks both executions run, plus their one worker-thread call.
 
     That covers the context and settings, the closed-state guard, synchronous
-    exit-stack entry, cleanup-error reporting, the resolved-resource cache,
-    resource-binding checks, input wiring, and ``run_sync``, which runs a blocking
-    callable on a worker thread from whichever event loop is running.
+    exit-stack entry, cleanup-error reporting, the resolved-resource cache, resource-
+    binding checks, input wiring, node-thread reservations, and ``run_sync``.
+    ``run_sync`` runs a blocking callable on a worker thread from whichever event loop
+    is running.
     """
 
     context: Context | None = None
@@ -138,6 +207,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
     _closing: bool = field(default=False, init=False)
     _cleanup_errors: list[Exception] = field(factory=list, init=False)
     _acquired: Acquisitions = field(factory=dict, init=False)
+    _reservations: list[_Reservation] = field(factory=list, init=False)
     is_async: ClassVar[bool]
 
     def emit(self, event: object) -> None:
@@ -180,12 +250,18 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
         return _plan, context
 
-    def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
-        """Runs a cleanup callback and saves its failure for the shutdown report."""
+    @contextmanager
+    def _record_cleanup_errors(self) -> Generator[None]:
+        """Records an error the block raises during cleanup."""
         try:
-            func(*args)
+            yield
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
+
+    def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
+        """Runs a cleanup callback and saves its failure for the shutdown report."""
+        with self._record_cleanup_errors():
+            func(*args)
 
     def queue_callback(self, func: Func[object], *args: object) -> None:
         """
@@ -222,6 +298,93 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         """
         self._require_open("run work in")
         return await asyncify(func, *args, **kwargs)
+
+    async def _reserve_threads(self, demand: int, output: OutputName) -> _Reservation:
+        """
+        Reserves every node thread a run may hold at once before it reads anything.
+
+        Args:
+
+            demand: The max number of node threads the run may hold at once.
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            The run's reservation. It is released when its output stream closes or the
+            execution shuts down.
+
+        Raises:
+
+            InvalidPipelineError: If ``demand`` exceeds the event loop's node-thread
+                budget, or what this execution's open output streams leave free, or if
+                the run is read from a node thread and too few threads are free.
+
+        """
+        budget = _resolve_thread_budget()
+        self._reservations[:] = [r for r in self._reservations if r.held]
+        held = sum(r.count for r in self._reservations)
+        kind = "an async" if self.is_async else "a synchronous"
+
+        if demand > budget.total:
+            msg = (
+                f"workflow output {output!r} may hold {demand} threads at once for "
+                f"modules without {kind} implementation. The node-thread budget is "
+                f"{budget.total}. Raise RIKO_NODE_THREADS, or shorten the chain of "
+                "such modules."
+            )
+            raise InvalidPipelineError(msg)
+        elif held + demand > budget.total:
+            msg = (
+                f"workflow output {output!r} may hold {demand} threads at once for "
+                f"modules without {kind} implementation. This execution's open output "
+                f"streams already hold {held} of the node-thread budget of "
+                f"{budget.total}. Close them first, or raise RIKO_NODE_THREADS."
+            )
+            raise InvalidPipelineError(msg)
+        elif _on_node_thread.get() and budget.available < demand:
+            msg = (
+                f"workflow output {output!r} runs inside a module without an async "
+                "implementation, for example as a nested stored workflow. It may hold "
+                f"{demand} threads at once, but only {budget.available} of the "
+                f"node-thread budget of {budget.total} are free. It cannot wait for "
+                "threads its parent holds, so raise RIKO_NODE_THREADS."
+            )
+            raise InvalidPipelineError(msg)
+
+        reservation = await budget.reserve(demand)
+
+        if demand:
+            try:
+                self.enter_context(reservation)
+            except BaseException:
+                reservation.release()
+                raise
+
+            self._reservations.append(reservation)
+
+        return reservation
+
+    async def _run_on_node_thread[R, **P](
+        self,
+        runner: async_runner,
+        func: Callable[P, R | Awaitable[R]],
+        /,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """Runs a node's blocking step on one of the run's node threads."""
+        self._require_open("run work in")
+        token = _on_node_thread.set(True)
+
+        try:
+            result = await runner(func, *args, **kwargs)
+        finally:
+            _on_node_thread.reset(token)
+
+        return result
+
+    def _worker(self, limiter: CapacityLimiter | None = None) -> WorkerCall:
+        return partial(self._run_on_node_thread, asyncify.using(limiter=limiter))
 
     def _select_embed(
         self, node: PreparedNode, to_sync: Drain[object]
@@ -312,7 +475,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
             steps: The streams each upstream port has left to hand out.
             incoming: The stream edges that target the node.
-            seed: The stream fed to the node's open input, if any.
+            seed: The items fed to the node's open input, if any.
 
         Returns:
 
@@ -338,35 +501,3 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         ordered = sorted(indexed, key=lambda item: item[0])
         others = [_stream for _, _stream in ordered] if ordered else None
         return NodeInputs(stream, named, others)
-
-    def _report_shutdown(
-        self, exc: BaseException | None, raised: BaseException | None, suppressed: bool
-    ) -> None:
-        """
-        Raises the shutdown outcome once cleanup has been attempted in full.
-
-        ``raised`` is an exception that a native context manager replaced the primary
-        error with. That replacement, or the unsuppressed primary error, stays the
-        primary outcome. Cleanup callback and task failures group alongside it rather
-        than replace it. They are raised on their own only when no primary outcome
-        remains.
-        """
-        errors = self._cleanup_errors
-
-        if raised is not None:
-            primary: BaseException | None = raised
-        elif suppressed:
-            primary = None
-        else:
-            primary = exc
-
-        if not errors and raised is not None:
-            raise raised
-        elif not errors:
-            pass
-        elif primary is None and len(errors) == 1:
-            raise errors[0]
-        elif primary is None:
-            raise ExceptionGroup("Execution shutdown failed", errors)
-        else:
-            raise BaseExceptionGroup("Execution shutdown failed", [primary, *errors])

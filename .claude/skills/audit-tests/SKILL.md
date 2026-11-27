@@ -48,7 +48,7 @@ per-file counts.
 ## 2. Script first, then agents verify leads
 
 Reading the suite by hand is the expensive mistake. Four agents once spent
-150–250k tokens each on a sweep that `overlap_scan.py` now does in about 2 s. Run
+150–250k tokens each on a sweep that `overlap_scan.py` now does in about 8 s. Run
 the mechanical sweeps yourself in the main loop (`SCRATCH` is the session scratchpad):
 
 ```bash
@@ -63,6 +63,8 @@ Add these only when their dimension is in scope:
   xfail_probe --no-cov -n auto <files>` records why each xfail fails today and
   lists the suspects: `SETUP` (satisfied by a setup error), `MISMATCH` (not its
   `raises=`), `UNPINNED` (no `raises=`), `PASSES` (the capability may have landed).
+  `python .claude/skills/tidy/xfail_probe.py --list [PATH ...]` lists every marker by
+  location without running anything, to check which tripwires a slice cites.
 - **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times, each
   saved to a file; `uv run --active python .claude/skills/tidy/fit_bounds.py FILE...`
   keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok; an
@@ -75,10 +77,14 @@ Add these only when their dimension is in scope:
   (`library-raises`), and tests whose every assert is `hasattr`/`callable`/
   `isinstance`/`is not None` with no `raises`/`warns` block (`trivial-assert`).
 - **Unique coverage:** `COVERAGE_CORE=ctrace pytest --cov=riko --cov-context=test`
-  ranks suspects that add no unique lines. It only ranks; it never decides.
+  ranks suspects that add no unique lines. It only ranks; it never decides. Record over
+  the default test paths (pass no path, or include the source files whose doctests are
+  COVER ids), since a run given only `tests/` records no doctest contexts; a doctest id
+  reads `riko/base/_iterutils.py::riko.base._iterutils.betwix`.
   The same data answers a proposed deletion: `uv run --active python
   .claude/skills/tidy/covdiff.py --data .coverage CUT... -- COVER...` lists the
-  lines the cut tests execute that their covering tests never do.
+  lines the cut tests execute that their covering tests never do, and exits 2 when
+  an id matches no recorded test context.
 
 Before fanning out, estimate the cost: lines to read × about 12 tokens × the number of
 agents rereading them. Size each file group to fit a 100k-token agent: about 1k test
@@ -89,7 +95,18 @@ agents of the 2026-10-29 audit to 145–189k). Run
 `python .claude/skills/land/require_agents.py` first (on failure, stop and report its
 output). Split `auditor` agents by file group (`model: "opus"`), give each agent the
 scan leads for its files, and require both sides of every suspected duplicate to be
-read. Tag each lead CONFIRMED or DROPPED, with the reason. Every brief ends with: "Run
+read. A brief spends the read where no script looks: the agent verifies its scan
+leads, then checks the remaining tests only for the hand-only dimensions
+`_docs/gameplans/testing.md` §3 assigns to the agents (rows shadowed by an earlier
+branch, xfail comparisons false on their face, xfail worst times that measure the
+defect, a `sleep` that outlasts its bound inside a nested function or a shielded
+cleanup, same-subject tests whose bodies differ in more than literals, retired
+verbs in test names) plus the cross-tier twins and timeout-only endings of §3
+below; it never re-derives a scanner section by hand. Rank the file groups by
+`python .claude/skills/tidy/mistake_scan.py --classes` (the owning modules of the
+top classes get the smaller groups and the heavier brief), so a group runs about
+1.5k lines when its brief is focused this way. Tag each lead CONFIRMED or DROPPED,
+with the reason. Every brief ends with: "Run
 `date` at the start and between items. If you pass about 10 minutes or 100k tokens and
 the remaining work is mechanical, stop at a consistent point and report what is done,
 what is left, and the script that would finish it." Ping each agent for status at about
@@ -108,6 +125,7 @@ git-ignored and cleared only by the user (agents never delete it).
    - a test that asserts a test helper rather than a riko name;
    - two tests asserting opposite outcomes for one pending feature;
    - a "…_once" test that never counts.
+
 2. **Tests that end only by timeout.** Look for:
    - blocking work inside a nested coroutine or the code under test that outlasts
      its backstop, so a regression ends by the timeout firing or passes on its own;
@@ -119,6 +137,7 @@ git-ignored and cleared only by the user (agents never delete it).
 
    A test guarding "stops promptly" needs blocking work longer than its
    elapsed-time assertion but shorter than the backstop.
+
 3. **Same behavior asserted twice**, which the scanner mostly misses:
    - a cross-tier twin of a different shape (a direct `_PoolLifetime` call vs an
      end-to-end `Pipeline` run);
@@ -131,14 +150,17 @@ git-ignored and cleared only by the user (agents never delete it).
    Grep the behavior's vocabulary (the setting, error type, message fragment, or
    outcome) across `tests/` and `riko/`, and open every hit. A hit you saw but
    never opened is exactly how a duplicate was added on 2026-10-29.
+
 4. **Doctest balance.** A doctest grown past basic usage (move cases to the
    subject's table), or an edge case in both places. Apply rule 6 as written; there
    is no public/private tie-breaker and no rule that "an error case stays in the
    doctest".
+
 5. **Same-shape groups.** The scanner's `shapes` section, plus tests that share
    setup and assertion and differ only in data. A finding must estimate the line
    count after the fold. A fold that would grow the file is not a finding until
    its rows compact.
+
 6. **Misfits.** Wrong tier, a class whose subject another file's row owns, a class
    named for something that isn't a riko name, behavior/rejection/tripwire order,
    grab-bag or history-named files, and files that need a split or merge (trim and
@@ -161,15 +183,19 @@ git-ignored and cleared only by the user (agents never delete it).
    dict-order or `ChainMap` assertion. The fix is a `testing.md` §6 move to
    `tests/typing/` for the pyright-owned ones and a deletion otherwise; a pyright
    *warning* (`reportUnsupportedDunderAll`) fails no gate, so a test over it stays.
+
 7. **Helpers.** Single-user `tests/_*.py` names, identical definitions across
    files, 3+ inline copies that should be one helper, and placement.
+
 8. **Timeout bounds.** `manage lint --tests` checks ladder membership and nesting; the
    audit measures the fit (`fit_bounds.py`): every bound is the smallest ladder step at
    least five times the worst of the three `--durations` runs above. Map a marker to the
    `def` that *follows* it, never by line range.
+
 9. **Stale citations and names.** Test names that cite nothing (`test_documented_*`),
    old verbs in test names, and `_docs/` citations of tests that moved or were
    deleted (`lint --docs` checks `path::Class::test`; it misses prose mentions).
+
 10. **Speed.** The slowest tests by `--durations`, duplicated subprocess matrices,
     and pools spun up where one call would do.
 
@@ -221,9 +247,10 @@ classes it names), sync/async mirrors, and tests a gameplan cites by name as a g
   run `--runxfail`) and show the test still passes, or fails for the wrong reason.
 - **Fold:** list the rows, the ids, and the estimated lines saved. Every removed
   test maps to a row, and no row's data changes silently.
-- **Deletion:** flag any line that only the cut test executes (`covdiff.py`). The
-  ratchet total can't see a deleted test whose lines other tests also reach, and earlier
-  "mechanical" slices lost 14 lines that way.
+- **Deletion:** flag any line that only the cut test executes (`covdiff.py`; an
+  id that matches no recorded test context exits 2 rather than reading as covered).
+  The ratchet total can't see a deleted test whose lines other tests also reach, and
+  earlier "mechanical" slices lost 14 lines that way.
 - **Speed and bounds:** cite the measured times, not estimates.
 
 A lead you cannot substantiate is dropped, or reported as unverified with what
@@ -252,9 +279,10 @@ Close with:
   local, or needs a decision. Triage is always the next step.
 - **Slice plan for the fix**: broken tests first, then layout moves, then
   dedup/folds, then rules or lints. Each slice is verified by a sorted collect-id
-  diff against a clean HEAD worktree (only the stated deletions differ),
-  `codegen --tests`, `lint --all`, `test --ratchet`, and `--check-types`, each full
-  gate run through `gates.py run` with `/land`'s command so `/land` reuses the pass.
+  diff against a clean HEAD worktree (only the stated deletions differ), a bare
+  `codegen --tests` (a targeted generator, not the codegen gate), then `lint --all`,
+  `test --ratchet`, and `--check-types`, each full gate run through `gates.py run` with
+  `/land`'s command so `/land` reuses the pass.
 - **Tool gaps**: leads the scanner missed that you found by hand, with the
   `overlap_scan.py` section or lint that would catch them, so the next pass can
   build that check.

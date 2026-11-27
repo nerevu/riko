@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
     from riko.types import Item
 
-p1_conf = ItemBuilderConf(
+build_conf = ItemBuilderConf(
     {"attrs": [{"value": "http://www.caltrain.com/Fares/farechart.html", "key": "url"}]}
 )
 
-p2_conf = RegexRawConf(
+regex_conf = RegexRawConf(
     {
         "rule": RegexRawRule(
             {
@@ -40,13 +40,16 @@ p2_conf = RegexRawConf(
 )
 
 
+def build_pipeline() -> Pipeline:
+    return Pipeline.from_module("itembuilder", conf=build_conf).regex(conf=regex_conf)
+
+
 def pipe(test: bool = False) -> list[Item]:
-    pipeline = Pipeline.from_module("itembuilder", conf=p1_conf).regex(conf=p2_conf)
-    return list(pipeline)
+    return list(build_pipeline())
 
 
 def async_pipe(test: bool = False) -> Pipeline:
-    return Pipeline.from_module("itembuilder", conf=p1_conf).regex(conf=p2_conf)
+    return build_pipeline()
 
 
 def print_results(result: Iterable[object]) -> None:

@@ -314,6 +314,39 @@ def helper():
 TABLE = [param(1, id="one")]
 """
 
+BOOTSTRAP = """\
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+
+import tool
+
+
+def f():
+    pass
+
+
+X = tool.VALUE
+"""
+
+BOOTSTRAP_EXPECTED = """\
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+
+import tool
+
+X = tool.VALUE
+
+
+def f():
+    pass
+"""
+
 CASES = [
     pytest.param(
         GUARDED, GUARDED_EXPECTED, "HAS_FAST -> top", id="guarded-import-header"
@@ -328,6 +361,7 @@ CASES = [
     pytest.param(REORDER, REORDER_EXPECTED, "reordered", id="reorder-only"),
     pytest.param(RANKS, RANKS_EXPECTED, "logger -> top", id="logger-then-aliases"),
     pytest.param(BARE_PARAM, BARE_PARAM_EXPECTED, "X -> top", id="bare-param-table"),
+    pytest.param(BOOTSTRAP, BOOTSTRAP_EXPECTED, "X -> top", id="sys-path-bootstrap"),
 ]
 
 
@@ -351,10 +385,9 @@ def test_a_helper_follows_the_constant_it_reads_and_aliases_stay(tmp_path):
     ]
 
 
-def test_a_second_pass_changes_nothing(tmp_path):
-    text, _ = _lift(tmp_path, SOURCE)
-    again, report = _lift(tmp_path, text)
-    assert (again, report) == (text, [])
+@pytest.mark.parametrize("lifted", [EXPECTED, BOOTSTRAP_EXPECTED])
+def test_a_second_pass_changes_nothing(tmp_path, lifted):
+    assert _lift(tmp_path, lifted) == (lifted, [])
 
 
 def test_a_rebound_name_is_reported_not_moved(tmp_path):

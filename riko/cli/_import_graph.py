@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from itertools import chain
 from tokenize import open as open_python
 from typing import TYPE_CHECKING, Final, Literal
 
@@ -11,6 +12,7 @@ from riko.base._exceptions import RikoError
 from riko.base._iterutils import gen_non_null
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
 
 type _ImportKind = Literal["module", "local", "type"]
@@ -28,6 +30,35 @@ class ImportAnalysisError(ImportLintError): ...
 class InvalidArchitectureError(ImportLintError): ...
 
 
+def _bound_names(node: ast.AST) -> tuple[str, ...]:
+    names: list[str] = []
+
+    if isinstance(node, ast.Name):
+        names.append(node.id)
+    elif isinstance(node, (ast.Tuple, ast.List)):
+        for child in node.elts:
+            names.extend(_bound_names(child))
+
+    return tuple(names)
+
+
+def resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> str:
+    """Resolves the absolute module a ``from`` import names."""
+    if level == 0:
+        name = module or ""
+    else:
+        parts = current.package.split(".") if current.package else []
+        keep = max(0, len(parts) - level + 1)
+        base = parts[:keep]
+
+        if module:
+            base.extend(module.split("."))
+
+        name = ".".join(base)
+
+    return name
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleInfo:
     name: str
@@ -39,6 +70,41 @@ class ModuleInfo:
     def package(self) -> str:
         """The dotted name of the package that owns this module."""
         return self.name if self.is_package else self.name.rpartition(".")[0]
+
+    @property
+    def symbol_sources(self) -> dict[str, tuple[str, str]]:
+        """
+        The ``(module, name)`` each top-level name was imported from at run time.
+
+        A later ``import``, definition, or assignment of the same name drops it.
+        """
+        sources: dict[str, tuple[str, str]] = {}
+
+        for node in self.tree.body:
+            if isinstance(node, ast.ImportFrom):
+                imported = node.module or ""
+
+                if node.level:
+                    imported = resolve_from_module(self, node.module, node.level)
+
+                for alias in (a for a in node.names if a.name != "*"):
+                    bound = alias.asname or alias.name
+                    sources[bound] = (imported, alias.name)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    bound = alias.asname or alias.name.split(".", 1)[0]
+                    sources.pop(bound, None)
+            elif isinstance(node, (*FUNCTION_NODES, ast.ClassDef)):
+                sources.pop(node.name, None)
+            elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+
+                for name in chain.from_iterable(map(_bound_names, targets)):
+                    sources.pop(name, None)
+
+        return sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,21 +146,9 @@ def load_modules(root: Path) -> tuple[ModuleInfo, ...]:
     return tuple(modules)
 
 
-def resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> str:
-    """Resolves the absolute module a ``from`` import names."""
-    if level == 0:
-        name = module or ""
-    else:
-        parts = current.package.split(".") if current.package else []
-        keep = max(0, len(parts) - level + 1)
-        base = parts[:keep]
-
-        if module:
-            base.extend(module.split("."))
-
-        name = ".".join(base)
-
-    return name
+def load_ast(path: Path) -> ast.Module:
+    """Loads and parses the Python source at ``path``."""
+    return ast.parse(path.read_text(encoding="utf-8"))
 
 
 def is_type_checking(test: ast.expr) -> bool:
@@ -230,7 +284,7 @@ def collect_imports(module: ModuleInfo) -> tuple[_ImportRef, ...]:
 
 
 def resolve_import_targets(
-    ref: _ImportRef, module_names: set[str] | frozenset[str]
+    ref: _ImportRef, module_names: Collection[str]
 ) -> tuple[str, ...]:
     if ref.form == "import":
         result = (ref.imported,) if ref.imported else ()

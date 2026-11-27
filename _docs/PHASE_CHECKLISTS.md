@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3913 passed / 113 xfailed**. The user commits.
+Suite: **4014 passed / 113 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -104,16 +104,17 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is st
 | **R3** immutable Context/Resource (+ write-session seam) | ✅ done | `1c72a7a5` (2026-09-24); [IMPLEMENTED § Write sessions](IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode). Not built and re-homed (implementation-sequence R3): factory-signature and eager resource-graph validation → R11; `state_store` → R6; identity-encoder selection and resource identity metadata → R2B; Context-local module definitions/`with_module()` unscheduled |
 | **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
 | **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/public/test_write.py`) |
-| **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ✅ done | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` flipped with R5A (2026-11-11); closed 2026-11-03 with decorated functions on `\|` re-homed as unscheduled (needs R2B's `version=`; strict xfail `TestPipelineChaining::test_or_composes_a_decorated_processor`) |
+| **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ✅ done | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestPipelineMap`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestPipelineMap::test_map_rejects_combine_identity` flipped with R5A (2026-11-11); closed 2026-11-03 with decorated functions on `\|` re-homed as unscheduled (needs R2B's `version=`; strict xfail `TestPipelineChaining::test_or_composes_a_decorated_processor`) |
 | **R4D** workflow input schemas | ✅ done | slot added 2026-10-03; closed 2026-11-10 (fingerprint folding of resolved values stays R2B); owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail for explicit value sources, flipped 2026-11-05 (only a source or a `strconcat` reading nothing from its default input starts unseeded; `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_with_input_schemas` (stored-workflow subtype from its roots), flipped 2026-11-09 (a stored workflow's pipe is tagged `"source"` when it can run without a seed; declared inputs don't affect the tag) |
-| **R5A** FeedResult, Metadata, private per-item provenance | ✅ done | M1 core: private `_ItemEnvelope` envelope, identity propagation (roots, preserve/derive/combine, pass-through identity table), and `map`'s `identity=` taking effect; fingerprints and `version=` re-homed to R2B (2026-11-11); owner `gameplans/implementation-sequence.md` § R5A; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` flipped (`map(identity="combine")` raises); implemented in the uncommitted phase-14 tree 2026-11-12 ([IMPLEMENTED § Per-item provenance](IMPLEMENTED.md#per-item-provenance--_itemenvelope-r5a-in-progress)); landed and pushed 2026-11-14; the close tests split out of `tests/internal/test_plan_runs.py` into `tests/internal/test_plan_closes.py` 2026-11-14; loop-embedder positional switch landed 2026-11-14 (implementation-sequence § R5A) |
-| **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
-| **R4L** DotDict literal access | ⏳ pending | slot added 2026-11-05, after M1 and before R4E; owner `gameplans/dotdict-parsing.md`; flips the `TestDotDict` literal-access tripwires in `tests/internal/test_values.py` and `TestCount::test_count_key_values_containing_dots_stay_literal` in `tests/public/test_modules.py` (GitHub issue #60) |
-| **R4E** module config contracts + strict conf validation + `is_async` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`); 2026-11-21: flips `TestExecutionPlan::test_build_plan_reads_an_extension_splitters_declared_ports` in `tests/internal/test_execution_plan.py` (declared splitter output ports) |
-| **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4L → R4E → merge → publish; acceptance = every announcement-post sample runs on the released wheel; not the 1.0 gate (implementation-sequence § 4 "M2") |
-| **M3** monthly-invoicing release | 🎯 milestone | M2 → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R5C/R6 (implementation-sequence § 4 "M3") |
-| **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R5B → R5C → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
-| **R5B**–**R12** | ⏳ pending | forward order and exits in [implementation-sequence.md](gameplans/implementation-sequence.md) § 4; R7 may overlap R5A (§ 5) |
+| **R5A** FeedResult, Metadata, private per-item provenance | ✅ done | M1 core: private `_ItemEnvelope` envelope, identity propagation (roots, preserve/derive/combine, pass-through identity table), and `map`'s `identity=` taking effect; fingerprints and `version=` re-homed to R2B (2026-11-11); owner `gameplans/implementation-sequence.md` § R5A; strict xfail `TestPipelineMap::test_map_rejects_combine_identity` flipped (`map(identity="combine")` raises); implemented in the uncommitted phase-14 tree 2026-11-12 ([IMPLEMENTED § Per-item provenance](IMPLEMENTED.md#per-item-provenance--_itemenvelope-r5a-in-progress)); landed and pushed 2026-11-14; the close tests split out of `tests/internal/test_plan_runs.py` into `tests/internal/test_plan_closes.py` 2026-11-14; loop-embedder positional switch landed 2026-11-14 (implementation-sequence § R5A) |
+| **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5C follows before M2, R5B/R6+ after it (implementation-sequence § 4 "M1") |
+| **R4L** DotDict literal access | ⏳ pending | slot added 2026-11-05, after M1 and before R4E; 2026-11-22: built in parallel with R7 Slices C–D, merged right after M1; owner `gameplans/dotdict-parsing.md`; flips the `TestDotDict` literal-access tripwires in `tests/internal/test_values.py` and `TestCount::test_count_key_values_containing_dots_stay_literal` in `tests/public/test_modules.py` (GitHub issue #60) |
+| **R4E** module config contracts + strict conf validation + `is_async` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestPipelineMap::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`); 2026-11-21: flips `TestExecutionPlan::test_build_plan_reads_an_extension_splitters_declared_ports` in `tests/internal/test_execution_plan.py` (declared splitter output ports) |
+| **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4L → R4E → R5C → merge → publish (R5C moved before M2 2026-11-22: it deletes the STABLE `Sinks`/`riko.modules.write`); acceptance = every code sample in `README.rst` and `docs/COOKBOOK.rst` runs on the released wheel, with the announcement post written as a prerequisite; not the 1.0 gate (implementation-sequence § 4 "M2") |
+| **M3** monthly-invoicing release | 🎯 milestone | M2 → resource-seam core slice (honor `Resource.credential`, tripwire `TestResourceAcquisition::test_sync_acquire_passes_a_credential_reference_to_its_factory` in `tests/internal/test_resources.py`; `ResourceView` on `riko.ext`; added 2026-11-22) → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R6; one run per client with `tenant_id`/`period` as workflow inputs (implementation-sequence § 4 "M3") |
+| **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; R5B off the path since 2026-11-22 (after R2B, in parallel with the R11 slices); the `riko.ext` parser-protocol design freezes first; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
+| **R7** execution-owned publish/subscribe and split | ⏳ in progress | Slice A (tee correctness) landed 2026-11-17; the async hand-through and stream-ownership redesign landed 2026-11-24 (`fcfedc85`), the test-file split 2026-11-24 (`3f48a078`); next the small definition-layer PR (Slice B's `ExecutionSettings`/`with_execution(strict=, overrides=)` half, `Pipeline.union`, the D103 rider; split 2026-11-22), then Slice C (task group, concurrent fan-in, Slice B's execution half), then Slice D (publish/subscribe); owner `gameplans/implementation-sequence.md` § R7 |
+| **R5B**–**R12** | ⏳ pending | forward order and exits in [implementation-sequence.md](gameplans/implementation-sequence.md) § 4 |
 
 ## P1 — API boundaries
 
@@ -182,7 +183,8 @@ deleted at v1-cutover step 4; one-shot lifetime is now owned by
 
 - **Chaining gate revised** from the original "gate on NEW": chaining is allowed while
   `NEW`/`RUNNING`/`EXHAUSTED` (wraps all / leftovers / nothing, like a native iterator);
-  only `CLOSED`/`FAILED` raise. `_chain` calls `_require_usable("chain")`.
+  only `CLOSED`/`FAILED` raise. `_chain` called `_require_usable("chain")` until the
+  move to `Pipeline` (2026-10-02).
 - **Iteration never raises** — post-exhaustion/close `iter(pipe)` yields `[]`
   (Python-iterator semantics), it does not restart. `PipelineStateError` was reserved
   for chaining/reconfiguring a `CLOSED`/`FAILED` pipe; since the v1 cutover it names the
@@ -286,23 +288,24 @@ that mapped a processor per item, so collapsing a processor-loop to a direct
   operator decorator into loop-owned `riko/modules/_loop.py`; compact-form schema types
   (`EmbedRef`, `LoopModule`, `CountArg`, a shared `RawModule` base) added as accepted
   input only. Characterization tests pinned the then-wrong global-flatten output first.
+
 - **Phase 2 — full Yahoo per-parent semantics (eager async).** Correct per-parent
-  folding shared by the processor and the explicit `loop`, via `_fold_parent`/`_take` in
-  `_loop.py` (`_run_loop`, `loop_embed_sync`). No cross-parent flatten before
-  `count`/`assign`; `assign` folds onto the **parent**; loop-level
-  `field`/`assign`/`emit` win over embed-level. `count` became a first-class top-level
-  kwarg (distinct from a module's own `conf.count`, resolved by location). The
-  **compact form is canonical**: `normalize_raw_module` lifts legacy → compact
-  (processor-loop → direct node; `pipe:<id>` loop → compact loop), the compiler/runtime
-  consume compact (the generated `tests/pyworkflows/*.py` tree was regenerated then; the
-  v1 cutover later replaced it with `WorkflowDocument`s (workflow documents) plus
-  hand-maintained probes). A loop embedding a `pipe:` stored workflow runs
-  **per parent** through the same fold; stored workflows are detected by **declared**
-  metadata (`SUBPIPE_TYPE` in `riko/base/_config.py`, the `workflow` decorator in
-  `riko/runtime/_workflow_pipes.py`, `is_subpipe` in `riko/types/_wrappers.py`) stamped
-  at `resolve_module` + in the codegen templates. `_resolve_leaf_modules`
-  fail-fast-resolves every leaf (incl. graph-disconnected) so an unreached unsupported
-  module raises at build. Per-parent fold contract:
+  folding shared by the processor and the explicit `loop`, via `_run_loop`/`_take` in
+  `_loop.py` (`loop_embed_sync`). No cross-parent flatten before `count`/`assign`;
+  `assign` folds onto the **parent**; loop-level `field`/`assign`/`emit` win over
+  embed-level. `count` became a first-class top-level kwarg (distinct from a module's
+  own `conf.count`, resolved by location). The **compact form is canonical**:
+  `normalize_raw_module` lifts legacy → compact (processor-loop → direct node;
+  `pipe:<id>` loop → compact loop), the compiler/runtime consume compact (the generated
+  `tests/pyworkflows/*.py` tree was regenerated then; the v1 cutover later replaced it
+  with `WorkflowDocument`s (workflow documents) plus hand-maintained probes). A loop
+  embedding a `pipe:` stored workflow runs **per parent** through the same fold; stored
+  workflows are detected by **declared** metadata (`SUBPIPE_TYPE` in
+  `riko/base/_config.py`, the `workflow` decorator in `riko/runtime/_workflow_pipes.py`,
+  `is_subpipe` in `riko/types/_wrappers.py`) stamped at `resolve_module` + in the
+  codegen templates. `_resolve_leaf_modules` fail-fast-resolved every leaf (incl.
+  graph-disconnected) so an unreached unsupported module raised at build, until the v1
+  compiler was deleted (2026-10-03). Per-parent fold contract:
 
   | emit | count | child → | output |
   |---|---|---|---|

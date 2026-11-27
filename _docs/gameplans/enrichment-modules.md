@@ -265,6 +265,10 @@ Requirements:
 The first adapter may use Simhash, but the public module contract must not depend on one
 third-party library's object types.
 
+`simhash` stays this plan's module; it is a single-field specialization of the generic
+linkage contract in [entity-resolution.md](entity-resolution.md), which owns match
+results and review thresholds.
+
 ## 9. Contact extraction
 
 Contact extraction is optional enrichment with structured output:

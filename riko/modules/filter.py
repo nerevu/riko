@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 from dateutil.parser import ParserError
 
+from riko.base._funcutils import resolve_str
 from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
@@ -119,7 +120,7 @@ TRUTHINESS_OPS = {"truthy", "falsy"}
 
 def cast_arg[VT](arg: VT, op: str) -> str | date | VT | None:
     if op in STRING_OPS:
-        value = None if arg is None else str(arg)
+        value = resolve_str(arg, None)
     elif op in DATE_OPS:
         try:
             value = cast_date(arg)  # pyright: ignore[reportArgumentType]

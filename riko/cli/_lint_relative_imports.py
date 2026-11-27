@@ -25,22 +25,6 @@ class _RelativeIssue:
         )
 
 
-def _suggestion(
-    package: str, imported: str, names: tuple[tuple[str, str | None], ...]
-) -> str:
-    rendered_names = ", ".join(
-        f"{name} as {alias}" if alias else name for name, alias in names
-    )
-
-    if imported == package:
-        suggestion = f"from . import {rendered_names}"
-    else:
-        suffix = imported.removeprefix(f"{package}.")
-        suggestion = f"from .{suffix} import {rendered_names}"
-
-    return suggestion
-
-
 def _iter_issues(root: Path) -> tuple[_RelativeIssue, ...]:
     issues: list[_RelativeIssue] = []
 
@@ -58,7 +42,11 @@ def _iter_issues(root: Path) -> tuple[_RelativeIssue, ...]:
                 continue
 
             if ref.form == "from":
-                suggestion = _suggestion(package, ref.imported, ref.names)
+                rendered_names = ", ".join(
+                    f"{name} as {alias}" if alias else name for name, alias in ref.names
+                )
+                suffix = ref.imported.removeprefix(package).removeprefix(".")
+                suggestion = f"from .{suffix} import {rendered_names}"
             else:
                 child = ref.imported.rsplit(".", 1)[-1]
                 alias = ref.names[0][1]

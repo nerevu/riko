@@ -49,7 +49,8 @@ is **making each layer have one clear job**, not shrinking the suite.
 These are real test bugs — coverage that looks stronger than it is. Fix them first.
 
 1. **`tests/functional/test_basics.py` — `_load()`/`_aload()` discard `value`/`check`.**
-   Both accept `value`/`check` but hard-code the defaults when delegating:
+   (Fixed; the helpers were merged on 2026-10-13.) Both accept `value`/`check` but
+   hard-code the defaults when delegating:
 
    ```python
    def _load(self, items, pipe_name, value=0, check=1):
@@ -58,23 +59,27 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    ```
 
    So `self._load(items, pipe_name, 25, 0)` never verifies `< 25`/`== 25` — it always
-   verifies the default `> 0`. Same bug in `_aload()`. A large part of the legacy
-   functional suite is weaker than it looks.
+   verifies the default `> 0`. The async twin had the same bug. A large part of the
+   legacy functional suite is weaker than it looks.
    **Fix this before pruning any pipeline tests.**
+
 2. **`tests/functional/test_pipeline.py` was not a test module** (since removed). It
    contains a generated `pipe_testpipe1()` implementation and no `test_*` functions.
    **Remove or relocate** it to the generated-pipeline fixture area.
+
 3. **Typed module-name behavior is tested in three places** — the (now-removed)
    `test_fluent_discovery.py`, `internal/test_codegen.py`, and `TestModuleNameEnum` in
    `public/test_collections.py` (since removed). `TestModuleNameEnum` already owns
    normalization, constructor normalization, enum/string equivalence, `|`, and
    `.pipe()`. Discovery tests should own **discovery**, not generic enum acceptance.
+
 4. **`internal/test_modules.py` has an exact behavioral duplicate.**
-   `test_loop_count_all_flattens_embedded_results` and
+   `test_loop_fold[emit-all]` and
    `test_loop_level_field_selects_child_input` invoke the same
    `_tokenizer_loop(... count="all", emit=True)` and expect the same output. The latter
    does not isolate the `field` behavior its name claims — give the parent both `title`
    and another candidate field so choosing `field="title"` changes the result.
+
 5. **One resolver precedence test is ineffective.**
    `test_runtime_registration_shadows_entry_point` uses the same `marker` callable for
    both the entry-point definition and the runtime registration, so it passes regardless
@@ -102,8 +107,8 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_modules.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_workflow` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
-| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
-| ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_io.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
+| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed on 2026-09-01 by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
+| ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_stream_helpers.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
@@ -157,7 +162,7 @@ Enforcement:
 - `manage lint --tests` (in `--all`, `riko/cli/_lint_tests.py`) fails on a stale
   generated tier index (`manage codegen --tests` regenerates it), a subject owned by two
   files, a top-level `test_*` function, a private name imported in `public/`, a
-  history-named file (`test_regressions`), a helper module inside a tier, or a stray
+  history-named file (`test_regressions.py`), a helper module inside a tier, or a stray
   folder; it prints size advice without failing. It also fails on a test bound off the
   ladder in `tests/__init__.py` (a `timeout` marker, a `fail_after`/`move_on_after`
   bound, a `wait`/`join`/`result` timeout, and the `timeout`/ `faulthandler_timeout`
@@ -186,9 +191,11 @@ Enforcement:
   tracked `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or
   `docs/*.rst` that names no current file; a line saying the file was deleted, retired,
   removed, dropped, merged, or superseded records history and is exempt. Its
-  `path::Class[::test]` and `Class::test` citations must also name a current test class
-  or test. `.claude/skills/tidy/move_tests.py` repoints both forms when it moves or
-  renames a test; keep each citation on one line.
+  `path::Class[::test]` and `Class::test` citations, and bare `test_*` names (a
+  `[param-id]` suffix allowed), must also name a current test class, test, or test-file
+  basename. `.claude/skills/tidy/move_tests.py` repoints these forms when it moves or
+  renames a test (a bare name only when no other test keeps it); keep each citation on
+  one line.
 - The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root
   doc, `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source
   file; gameplans, `MILESTONES.md`, and `docs/*.rst` keep historical paths and are
@@ -207,11 +214,18 @@ Enforcement:
   every argument and an expected value appear in one `pytest.param` row of a test naming
   the callee (`doctest-args`, which sees short literals such as `"8"`/`"many"` that
   `overlaps` drops), a doctest `Traceback` whose exception and message match a
-  `pytest.raises` (`doctest-raises`), and a docstring with six or more examples whose
-  callees a test table already covers (`doctest-balance`). Its module docstring lists
-  the other sections and their known false positives. `.claude/skills/tidy/covdiff.py`
-  reads one `--cov-context=test` coverage file and lists the lines the tests to be cut
-  execute that their covering tests never do.
+  `pytest.raises` (`doctest-raises`), and a docstring with six or more examples on a
+  function a test table already names (`doctest-balance`). Its module docstring lists
+  the other sections and their known false positives. Those sections include
+  `Test<Subject>` classes whose subject does not start with a riko name and is not one
+  of the named concept classes (`placement`), sync/async twins that check different
+  amounts or exist on one side only (`twins`), `while True` helpers (`endless`), `once`
+  tests that count nothing (`once`), determinism tests that never leave one process
+  (`determinism`), and async tests that close or open a task group with no bound
+  (`drains`).
+  `.claude/skills/tidy/covdiff.py` reads one `--cov-context=test` coverage file and
+  lists the lines the tests to be cut execute that their covering tests never do; an
+  id that matches no recorded test context exits 2.
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and
   whether a doctest or existing test already owns the case.
 
@@ -344,21 +358,22 @@ shrink the suite — they cover contracts hard to catch elsewhere: `TestCompileW
 in `tests/public/test_workflow.py`; `TestSyncPolicy`, `TestPoolLifetime`,
 `TestAsyncPolicy`, and `TestThreadBudget` in `tests/internal/test_concurrency.py`;
 `TestAsyncOperatorLaziness` in `tests/internal/test_modules.py`; and
-`TestSyncExecution`, `TestAsyncExecution`, `TestResourceAcquisition`, and
-`TestAsyncResourceAcquisition` in `tests/internal/test_execution.py`.
+`TestSyncExecution` and `TestAsyncExecution` in `tests/internal/test_execution.py`;
+and `TestResourceAcquisition` and `TestAsyncResourceAcquisition` in
+`tests/internal/test_resources.py`.
 
 **Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
 
-- `test_basics._load`/`_aload` now forward `value`/`check`; the two stale expected
-  counts the live assertions exposed were corrected to the deterministic fixture truth
-  (`feeddiscovery` 25→15, `simplemath_1` 4→6).
+- `test_basics._load` and its async twin (since merged) now forward `value`/`check`; the
+  two stale expected counts the live assertions exposed were corrected to the
+  deterministic fixture truth (`feeddiscovery` 25→15, `simplemath_1` 4→6).
 - Resolver precedence tests use distinguishable callables:
   `test_runtime_registration_shadows_entry_point` now proves the runtime marker (not the
   entry-point one) wins, and `test_first_hit_wins` puts a different object in the first
   two stores so it proves precedence, not fallback.
 - `test_loop_level_field_selects_child_input` now isolates `field` (a parent carrying
   both `title` and `alt`, tokenizing on `alt`), so it is no longer a duplicate of
-  `test_loop_count_all_flattens_embedded_results`.
+  `test_loop_fold[emit-all]`.
 - `test_script.assert_output_matches` dropped the dead/broken `bool` branch and the
   `SequenceMatcher` `partial` path; `test_benchmark` now asserts the stable benchmark
   labels directly (each label heads a line, robust to the right-justified name padding).
@@ -535,6 +550,16 @@ I/O wait from `RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durat
 across commits): ten spawned processes each re-importing riko pushed the subprocess past
 its 5 s bound when every tox environment ran in parallel.
 
+**Shipped (whole-suite audit, 2026-11-24).** A second `/audit-tests` pass ran as one
+workflow: per-file-group auditors verified the scanner leads and read only for what no
+script sees, and a skeptic re-checked every proposed deletion. It fixed 18 tests that
+could not fail or ended only by a timeout (each proven to fail under a simulated
+regression), sorted class order, renamed classes to riko names (fifteen concept classes
+are now permitted), shared copied helpers, and cut or folded duplicates after a per-test
+coverage diff (4134 → 4121 collected; sync resource-acquisition tests became tables that
+mirror the async ones). `manage lint --tests` now leaves a `wait`/`join` inside a fake
+the test defines off the bound ladder, since it is blocking work under test.
+
 ## 5b. Execution lifetime proofs (R4)
 
 `implementation-sequence.md` R4 adds a proof obligation that does not fit the existing
@@ -577,10 +602,9 @@ ships with its behavior proven in two files, laid out by the same ownership rule
   path, per-item passthrough; CSV header/schema/append boundaries; JSONL one value per
   line with one final terminator; framed JSON/GeoJSON stage-then-publish-once with abort
   discarding the staged document; the `_SessionState` transitions and misuse).
-- `tests/public/test_pipeline.py` — the public surface: `write()` passthrough yields
-  each input once, `sink()` returns a `WriteResult` for both sync and async, and the
-  async error text carries no pub/sub language; the pending `Pipeline.write` tripwires
-  sit beside them.
+- `tests/public/test_write.py` — the public surface: `TestPipelineWriteDefinition`
+  pins the `write` verb's declared node, and the pending `TestPipelineWrite` tripwires
+  hold the pipeline-level write behavior until a write node can run.
 
 For incremental formats these tests deliberately do **not** assert rollback of
 already-written bytes. When R4B/R5C take over session-lifetime ownership, they reuse
@@ -601,9 +625,17 @@ this same contract rather than re-proving it.
   and `TestWriteOperation::test_is_frozen`,
   `tests/internal/test_modules.py::TestPrepare::test_prepared_module_is_frozen`,
   `tests/public/test_pipeline.py::TestContext::test_fields_cannot_be_reassigned`,
-  `TestResource::test_external_value_fields_are_read_only`, and the post-pickle frozen
+  `TestContext::test_private_fields_cannot_be_set`,
+  `TestResource::test_external_value_fields_are_read_only`, the post-pickle frozen
   assertion of `TestContext::test_roundtrips_through_pickle` (the round trip itself
-  stays).
+  stays), and `tests/public/test_workflow.py::TestNodeFamily::test_node_is_frozen` (a
+  `tests/typing/invalid` case assigning `ModuleNode.name`; delete the pytest method when
+  it lands). `test_plan_fields_are_read_only` must be narrowed before it moves: its
+  ignore holds even without the frozen declaration, because `resource._plan` is the
+  un-narrowed `ResourcePlan` union and the assigned factory is the wrong type for
+  `enter`; assert `isinstance(resource._plan, SyncLifecyclePlan)` first and assign a
+  same-typed value (`resource._plan.enter = resource._plan.enter`) so only the frozen
+  field is rejected (test audit 2026-11-24).
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
 

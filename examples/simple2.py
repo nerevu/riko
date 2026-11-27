@@ -15,6 +15,7 @@ from pprint import pprint
 from typing import TYPE_CHECKING
 
 from riko import Pipeline
+from riko.types import CallOptions
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -25,7 +26,7 @@ from riko.types.modules import (
 if TYPE_CHECKING:
     from riko.types import Item, Items
 
-p232_conf = ItemBuilderConf(
+build_conf = ItemBuilderConf(
     {
         "attrs": [
             ParsedParam({"value": "www.google.com", "key": "link"}),
@@ -35,25 +36,25 @@ p232_conf = ItemBuilderConf(
     }
 )
 
-p421_conf = StrReplaceConf(
+replace_conf = StrReplaceConf(
     {"rule": StrReplaceConfRule(find="empty", param="first", replace="ABC")}
 )
 
-p421_options = {"field": "author", "assign": "author"}
+replace_options = CallOptions(field="author", assign="author")
+
+
+def build_pipeline() -> Pipeline:
+    return Pipeline.from_module("itembuilder", conf=build_conf).strreplace(
+        conf=replace_conf, options=replace_options
+    )
 
 
 def pipe(test: bool = False) -> list[Item]:
-    pipeline = Pipeline.from_module("itembuilder", conf=p232_conf).strreplace(
-        conf=p421_conf, options=p421_options
-    )
-
-    return list(pipeline)
+    return list(build_pipeline())
 
 
 def async_pipe(test: bool = False) -> Pipeline:
-    return Pipeline.from_module("itembuilder", conf=p232_conf).strreplace(
-        conf=p421_conf, options=p421_options
-    )
+    return build_pipeline()
 
 
 def print_results(result: Items) -> None:

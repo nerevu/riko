@@ -13,7 +13,7 @@ from functools import partial
 from typing import TYPE_CHECKING, cast
 
 from riko.bado._util import maybe_aclosing, maybe_async, maybe_closing
-from riko.bado.itertools import as_async
+from riko.bado.itertools import aislice, as_async
 from riko.base._logging import get_logger
 from riko.types._wrappers import is_subpipe
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.types._pipedef import CountValues, EmbedKwargs
-    from riko.types._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
+    from riko.types._streams import AsyncStream, Feed, Item, Items, Stream
     from riko.types._wrappers import (
         AsyncProcessorWrapper,
         AsyncSubPipe,
@@ -49,70 +49,15 @@ def _take_first(results: Items) -> Stream:
             break
 
 
-async def _atake_first(results: AsyncItems) -> AsyncStream:
-    async with maybe_aclosing(aiter(results)) as iterator:
-        async for item in iterator:
-            yield item
-            break
-
-
 def _take[T: Feed](results: T, count: CountValues | None = "all") -> T:
     if count != "first":
         result = results
     elif isinstance(results, AsyncIterable):
-        result = _atake_first(results)
+        result = aislice(results, 1)
     else:
         result = _take_first(results)
 
     return result
-
-
-def _fold_parent(
-    parent: Item, results: Stream, assign: str, emit: bool = False
-) -> Stream:
-    """
-    Folds a parent's child results back against that parent.
-
-    If a child yields nothing, this still yields the untouched parent unless ``emit`` is
-    set. ``results`` closes once the fold is done with it, whether drained or closed
-    early.
-
-    Args:
-
-        parent: The item the child ran for.
-        results: The child's results for ``parent``.
-
-        assign: The key each result is stored under when ``emit`` is not set. Never
-            empty, since an unset ``assign`` resolves to the module name first.
-
-    Kwargs:
-
-        emit: Yields each result in place of the parent instead of a parent copy.
-
-    """
-    yielded = False
-
-    with maybe_closing(iter(results)) as stream:
-        for value in stream:
-            yielded = True
-            yield value if emit else cast("Item", {**parent, assign: value})
-
-    if not (yielded or emit):
-        yield parent
-
-
-async def _afold_parent(
-    parent: Item, results: Stream | AsyncStream, assign: str, emit: bool = False
-) -> AsyncStream:
-    yielded = False
-
-    async with maybe_aclosing(as_async(results)) as iterator:
-        async for value in iterator:
-            yielded = True
-            yield value if emit else cast("Item", {**parent, assign: value})
-
-    if not (yielded or emit):
-        yield parent
 
 
 def _run_loop(
@@ -126,11 +71,27 @@ def _run_loop(
     emit: bool,
     count: CountValues | None,
 ) -> Stream:
+    """
+    Runs the embed once per parent and folds its results back against that parent.
+
+    Each result replaces the parent when ``emit`` is set. Otherwise it lands in a parent
+    copy under ``assign``. An unset ``assign`` resolves to the module name. If a child
+    yields nothing, this yields the untouched parent unless ``emit`` is set. Each
+    child's results close once the fold is done with them, whether drained or closed
+    early.
+    """
     embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
-        taken = _take(embedder(parent), count)
-        yield from _fold_parent(parent, taken, assign, emit)
+        yielded = False
+
+        with maybe_closing(iter(_take(embedder(parent), count))) as stream:
+            for value in stream:
+                yielded = True
+                yield value if emit else cast("Item", {**parent, assign: value})
+
+        if not (yielded or emit):
+            yield parent
 
 
 async def _arun_loop(
@@ -147,14 +108,18 @@ async def _arun_loop(
     args = embed, context, embedded_kwargs
     embedder = bind_subpipe(*args, field=field, host_is_async=True)
 
-    async for parent in as_async(source):
-        items = await maybe_async(embedder, parent)
-        taken = _take(items, count)
-        stream = _afold_parent(parent, taken, assign, emit)
+    async with maybe_aclosing(as_async(source)) as parents:
+        async for parent in parents:
+            items = await maybe_async(embedder, parent)
+            yielded = False
 
-        async with maybe_aclosing(stream) as folded:
-            async for value in folded:
-                yield value
+            async with maybe_aclosing(as_async(_take(items, count))) as iterator:
+                async for value in iterator:
+                    yielded = True
+                    yield value if emit else cast("Item", {**parent, assign: value})
+
+            if not (yielded or emit):
+                yield parent
 
 
 def loop_embed_sync(

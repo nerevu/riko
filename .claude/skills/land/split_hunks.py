@@ -3,6 +3,7 @@ Lists a working-tree change as selectable hunks and builds trees from a selectio
 
 Usage:
     python .claude/skills/land/split_hunks.py list [-U N] [--body N]
+        [--base REF] [--head REF]
     python .claude/skills/land/split_hunks.py emit SELECTION [-U N]
 
 ``list`` prints one line per hunk of ``git diff -U<N> HEAD`` (default ``-U0``, the
@@ -16,6 +17,10 @@ to ``N`` of each hunk's removed and added lines under it, for sorting hunks by c
 A selection file holds one id per line (``#`` starts a comment; ``path:N-M`` takes the
 hunks starting on lines ``N`` to ``M``). ``emit`` prints the patch against ``HEAD``
 that applies exactly the selected hunks, ready for ``git apply --cached``.
+
+``--head REF`` lists a committed change instead of the working tree: ``list --base
+M^ --head M`` gives commit ``M``'s own hunks, with the same ids ``rehearse_plan.py``
+takes in a ``fold`` step (no untracked files; whole files come from ``REF``).
 
 Every hunk's old-side range is relative to ``HEAD``, so any subset of hunks splices
 onto ``HEAD``'s files exactly and in any order. Trees are built in a temporary index
@@ -32,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 
 DESCRIPTION = "List a change's hunks by id, or emit the patch for a selection."
@@ -40,6 +46,7 @@ NO_EOL = "\\ No newline at end of file"
 NULL_SHA = "0" * 40
 GIT = shutil.which("git") or "git"
 BASE = "HEAD"
+HEAD: str | None = None
 
 
 @dataclass
@@ -63,6 +70,15 @@ class Hunk:
     def summary(self) -> str:
         text = next((t for t in self.added if t.strip()), "").strip()
         return text[:60] or f"(-{self.removed} lines)"
+
+    def add_line(self, line: str) -> None:
+        """Records a ``+``/``-`` line, or drops the newline a no-EOL marker denies."""
+        if line == NO_EOL and self.added and self.added[-1].endswith("\n"):
+            self.added[-1] = self.added[-1][:-1]
+        elif line.startswith("+"):
+            self.added.append(line[1:] + "\n")
+        elif line.startswith("-"):
+            self.deleted.append(line[1:])
 
 
 @dataclass
@@ -107,13 +123,8 @@ def parse_diff(text: str) -> list[FileChange]:
             old_count = 1 if match[2] is None else int(match[2])
             hunk = Hunk(current.path, int(match[1]), old_count, int(match[3]))
             current.hunks.append(hunk)
-        elif hunk is not None and line == NO_EOL:
-            if hunk.added and hunk.added[-1].endswith("\n"):
-                hunk.added[-1] = hunk.added[-1][:-1]
-        elif hunk is not None and line.startswith("+"):
-            hunk.added.append(line[1:] + "\n")
-        elif hunk is not None and line.startswith("-"):
-            hunk.deleted.append(line[1:])
+        elif hunk is not None and line.startswith(("+", "-", "\\")):
+            hunk.add_line(line)
         elif line.startswith("new file"):
             current.status = "A"
         elif line.startswith("deleted file"):
@@ -125,10 +136,14 @@ def parse_diff(text: str) -> list[FileChange]:
 
 
 def load_change(context: int = 0) -> list[FileChange]:
-    """Loads ``git diff BASE`` plus untracked files as selectable changes."""
-    files = parse_diff(git("diff", "--no-renames", f"-U{context}", BASE))
-    untracked = git("ls-files", "--others", "--exclude-standard", "-z").split("\0")
-    files.extend(FileChange(path, "?") for path in untracked if path)
+    """Loads ``git diff BASE [HEAD]`` (plus untracked files) as selectable changes."""
+    head = () if HEAD is None else (HEAD,)
+    files = parse_diff(git("diff", "--no-renames", f"-U{context}", BASE, *head))
+
+    if HEAD is None:
+        untracked = git("ls-files", "--others", "--exclude-standard", "-z")
+        files.extend(FileChange(path, "?") for path in untracked.split("\0") if path)
+
     return files
 
 
@@ -200,6 +215,8 @@ class TreeBuilder:
     def __init__(self, files: list[FileChange]) -> None:
         self.files = {f.path: f for f in files}
         self.ids = index_hunks(files)
+        self.base = BASE
+        self.head = HEAD
         self.index = Path(tempfile.mkdtemp(prefix="split-hunks-")) / "index"
         self.env = {**os.environ, "GIT_INDEX_FILE": str(self.index)}
         self._blobs: dict[tuple[str, frozenset[str]], str] = {}
@@ -207,24 +224,30 @@ class TreeBuilder:
     def _blob(self, data: bytes) -> str:
         return git("hash-object", "-w", "--stdin", data=data).strip()
 
-    def _entry(self, path: str, chosen: frozenset[str]) -> str:
+    def _entry(self, path: str, *ids: str) -> str:
         change = self.files[path]
+        chosen = frozenset(ids)
         key = (path, chosen)
 
         if key not in self._blobs:
             if change.status == "D" and change.path in chosen:
                 self._blobs[key] = f"0 {NULL_SHA}\t{path}"
+            elif self.head is not None and (
+                change.whole or len(chosen) == len(change.hunks)
+            ):
+                mode, _, sha = git("ls-tree", self.head, "--", path).split()[:3]
+                self._blobs[key] = f"{mode} {sha}\t{path}"
             elif change.whole or len(chosen) == len(change.hunks):
-                data = (
-                    os.readlink(path).encode()
-                    if os.path.islink(path)
-                    else Path(path).read_bytes()
-                )
+                if os.path.islink(path):
+                    data = os.readlink(path).encode()
+                else:
+                    data = Path(path).read_bytes()
+
                 self._blobs[key] = f"{file_mode(path)} {self._blob(data)}\t{path}"
             else:
-                head = git("show", f"{BASE}:{path}").splitlines(keepends=True)
+                head = git("show", f"{self.base}:{path}").splitlines(keepends=True)
                 hunks = [h for h in change.hunks if h.id in chosen]
-                mode = git("ls-tree", BASE, "--", path).split()[0]
+                mode = git("ls-tree", self.base, "--", path).split()[0]
                 blob = self._blob(splice(head, hunks).encode())
                 self._blobs[key] = f"{mode} {blob}\t{path}"
 
@@ -238,8 +261,8 @@ class TreeBuilder:
             item = self.ids[hid]
             by_path.setdefault(item.path, set()).add(hid)
 
-        git("read-tree", BASE, env=self.env)
-        lines = [self._entry(p, frozenset(ids)) for p, ids in sorted(by_path.items())]
+        git("read-tree", self.base, env=self.env)
+        lines = [self._entry(p, *ids) for p, ids in sorted(by_path.items())]
         git(
             "update-index", "--index-info", data="\n".join(lines).encode(), env=self.env
         )
@@ -250,6 +273,13 @@ def set_base(ref: str) -> None:
     """Sets the commit the change is diffed against (``HEAD`` unless un-committing)."""
     global BASE
     BASE = git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
+
+
+def set_head(ref: str | None) -> None:
+    """Sets the commit the change ends at (``None``: the working tree)."""
+    global HEAD
+    verify = ("rev-parse", "--verify", f"{ref}^{{commit}}")
+    HEAD = None if ref is None else git(*verify).strip()
 
 
 def working_tree() -> str:
@@ -268,8 +298,10 @@ def main() -> None:
     parser.add_argument("-U", type=int, default=0, dest="context", help="diff context")
     parser.add_argument("--body", type=int, default=0, help="hunk lines to show (list)")
     parser.add_argument("--base", default="HEAD", help="ref the hunks apply to")
+    parser.add_argument("--head", help="commit the change ends at (default: worktree)")
     args = parser.parse_args()
     set_base(args.base)
+    set_head(args.head)
     files = load_change(args.context)
 
     if args.command == "list":
@@ -290,7 +322,8 @@ def main() -> None:
     elif args.selection is None:
         sys.exit("emit needs a selection file")
     else:
-        ids = {i for e in read_selection(args.selection) for i in expand(e, files)}
+        entries = read_selection(args.selection)
+        ids = set(chain.from_iterable(expand(e, files) for e in entries))
         tree = TreeBuilder(files).tree(ids)
         sys.stdout.write(git("diff", "--binary", BASE, tree))
 

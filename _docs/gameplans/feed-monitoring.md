@@ -1,5 +1,9 @@
 # Feed monitoring gameplan
 
+> **Provenance.** Pluggable anomaly scorers (§ 15.1) and the further deterministic
+> methods of § 15 come from the AI/ML strategy assessment in
+> [`../research/ai-ml-strategy.md`](../research/ai-ml-strategy.md).
+
 ## 1. Mission
 
 Add first-class primitives for repeatedly observing finite sources and consuming
@@ -116,7 +120,8 @@ Do not add to core:
 * mandatory Redis/database dependencies;
 * a monitoring dashboard;
 * a general complex-event-processing engine;
-* ML anomaly models;
+* any ML/numerical-library dependency or hidden model state (learned scorers plug in
+  through § 15.1);
 * provider-specific notification clients;
 * provider-specific revision-tree/change-feed models;
 * another generic retry, checkpoint store, state store, or operation-wait
@@ -667,6 +672,16 @@ z-score
 rate/count threshold
 ```
 
+Further deterministic methods, each bounded by its window and reproducible from the
+same input:
+
+```text
+EWMA (exponentially weighted moving average)
+modified z-score (median/MAD)
+quantile estimation
+change-point detection
+```
+
 Example:
 
 ```python
@@ -675,7 +690,9 @@ pipeline.anomaly(
 )
 ```
 
-Do not add distributed watermarks, late-data correction, or ML model hosting to core.
+Do not add distributed watermarks or late-data correction to core. Core takes no
+ML/numerical-library dependency and hosts no hidden model state; learned scorers plug in
+through § 15.1.
 
 A change feed with `ordering="partial"` or `"none"` does not become globally ordered
 merely because it passes through a local window. Event-time/watermark semantics would
@@ -683,6 +700,30 @@ require a separate explicit contract.
 
 Window/alert persistence uses the same stateful-owner and `StateStore` rules when state
 must survive executions.
+
+### 15.1 M9a — pluggable anomaly scorers
+
+Besides the built-in methods, `anomaly(method=...)` accepts a registered scorer supplied
+as a declared `Resource`. The scorer is execution-owned, never mutable state on
+`Context`.
+
+Rules:
+
+* an online/learning scorer's learned state is a versioned, typed `FeedState` payload
+  under the stateful owner's `StateKey`; it reuses `StateStore`, serialization IDs, CAS,
+  and `.checkpoint()` from `execution-semantics.md` — no second store, and no pickled
+  callables in serialized configuration;
+* the scorer records its algorithm, package, and version plus its state version in
+  metadata;
+* M12 dry-run evaluates without advancing learned state, and its explanation includes
+  the scorer identity and state version;
+* learning never silently changes behavior across a model-version boundary (the "no
+  silent production changes" rule of `ai-inference.md` § 18);
+* a missing optional adapter fails clearly at prepare time.
+
+River [1] is the first optional adapter and ships outside core, as an optional extra or
+an ecosystem package. A broader `riko-ml` package is deferred until several integrations
+need shared model-lifecycle contracts (see the research note).
 
 ## 16. M10 — alert rule and firing state
 
@@ -901,7 +942,8 @@ Required tests include:
 20. approximate dedupe reports its error semantics;
 21. `changed` reports selected-field changes only;
 22. count/duration windows remain bounded;
-23. deterministic threshold/z-score fixtures;
+23. deterministic threshold/z-score fixtures, plus EWMA, modified z-score, quantile,
+    and change-point fixtures that stay bounded by their window;
 24. transition/cooldown firing semantics;
 25. dry-run performs no external mutation;
 26. in-process and orchestrated finite observation produce equivalent logical deltas;
@@ -918,7 +960,11 @@ Required tests include:
 29. the four observation outcomes of § 8 are told apart by result metadata, not item
     count: a complete-empty snapshot may delete scoped records while an
     incremental-empty poll may not, and an incomplete observation, whether it yielded
-    zero or many items, neither advances the checkpoint nor derives deletions.
+    zero or many items, neither advances the checkpoint nor derives deletions;
+30. a learned scorer's state round-trips through a persistent `StateStore` and resumes
+    where it stopped;
+31. dry-run leaves learned scorer state unchanged;
+32. a missing optional scorer adapter fails clearly at prepare time.
 
 ## 24. Phases
 
@@ -934,6 +980,7 @@ M6   optional approximate membership
 M7   changed
 M8   write-if-changed composition boundary
 M9   bounded windows + anomaly vocabulary
+M9a  pluggable anomaly scorers (Resource-supplied, StateStore-backed learned state)
 M10  alert rule/firing state
 M11  publish/subscription action composition
 M12  dry-run/explainability
@@ -958,9 +1005,13 @@ M13  RSS/Atom monitoring helper
 10. State can persist without a mandatory service dependency, and configured store
     capabilities are inspectable/validatable.
 11. Exact and approximate dedupe have explicit, distinct semantics.
-12. Change detection and lightweight anomaly rules are configuration-friendly.
+12. Change detection and lightweight anomaly rules are built in and
+    configuration-friendly; learned scorers are pluggable and keep their state in
+    `StateStore`.
 13. Monitoring reuses generic `RetryPolicy` instead of defining another retry contract.
 14. Alert transition/cooldown behavior prevents accidental notification spam.
 15. Actions remain ordinary provider/sink/`publish` operations.
 16. Dry-run explains behavior without external mutation.
 17. Scheduling/restart policy remains outside the monitoring core.
+
+[1]: https://riverml.xyz/ "River: online machine learning in Python"

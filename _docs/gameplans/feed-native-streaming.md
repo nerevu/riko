@@ -350,11 +350,13 @@ by
 (strict xfail), which flips when that seam goes.
 
 Closing a bare `truncate`, `uniq`, or `filter` pipe early never closes a source the
-caller still holds, sync and async alike: the operator wrapper closes only the parser's
-result (`maybe_closing(result)` in `_gen`, `auto_close(…, result)` in `_agen`,
-`riko/modules/_decorators.py`), never its input, and a generator parser's frame unwinds
-without closing it. Input lifetime under execution belongs to the run object (R7,
-[execution-semantics.md](execution-semantics.md)). Each S1 Feed-native rewrite closes
+caller still holds, sync and async alike: the operator wrapper closes only what it
+creates, the parser's result (`maybe_closing(result)` in `_gen`, `auto_close(…, result)`
+in `_agen`, `riko/modules/_decorators.py`) and its own normalizer stream when the parser
+stops early (`aauto_close(processed, input_)` in `_agen`), never the caller's input, and
+a generator parser's frame unwinds without closing it; S1 still owns closing the input.
+Input lifetime under execution belongs to the adapter that reads each stream
+([execution-semantics.md](execution-semantics.md)). Each S1 Feed-native rewrite closes
 the source it stops reading. Tripwires (S1, strict xfail tables over the three pipes,
 triage 2026-11-14):
 `tests/internal/test_modules.py::TestOperatorInputClose::test_closing_sync_early_closes_a_held_source`

@@ -365,32 +365,6 @@ class WorkflowResolver:
         """
         return is_pipe_id(name)
 
-    def _load_dependencies(self, pipe_id: PipeIdLike) -> frozenset[PipeId]:
-        """
-        Loads the ``pipe_<id>`` names a stored workflow's nodes run.
-
-        Checks both the ``ModuleStore`` and the ``DocumentStore`` for ``pipe_id``, and
-        returns the dependencies of the first found entry. A ``DocumentStore`` entry
-        that shadows a ``ModuleStore`` entry is never read.
-
-        """
-        module_store, document_store = self._module_store, self._document_store
-        resolved_flow = None if module_store is None else module_store.load(pipe_id)
-
-        if resolved_flow is None:
-            resolved_flow = self._resolved_flows.get(pipe_id)
-
-        if (
-            resolved_flow is None
-            and document_store is not None
-            and (flow := document_store.load(pipe_id)) is not None
-        ):
-            names = _gen_stored_names(flow.dependencies)
-        else:
-            names = _gen_dependencies(resolved_flow)
-
-        return frozenset(names)
-
     def _require_acyclic(self, pipe_id: PipeIdLike, *dependencies: PipeIdLike) -> None:
         """
         Requires that ``pipe_id``'s stored-workflow dependencies never lead back to it.
@@ -398,6 +372,10 @@ class WorkflowResolver:
         A stored workflow embeds the workflows its nodes name. One that reaches itself
         through that chain would run forever, so it is rejected before it runs. A
         stored workflow whose pipe declares no dependencies ends the chain.
+
+        Each dependency's own ``pipe_<id>`` names come from the first store holding it.
+        Search precedence is ``ModuleStore``, then ``DocumentStore``. A
+        ``DocumentStore`` entry that shadows a ``ModuleStore`` entry is never read.
 
         Args:
 
@@ -414,10 +392,25 @@ class WorkflowResolver:
             pipe_id: frozenset(dependencies)
         }
         pending = list(dependencies)
+        module_store, document_store = self._module_store, self._document_store
 
         while pending:
             if (name := pending.pop()) not in graph:
-                graph[name] = self._load_dependencies(name)
+                stored = None if module_store is None else module_store.load(name)
+
+                if stored is None:
+                    stored = self._resolved_flows.get(name)
+
+                if (
+                    stored is None
+                    and document_store is not None
+                    and (flow := document_store.load(name)) is not None
+                ):
+                    names = _gen_stored_names(flow.dependencies)
+                else:
+                    names = _gen_dependencies(stored)
+
+                graph[name] = frozenset(names)
                 pending.extend(graph[name])
 
         if cycle := get_cycle(graph, pipe_id):
@@ -425,19 +418,6 @@ class WorkflowResolver:
             msg = f"stored workflow {cycle[0]!r} embeds itself ({path}). Move steps to"
             msg += " a separate stored workflow and run it from a 'loop' node instead"
             raise InvalidPipelineError(msg)
-
-    def _load_resolved(self, name: str) -> ResolvedWorkflow | None:
-        if (
-            (resolved_flow := self._resolved_flows.get(name)) is None
-            and (document_store := self._document_store) is not None
-            and (flow := document_store.load(name)) is not None
-        ):
-            dispatcher = self._require_dispatcher(name)
-            self._require_acyclic(name, *_gen_stored_names(flow.dependencies))
-            resolved_flow = _build_resolved_workflow(name, flow, dispatcher)
-            self._resolved_flows[name] = resolved_flow
-
-        return resolved_flow
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """
@@ -478,11 +458,19 @@ class WorkflowResolver:
         """
         pipe_id = pythonise(name)
         store = self._module_store
+        resolved_flow = None if store is None else store.load(pipe_id)
 
-        if (resolved_flow := None if store is None else store.load(pipe_id)) is None:
-            resolved_flow = self._load_resolved(pipe_id)
-        else:
+        if resolved_flow is not None:
             self._require_acyclic(pipe_id, *_gen_dependencies(resolved_flow))
+        elif (
+            (resolved_flow := self._resolved_flows.get(pipe_id)) is None
+            and (document_store := self._document_store) is not None
+            and (flow := document_store.load(pipe_id)) is not None
+        ):
+            dispatcher = self._require_dispatcher(pipe_id)
+            self._require_acyclic(pipe_id, *_gen_stored_names(flow.dependencies))
+            resolved_flow = _build_resolved_workflow(pipe_id, flow, dispatcher)
+            self._resolved_flows[pipe_id] = resolved_flow
 
         return resolved_flow
 

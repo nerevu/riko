@@ -29,6 +29,8 @@ New
     ``with_execution``
   - call it with items, iterate it, or use ``pipeline.open()`` as a context manager
   - fan it out into branches with ``pipeline.split(splits, *, isolate=True)``
+  - a run that needs more than ``RIKO_NODE_THREADS`` worker threads raises
+    ``InvalidPipelineError`` before it reads anything
 
 - ``Workflow`` graph (``RikoNode``/``PortEdge``/``Endpoint``) that a ``Pipeline`` runs:
 
@@ -46,8 +48,7 @@ New
   - the ``workflow`` decorator and ``CompiledInputSchemas``
   - the ``Dispatcher``, ``SupportsRead``, ``SupportsWrite``, and ``SupportsActions``
     protocols, ``WriteCapabilities``, and ``TargetRegistry``
-  - ``auto_close``/``aauto_close``, which close a stream's backing values when iteration
-    ends, for modules that return a lazy iterator over an open handle
+  - ``auto_close``/``aauto_close`` for closing a stream's sources when iteration ends
 
 - ``riko.types``: ``RawWorkflow``, ``PipelineStream``, ``CallOptions``, ``InputSchema``,
   ``InputSchemaLike``, ``RawInputSchema``, ``Limit``, ``CustomUserAgent``, ``Embed``,
@@ -80,6 +81,8 @@ Changes
   - ``compile-workflow`` takes a ``WorkflowDocument`` instead of a ``PipeDef`` (convert
     ``PipeDef`` with ``build-workflow`` first).
   - ``run-pipe`` prints a riko error as one line instead of a traceback.
+  - ``as_async`` closes a closable sync iterator once it is exhausted, closed, or fails,
+    as it already did for a generator.
 
 - riko now raises on invalid input instead of ignoring it or yielding nothing:
 
@@ -144,6 +147,8 @@ Changes
     instead of yielding the coroutine object.
   - Ones that assign a stream of results (e.g., ``tokenizer`` with ``emit=False``) now
     always assign a list. Pass ``count="first"`` to assign only the first result.
+  - A processor result of ``None`` is now assigned as a null field. With
+    ``count="first"``, an empty result still leaves the item unchanged.
   - ``exchangerate`` raises on a response with no ``rates`` or a non-finite or
     non-positive rate instead of emitting ``0``, NaN, or a negative value.
   - URL fetchers like ``exchangerate`` time out after ``RIKO_FETCH_TIMEOUT`` seconds.
@@ -176,7 +181,8 @@ Changes
   - ``ModuleMetadata.subtypes`` and a pipe's ``subtypes`` are immutable ``frozenset``\s
   - ``@processor``, ``@operator``, and ``@splitter`` work without parentheses
   - All ``pipe``\s must return an iterator (``iter(…)``) and ``async_pipe``\s an async
-    iterator (``async def`` generator). A run raises ``TypeError`` otherwise.
+    iterator (``async def`` generator), as must each branch a splitter returns. A run
+    raises ``TypeError`` otherwise.
   - Pipes now parse ``conf`` on every call. Use ``pipe.prepare(conf=…)`` to parse once.
 
 Removed

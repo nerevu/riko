@@ -23,7 +23,6 @@ from ast import (
     TypeVar,
     TypeVarTuple,
     arg,
-    expr,
     get_docstring,
     iter_child_nodes,
     parse,
@@ -39,6 +38,7 @@ from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
 from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._iterutils import gen_instances, gen_non_null
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_indent
 from riko.base._verbs import VERBS
 
 from ._import_graph import FUNCTION_NODES
@@ -246,7 +246,7 @@ def gen_malformed_raises(doc: str) -> Iterator[str]:
     entry: int | None = None
 
     for raw in doc.splitlines():
-        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+        indent, line = get_indent(raw), raw.strip()
 
         if line == "Raises:":
             section, entry = indent, None
@@ -285,7 +285,7 @@ def gen_section_names(doc: str, section: str) -> Iterator[str]:
     entry: int | None = None
 
     for raw in doc.splitlines():
-        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+        indent, line = get_indent(raw), raw.strip()
 
         if line == f"{section}:":
             start, entry = indent, None
@@ -528,9 +528,11 @@ def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
 
     """
     for tree in _gen_example_trees(doc):
+        nodes = gen_instances(walk(tree), ImportFrom)
+
         imports = (
             node
-            for node in gen_instances(walk(tree), ImportFrom)
+            for node in nodes
             if node.module is not None and _is_private_path(node.module)
         )
 
@@ -538,9 +540,7 @@ def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
             text = unparse(node)
 
             for alias in node.names:
-                public = resolve_public_path(alias.name)
-
-                if public is not None:
+                if (public := resolve_public_path(alias.name)) is not None:
                     yield text, alias.name, public
 
 
@@ -568,9 +568,7 @@ def _gen_bound_names(tree: Module) -> Iterator[str]:
             yield from gen_non_null([node.name])
 
 
-def gen_own_name_imports(
-    doc: str, defined: frozenset[str]
-) -> Iterator[tuple[str, str]]:
+def gen_own_name_imports(doc: str, *names: str) -> Iterator[tuple[str, str]]:
     """
     Finds doctest imports of names the enclosing module defines.
 
@@ -580,7 +578,7 @@ def gen_own_name_imports(
     Args:
 
         doc: A cleaned class or function docstring.
-        defined: The names the enclosing module defines.
+        names: The names the enclosing module defines.
 
     Yields:
 
@@ -589,24 +587,26 @@ def gen_own_name_imports(
     Examples:
 
         >>> doc = ">>> from riko import Pipeline, run"
-        >>> list(gen_own_name_imports(doc, frozenset({"Pipeline"})))
+        >>> list(gen_own_name_imports(doc, "Pipeline"))
         [('from riko import Pipeline, run', 'Pipeline')]
-        >>> list(gen_own_name_imports(">>> from riko import run", frozenset({"f"})))
+        >>> list(gen_own_name_imports(">>> from riko import run", "f"))
         []
 
     """
-    for tree in _gen_example_trees(doc):
-        for node in gen_instances(walk(tree), (Import, ImportFrom)):
-            text = unparse(node)
+    trees = _gen_example_trees(doc)
+    defined = frozenset(names)
 
-            for alias in node.names:
-                name = _get_import_name(node, alias.name, alias.asname)
+    for node in chain.from_iterable(
+        gen_instances(walk(tree), (Import, ImportFrom)) for tree in trees
+    ):
+        text = unparse(node)
 
-                if name in defined:
-                    yield text, name
+        for alias in node.names:
+            if (name := _get_import_name(node, alias.name, alias.asname)) in defined:
+                yield text, name
 
 
-def gen_unbound_names(doc: str, defined: frozenset[str]) -> Iterator[str]:
+def gen_unbound_names(doc: str, *defined: str) -> Iterator[str]:
     """
     Finds names a docstring's examples use without binding them.
 
@@ -627,9 +627,9 @@ def gen_unbound_names(doc: str, defined: frozenset[str]) -> Iterator[str]:
     Examples:
 
         >>> doc = ">>> from riko import run\\n>>> items = [Path(), f()]"
-        >>> list(gen_unbound_names(doc, frozenset({"f"})))
+        >>> list(gen_unbound_names(doc, "f"))
         ['Path']
-        >>> list(gen_unbound_names(doc, frozenset()))
+        >>> list(gen_unbound_names(doc))
         ['Path', 'f']
 
     """
@@ -637,23 +637,10 @@ def gen_unbound_names(doc: str, defined: frozenset[str]) -> Iterator[str]:
     bound = set(chain.from_iterable(map(_gen_bound_names, trees)))
     nodes = list(chain.from_iterable(map(walk, trees)))
     aliases = gen_instances(nodes, TypeAlias)
-    lazy = {id(node) for alias in aliases for node in walk(alias.value)}
+    lazy = set(map(id, chain.from_iterable(walk(alias.value) for alias in aliases)))
     names = gen_instances(nodes, Name)
     used = {node.id for node in names if id(node) not in lazy}
-    yield from sorted(used - bound - defined - _BUILTINS)
-
-
-def _get_base_name(base: expr) -> str:
-    """Gets the bare class name of a base expression such as ``typing.Protocol[T]``."""
-    node = base.value if isinstance(base, Subscript) else base
-    name = ""
-
-    if isinstance(node, Attribute):
-        name = node.attr
-    elif isinstance(node, Name):
-        name = node.id
-
-    return name
+    yield from sorted(used.difference(bound, defined, _BUILTINS))
 
 
 def _gen_global_bindings(node: AST) -> Iterator[tuple[bool, str]]:
@@ -690,28 +677,6 @@ def _get_global_names(tree: Module) -> frozenset[str]:
     return frozenset(name for _, name in bindings) - imported
 
 
-def _gen_runtime_names(tree: Module) -> Iterator[str]:
-    """
-    Lists the functions and classes a module defines that do something when used.
-
-    Type-only classes (protocols and typed dicts, directly or through a base defined in
-    the same module) and exceptions do not count.
-
-    """
-    type_only: set[str] = set(_TYPE_ONLY_BASES)
-
-    for node in tree.body:
-        if isinstance(node, FUNCTION_NODES):
-            yield node.name
-        elif isinstance(node, ClassDef):
-            bases = set(map(_get_base_name, node.bases))
-
-            if not type_only.isdisjoint(bases):
-                type_only.add(node.name)
-            elif not node.name.endswith(_EXCEPTION_SUFFIXES):
-                yield node.name
-
-
 def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIssue]:
     """
     Flags a private module whose module example does not match its public API.
@@ -720,11 +685,31 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     public names include a runtime function or class must carry one, and one whose
     public names are all type-only carries none.
 
+    A runtime function or class does something when used. Type-only classes (protocols
+    and typed dicts) and exceptions do not count. A base such as ``typing.Protocol[T]``
+    is known by its bare class name.
+
     """
+    type_only: set[str] = set(_TYPE_ONLY_BASES)
+    runtime_names: list[str] = []
+
+    for node in tree.body:
+        if isinstance(node, FUNCTION_NODES):
+            runtime_names.append(node.name)
+        elif isinstance(node, ClassDef):
+            heads = [b.value if isinstance(b, Subscript) else b for b in node.bases]
+            attributes = {head.attr for head in heads if isinstance(head, Attribute)}
+            bases = attributes | {head.id for head in heads if isinstance(head, Name)}
+
+            if not type_only.isdisjoint(bases):
+                type_only.add(node.name)
+            elif not node.name.endswith(_EXCEPTION_SUFFIXES):
+                runtime_names.append(node.name)
+
     doc = get_docstring(tree) or ""
     private = path.name.startswith("_") and path.name != "__init__.py"
     exported = not _PUBLIC_NAMES.isdisjoint(_get_global_names(tree))
-    runtime = sorted(_PUBLIC_NAMES.intersection(_gen_runtime_names(tree)))
+    runtime = sorted(_PUBLIC_NAMES.intersection(runtime_names))
     has_example = bool(DocTestParser().get_examples(doc))
 
     if private and not exported and has_example:
@@ -764,6 +749,61 @@ def _iter_python_files(root: Path) -> Iterator[Path]:
     yield from files
 
 
+def _gen_function_issues(
+    path: Path, node: FunctionDef | AsyncFunctionDef, summary: str
+) -> Iterator[DocstringIssue]:
+    """Checks a function docstring's summary verb and parameter sections."""
+    lineno, name = node.lineno, node.name
+
+    if summary and summary_leads_with_output(summary):
+        problem = "summary leads with the output"
+        yield DocstringIssue(path, lineno, name, problem, summary)
+
+    if (path.name, name) not in COMPOUND_FUNCTIONS:
+        is_async = isinstance(node, AsyncFunctionDef)
+        name_verb = get_name_verb(name, is_async=is_async)
+        summary_verb = get_summary_verb(summary)
+
+        if name_verb is not None and summary_verb not in {None, name_verb}:
+            problem = "summary verb does not match the name verb "
+            problem += name_verb
+            yield DocstringIssue(path, lineno, name, problem, summary)
+
+    for note in gen_misplaced_params(node):
+        problem = "documents a parameter in the wrong section"
+        yield DocstringIssue(path, lineno, name, problem, note)
+
+    for note in gen_unordered_params(node):
+        problem = "lists parameters out of signature order"
+        yield DocstringIssue(path, lineno, name, problem, note)
+
+
+def _gen_text_issues(
+    path: Path, lineno: int, name: str, doc: str
+) -> Iterator[DocstringIssue]:
+    """Checks a docstring's layout, raises entries, example prose, and review notes."""
+    if "\n\n\n" in doc:
+        problem = "has a run of blank lines"
+        excerpt = doc.split("\n\n\n", 1)[0].rsplit("\n", 1)[-1]
+        yield DocstringIssue(path, lineno, name, problem, excerpt)
+
+    for entry in gen_malformed_raises(doc):
+        problem = "Raises: entry does not start with 'SomeError:'"
+        yield DocstringIssue(path, lineno, name, problem, entry)
+
+    for prose in gen_example_prose(doc):
+        problem = "narrates between examples (use a # comment)"
+        yield DocstringIssue(path, lineno, name, problem, prose)
+
+    for check in gen_null_checks(doc):
+        problem = "checks for None (show the bare call instead)"
+        yield DocstringIssue(path, lineno, name, problem, check)
+
+    for note in gen_review_notes(doc):
+        problem = "leaves a TODO or ??? review note"
+        yield DocstringIssue(path, lineno, name, problem, note)
+
+
 def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     """
     Walks ``roots`` for docstrings that break the summary or example rules.
@@ -793,98 +833,52 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     """
     types = (Module, ClassDef, *FUNCTION_NODES)
 
-    for root in roots:
-        for path in _iter_python_files(root):
-            tree = parse(path.read_text(encoding="utf-8"))
-            nodes = gen_instances(walk(tree), types)
-            module_name = _get_module_name(path)
-            qualnames = {tree: module_name, **dict(_gen_qualnames(tree, module_name))}
-            global_names = _get_global_names(tree)
+    for path in chain.from_iterable(map(_iter_python_files, roots)):
+        tree = parse(path.read_text(encoding="utf-8"))
+        nodes = gen_instances(walk(tree), types)
+        module_name = _get_module_name(path)
+        qualnames = {tree: module_name, **dict(_gen_qualnames(tree, module_name))}
+        global_names = _get_global_names(tree)
 
-            for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
-                doc = get_docstring(node) or ""
-                summary = doc.strip().split("\n", 1)[0].strip()
-                lineno = getattr(node, "lineno", 1)
-                name = getattr(node, "name", "<module>")
-                is_function = isinstance(node, FUNCTION_NODES)
+        for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
+            doc = get_docstring(node) or ""
+            summary = doc.strip().split("\n", 1)[0].strip()
+            lineno = getattr(node, "lineno", 1)
+            name = getattr(node, "name", "<module>")
 
-                if is_function and summary and summary_leads_with_output(summary):
-                    problem = "summary leads with the output"
-                    yield DocstringIssue(path, lineno, name, problem, summary)
+            if isinstance(node, FUNCTION_NODES):
+                yield from _gen_function_issues(path, node, summary)
 
-                if is_function and (path.name, name) not in COMPOUND_FUNCTIONS:
-                    is_async = isinstance(node, AsyncFunctionDef)
-                    name_verb = get_name_verb(name, is_async=is_async)
-                    summary_verb = get_summary_verb(summary)
+            yield from _gen_text_issues(path, lineno, name, doc)
+            doctest_name = qualnames.get(node, f"{module_name}.{name}")
 
-                    if name_verb is not None and summary_verb not in {None, name_verb}:
-                        problem = "summary verb does not match the name verb "
-                        problem += name_verb
-                        yield DocstringIssue(path, lineno, name, problem, summary)
+            for binding in gen_run_bindings(doc, doctest_name):
+                problem = "binds a run( result that is skipped without async support "
+                problem += "(move it to an async example)"
+                yield DocstringIssue(path, lineno, name, problem, binding)
 
-                if is_function:
-                    for note in gen_misplaced_params(node):
-                        problem = "documents a parameter in the wrong section"
-                        yield DocstringIssue(path, lineno, name, problem, note)
+            for line, imported, public in gen_private_imports(doc):
+                _problem = 'imports {0} privately (use "from {1} import {0}")'
+                problem = _problem.format(imported, public)
+                yield DocstringIssue(path, lineno, name, problem, line)
 
-                    for note in gen_unordered_params(node):
-                        problem = "lists parameters out of signature order"
-                        yield DocstringIssue(path, lineno, name, problem, note)
+            is_module = node is tree
+            own_names = frozenset() if is_module else global_names
 
-                if "\n\n\n" in doc:
-                    problem = "has a run of blank lines"
-                    excerpt = doc.split("\n\n\n", 1)[0].rsplit("\n", 1)[-1]
-                    yield DocstringIssue(path, lineno, name, problem, excerpt)
+            for line, imported in gen_own_name_imports(doc, *own_names):
+                problem = f"imports its own module's {imported} (use it bare)"
+                yield DocstringIssue(path, lineno, name, problem, line)
 
-                for entry in gen_malformed_raises(doc):
-                    problem = "Raises: entry does not start with 'SomeError:'"
-                    yield DocstringIssue(path, lineno, name, problem, entry)
+            for unbound in gen_unbound_names(doc, *own_names):
+                if unbound in global_names:
+                    problem = "uses its own name without importing it (import it "
+                    problem += "through its public path)"
+                else:
+                    problem = "uses a name it neither imports nor defines"
 
-                for prose in gen_example_prose(doc):
-                    problem = "narrates between examples (use a # comment)"
-                    yield DocstringIssue(path, lineno, name, problem, prose)
+                yield DocstringIssue(path, lineno, name, problem, unbound)
 
-                for check in gen_null_checks(doc):
-                    problem = "checks for None (show the bare call instead)"
-                    yield DocstringIssue(path, lineno, name, problem, check)
-
-                for note in gen_review_notes(doc):
-                    problem = "leaves a TODO or ??? review note"
-                    yield DocstringIssue(path, lineno, name, problem, note)
-
-                doctest_name = qualnames.get(node, f"{module_name}.{name}")
-
-                for binding in gen_run_bindings(doc, doctest_name):
-                    problem = (
-                        "binds a run( result that is skipped without async support "
-                    )
-                    problem += "(move it to an async example)"
-                    yield DocstringIssue(path, lineno, name, problem, binding)
-
-                for line, imported, public in gen_private_imports(doc):
-                    problem = (
-                        f"imports {imported} privately "
-                        f'(use "from {public} import {imported}")'
-                    )
-                    yield DocstringIssue(path, lineno, name, problem, line)
-
-                is_module = node is tree
-                own_names = frozenset() if is_module else global_names
-
-                for line, imported in gen_own_name_imports(doc, own_names):
-                    problem = f"imports its own module's {imported} (use it bare)"
-                    yield DocstringIssue(path, lineno, name, problem, line)
-
-                for unbound in gen_unbound_names(doc, own_names):
-                    problem = (
-                        "uses its own name without importing it "
-                        "(import it through its public path)"
-                        if unbound in global_names
-                        else "uses a name it neither imports nor defines"
-                    )
-                    yield DocstringIssue(path, lineno, name, problem, unbound)
-
-            yield from _gen_module_example_issues(path, tree)
+        yield from _gen_module_example_issues(path, tree)
 
 
 __all__ = [

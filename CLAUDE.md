@@ -260,7 +260,7 @@ new permanent bullet here.
   `Literal`, a raise, or move the decision into the caller.
 - **Callable parameter names.** `fn` is a callable the user supplies
   (`Pipeline.map(fn)`, `CallableNode.fn`); `call` is a pipe's or node's prepared call,
-  its configuration and context already bound (`NodeCall`, `ItemCall`, `LoopCall`,
+  its configuration and context already bound (`NodeCall`, `ItemCall`,
   `build_item_call`); `func` is any other callable (helpers, pools, parsers).
 - **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
   when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,
@@ -352,9 +352,10 @@ a `normalize`; substituting a default the caller supplies or chooses
 - **Lint selectors are additive** — bare `manage lint` is Ruff plus rumdl (Markdown);
   `manage lint --all` runs the whole standard suite (Ruff, rumdl, RST, `--docs`,
   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
-  `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of
-  those need a separate run. Type verification (`--check-types`/`--verify-types`),
-  pylint strict mode, and distribution checks remain explicit heavyweight checks.
+  `--basenames`, `--escapes`, `--helpers`, `--ownership`, actionlint, YAML, and all
+  import contracts), so none of those need a separate run. Type verification
+  (`--check-types`/`--verify-types`), pylint strict mode, and distribution checks remain
+  explicit heavyweight checks.
 - **Whole-tree gates run through `gates.py`** — every full `lint --all`,
   `test --ratchet`, `--check-types`, `--verify-types`, `prettify`, or `codegen` run, in
   any skill or ad hoc, goes through

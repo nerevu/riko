@@ -225,16 +225,16 @@ def require_enum[E: StrEnum](
 
         >>> from enum import StrEnum
         >>>
-        >>> class Color(StrEnum):
-        ...     RED = "red"
-        ...     BLUE = "blue"
+        >>> class Size(StrEnum):
+        ...     SMALL = "small"
+        ...     LARGE = "large"
         >>>
-        >>> require_enum(Color, "red")
-        <Color.RED: 'red'>
-        >>> require_enum(Color, None, "color")
+        >>> require_enum(Size, "small")
+        <Size.SMALL: 'small'>
+        >>> require_enum(Size, None, "size")
         Traceback (most recent call last):
         ...
-        riko.exceptions.InvalidPipelineError: ...missing required color
+        riko.exceptions.InvalidPipelineError: ...missing required size
 
     """
     what = cls.__name__ if what is None else what
@@ -286,14 +286,14 @@ def resolve_enum[E: StrEnum](
 
         >>> from enum import StrEnum
         >>>
-        >>> class Color(StrEnum):
-        ...     RED = "red"
-        ...     BLUE = "blue"
+        >>> class Size(StrEnum):
+        ...     SMALL = "small"
+        ...     LARGE = "large"
         >>>
-        >>> resolve_enum(Color, "red", Color.BLUE)
-        <Color.RED: 'red'>
-        >>> resolve_enum(Color, None, Color.BLUE)
-        <Color.BLUE: 'blue'>
+        >>> resolve_enum(Size, "small", Size.LARGE)
+        <Size.SMALL: 'small'>
+        >>> resolve_enum(Size, None, Size.LARGE)
+        <Size.LARGE: 'large'>
 
     """
     return default if value is None else require_enum(enum, value, what, error=error)

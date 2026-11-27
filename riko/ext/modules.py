@@ -27,6 +27,7 @@ from inspect import unwrap
 from types import SimpleNamespace
 
 from riko.bado.itertools import aauto_close
+from riko.base._guards import is_subclass
 from riko.base._iterutils import auto_close
 from riko.base._typing import resolve_type_hints
 from riko.coercion import _configs
@@ -104,7 +105,7 @@ def get_conf_type(parser: object) -> type[DynamicConf]:
     else:
         hint = None
 
-    if isinstance(hint, type) and issubclass(hint, DynamicConf):
+    if is_subclass(hint, DynamicConf):
         conf_type = hint
     else:
         conf_type = DynamicConf

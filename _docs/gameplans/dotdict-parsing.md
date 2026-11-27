@@ -117,7 +117,7 @@ through `resolve_sentinel(v, v)` (`riko/parsing/_dotdict.py`), which returns a p
 there is no tripwire.
 
 Typing (2026-10-27 `Any`/`cast` triage): `DotDict[VT]` declares no element type for a
-nested mapping, so nine casts in `riko/parsing/_dotdict.py` paper over it
+nested mapping, so nine of the ten casts in `riko/parsing/_dotdict.py` paper over it
 (`__setitem__`/`delete` store plain `dict`s in `VT` slots, and the reducers'
 `cast("Self", ...)` is false at runtime: the stored value is a `dict`, not a `DotDict`).
 A recursive value type (values `VT | DotDict[VT]`) removes them; land it with the

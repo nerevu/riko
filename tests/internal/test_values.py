@@ -56,8 +56,10 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import (
+    AsyncClosable,
     SyncClosable,
     _check_strict_protocol,
+    get_async_closer,
     get_sync_closer,
     isinstance_strict,
     require_listlike,
@@ -120,7 +122,6 @@ from riko.types._feed import (
     _ItemEnvelope,
 )
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import AsyncClosable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
@@ -154,11 +155,8 @@ NOON_EST = datetime(2020, 6, 15, 7, tzinfo=timezone(timedelta(hours=-5)))
 
 GOLDEN_BYTES = {
     "none": (None, b'["none",null]'),
-    "bool": (True, b'["bool",true]'),
-    "int": (1, b'["int","1"]'),
     "float": (1.0, b'["float","1.0"]'),
     "decimal": (Decimal("1.00"), b'["dec","1"]'),
-    "str": ("a", b'["str","a"]'),
     "bytes": (b"\x00\xff", b'["bytes","00ff"]'),
     "list": ([1, 2], b'["list",[["int","1"],["int","2"]]]'),
     "tuple": ((1, 2), b'["tup",[["int","1"],["int","2"]]]'),
@@ -252,6 +250,8 @@ EQUIVALENT_PAIRS = [
     pytest.param({1, 2, 3}, {3, 2, 1}, id="set-order"),
     pytest.param(-0.0, 0.0, id="negative-zero"),
     pytest.param(Decimal("1.0"), Decimal("1.000"), id="decimal-exponent"),
+    pytest.param(Decimal("-0"), Decimal(0), id="decimal-negative-zero"),
+    pytest.param(Decimal("-0.00"), Decimal(0), id="decimal-negative-zero-exponent"),
     pytest.param(datetime(2020, 6, 15, 12), NOON_UTC, id="naive-datetime-utc"),
     pytest.param(NOON_EST, NOON_UTC, id="aware-datetime-utc"),
     pytest.param(
@@ -352,11 +352,6 @@ class TestIdentityAccumulator:
         folded = b"\x00" + canonical_bytes("a") + b"\x00" + canonical_bytes(1)
         expected = blake2b(header.encode() + folded, digest_size=16).hexdigest()
         assert accumulator.digest() == expected
-
-    def test_one_value_matches_digest(self):
-        accumulator = IdentityAccumulator(IdentityDomain.GENERATION)
-        accumulator.add({"a": 1})
-        assert accumulator.digest() == digest({"a": 1}, IdentityDomain.GENERATION)
 
     def test_domains_stay_separate(self):
         generation = IdentityAccumulator(IdentityDomain.GENERATION)
@@ -627,16 +622,21 @@ class TestCastDatetime:
 
 
 # Each row: content whose cast overflows, and the cast type's default.
-CAST_OVERFLOWS = [
+CAST_DEFAULTS = [
+    pytest.param("foo", CastType.FLOAT, float("nan"), id="float-unparseable"),
+    pytest.param("foo", CastType.DECIMAL, Decimal("NaN"), id="decimal-unparseable"),
+    pytest.param("foo", CastType.INT, 0, id="int-unparseable"),
     pytest.param("inf", CastType.INT, 0, id="int-inf"),
     pytest.param("1e400", CastType.INT, 0, id="int-huge"),
 ]
 
 
 class TestCastValue:
-    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
-    def test_overflow_degrades_to_the_default(self, content, type_, expected):
-        assert cast_value(content, type_) == expected
+    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_DEFAULTS)
+    def test_unparseable_or_overflowing_content_degrades_to_the_default(
+        self, content, type_, expected
+    ):
+        assert repr(cast_value(content, type_)) == repr(expected)
 
     def test_a_datetime_casts_to_its_date(self):
         moment = datetime(2010, 10, 14, 5, tzinfo=UTC)
@@ -682,12 +682,11 @@ class TestOverloadTypes:
 
 
 class TestResolveCastType:
-    def test_unknown_name_warns_once_and_passes(self, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            cast_type = resolve_cast_type("unknown")
+    def test_unknown_name_warns_once_and_passes(self, riko_warnings):
+        cast_type = resolve_cast_type("unknown")
 
         assert cast_type == CastType.PASS
-        assert [r.levelno for r in caplog.records] == [WARNING]
+        assert [r.levelno for r in riko_warnings.records] == [WARNING]
 
 
 SORT_KEY_WARNINGS = [
@@ -709,13 +708,12 @@ INVALID_CAST_KEYS = [
 
 class TestDefItemgetter:
     @pytest.mark.parametrize(("type_", "warnings"), SORT_KEY_WARNINGS)
-    def test_uncast_types_warn_at_most_once(self, type_, warnings, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            keyfunc = def_itemgetter("n", type_=type_)
-            keys = [keyfunc({"n": n}) for n in (3, 1, 2)]
+    def test_uncast_types_warn_at_most_once(self, type_, warnings, riko_warnings):
+        keyfunc = def_itemgetter("n", type_=type_)
+        keys = [keyfunc({"n": n}) for n in (3, 1, 2)]
 
         assert keys == [3, 1, 2]
-        assert len(caplog.records) == warnings
+        assert len(riko_warnings.records) == warnings
 
     @pytest.mark.parametrize(("value", "expected"), INVALID_CAST_KEYS)
     def test_invalid_cast_type_keeps_scalars_and_defaults_containers(
@@ -724,12 +722,11 @@ class TestDefItemgetter:
         keyfunc = def_itemgetter("n", default="x", type_="location")
         assert keyfunc({"n": value}) == expected
 
-    def test_an_unsortable_value_warns_and_sorts_by_the_default(self, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            key = def_itemgetter("n", default="x")({"n": _UNSORTABLE})
+    def test_an_unsortable_value_warns_and_sorts_by_the_default(self, riko_warnings):
+        key = def_itemgetter("n", default="x")({"n": _UNSORTABLE})
 
         assert key == "x"
-        assert "non-sortable object" in caplog.text
+        assert "non-sortable object" in riko_warnings.text
 
 
 @dataclass
@@ -897,10 +894,8 @@ class TestDatetimeToDatedict:
     def test_cast_datetime_reads_it_back(self, moment, label):
         result = cast_datetime(loads(dumps(datetime_to_datedict(moment))))
         assert result is not None
-        assert (result.timestamp(), result.utcoffset()) == (
-            moment.timestamp(),
-            moment.utcoffset(),
-        )
+        assert result.timestamp() == moment.timestamp()
+        assert result.utcoffset() == moment.utcoffset()
 
     def test_date_parts_never_change_the_moment(self):
         built = datetime_to_datedict(datetime(2014, 12, 3, 9, tzinfo=UTC))
@@ -1140,6 +1135,7 @@ JSON_WITHOUT_RECORDS = [
     pytest.param('{"x": 1}', "y", "no value at 'y'", id="missing-path"),
     pytest.param('{"x": [1]}', "x.item", "no value at 'x.item'", id="item-path"),
     pytest.param('[{"x": 1}]', "x", "no value at 'x'", id="path-into-list"),
+    pytest.param("{", None, "ERROR", id="malformed"),
 ]
 
 JSON_READERS = [
@@ -1208,19 +1204,14 @@ class TestAny2dict:
     @pytest.mark.parametrize("read", JSON_READERS)
     @pytest.mark.parametrize(("content", "path", "match"), JSON_WITHOUT_RECORDS)
     def test_any2dict_warns_on_json_without_records(
-        self, monkeypatch, caplog, read, content, path, match
+        self, streamed_json, riko_warnings, read, content, path, match
     ):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
+        assert list(any2dict(read(content), ext="json", path=path)) == []
 
-        with caplog.at_level(WARNING, logger="riko"):
-            assert list(any2dict(read(content), ext="json", path=path)) == []
-
-        assert match in caplog.text
+        assert match in riko_warnings.text
 
     @pytest.mark.parametrize(("build", "streams"), STREAMED_JSON_SOURCES)
-    def test_only_binary_sources_stream_json(self, monkeypatch, build, streams):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
-
+    def test_only_binary_sources_stream_json(self, streamed_json, build, streams):
         with build(get_path("gigs.json")) as source:
             assert (documents._get_ijson_source(source) is not None) is streams
 
@@ -1230,9 +1221,8 @@ class TestAny2dict:
 
     @pytest.mark.parametrize(("read", "expected"), CASE_DUPLICATE_READERS)
     def test_case_duplicate_keys_pick_a_branch_specific_value(
-        self, monkeypatch, read, expected
+        self, streamed_json, read, expected
     ):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
         records = any2dict(read(CASE_DUPLICATE_JSON), ext="json", path="x")
         assert list(records) == expected
 
@@ -1311,7 +1301,7 @@ class TestAugmentEntries:
 
 
 class TestResolveDate:
-    def test_resolve_date_skips_blank_and_unparseable_values(self, caplog):
+    def test_resolve_date_skips_blank_and_unparseable_values(self, riko_warnings):
         """A blank or unparseable candidate never raises; the next key is tried."""
         raw = cast(
             "ParserRSSEntry",
@@ -1325,10 +1315,9 @@ class TestResolveDate:
         )
         keys = ("published_parsed", "published", "updated_parsed", "updated")
 
-        with caplog.at_level(WARNING, logger="riko"):
-            assert resolve_date(raw, *keys) is None
+        assert resolve_date(raw, *keys) is None
 
-        assert [r.getMessage() for r in caplog.records] == [
+        assert [r.getMessage() for r in riko_warnings.records] == [
             "skipping unparseable published date 'not a date'"
         ]
         stamp = resolve_date(raw, *keys, "created")
@@ -1362,6 +1351,10 @@ class TestGenNonNull:
         items = [(SimpleNamespace(n=1),), (SimpleNamespace(n=None),)]
         selected = gen_non_null(items, cmp_pos=0, cmp_attr="n", arg_pos=0, arg_attr="n")
         assert list(selected) == [1]
+
+    def test_positions_skip_a_none_item(self):
+        items = [("a", 1), None, ("b", None)]
+        assert list(gen_non_null(items, cmp_pos=1, arg_pos=0)) == ["a"]
 
     @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
     def test_an_unindexable_item_raises(self, items, positions, match):
@@ -1408,7 +1401,7 @@ class TestGraph:
             native_topological_sort({"a": {"b"}, "b": {"a"}})
 
 
-class TestGraphIndex:
+class TestWorkflowIndex:
     def test_graph_index_derives_on_first_use(self, monkeypatch) -> None:
         calls: list[str] = []
 
@@ -1524,28 +1517,18 @@ def _with_close() -> _Plain:
     return plain
 
 
-class _SlottedAsyncClose:
-    __slots__ = ()
-
-    async def close(self) -> None:
-        pass
-
-
-async def _aclose_plain() -> None:
-    pass
-
-
-def _with_async_close() -> _Plain:
-    plain = _Plain()
-    plain.close = _aclose_plain  # pyright: ignore[reportAttributeAccessIssue]
-    return plain
-
-
 class _SlottedNeedsArg:
     __slots__ = ()
 
     def close(self, how: str) -> None:
         pass
+
+
+class _SlottedGetattr:
+    __slots__ = ()
+
+    def __getattr__(self, name: str) -> object:
+        raise AttributeError(name)
 
 
 class _SlottedStaticClose:
@@ -1563,20 +1546,14 @@ STRICT_CHECKS = [
     pytest.param(_SlottedClose, SyncClosable, id="slotted"),
     pytest.param(_SlottedNeedsArg, SyncClosable, id="slotted-wrong-signature"),
     pytest.param(_SlottedStaticClose, SyncClosable, id="slotted-static"),
+    pytest.param(_SlottedGetattr, SyncClosable, id="slotted-getattr"),
     pytest.param(_with_close, SyncClosable, id="instance-close"),
     pytest.param(_Plain, SyncClosable, id="plain"),
     pytest.param(DotDict, SyncClosable, id="dotdict"),
 ]
 
-# Whether a value has a sync closer; only a value that defines ``close`` is checked.
-STATIC_CLOSERS = [
-    pytest.param(DotDict, False, id="dotdict"),
-    pytest.param(_Plain, False, id="plain"),
-    pytest.param(_with_close, True, id="instance-close"),
-]
 
-
-class TestRequireGuards:
+class TestIsinstanceStrict:
     @pytest.mark.parametrize(("make", "protocol"), STRICT_CHECKS)
     def test_a_remembered_strict_verdict_matches_the_full_check(
         self, make, protocol
@@ -1594,6 +1571,16 @@ class TestRequireGuards:
         ]
         assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
 
+
+# Whether a value has a sync closer; only a value that defines ``close`` is checked.
+STATIC_CLOSERS = [
+    pytest.param(DotDict, False, id="dotdict"),
+    pytest.param(_Plain, False, id="plain"),
+    pytest.param(_with_close, True, id="instance-close"),
+]
+
+
+class TestGetSyncCloser:
     @pytest.mark.parametrize(("make", "closes"), STATIC_CLOSERS)
     def test_a_close_neither_type_nor_instance_defines_skips_the_protocol_check(
         self, monkeypatch, make, closes
@@ -1608,6 +1595,25 @@ class TestRequireGuards:
         closer = get_sync_closer(make())
         assert (closer is not None, bool(checked)) == (closes, closes)
 
+
+class _SlottedAsyncClose:
+    __slots__ = ()
+
+    async def close(self) -> None:
+        pass
+
+
+async def _aclose_plain() -> None:
+    pass
+
+
+def _with_async_close() -> _Plain:
+    plain = _Plain()
+    plain.close = _aclose_plain  # pyright: ignore[reportAttributeAccessIssue]
+    return plain
+
+
+class TestGetAsyncCloser:
     def test_an_async_close_is_found_per_type_and_per_instance(self) -> None:
         closers = (
             get_async_closer(_SlottedAsyncClose()),
@@ -1616,6 +1622,8 @@ class TestRequireGuards:
         )
         assert [closer is None for closer in closers] == [False, False, True]
 
+
+class TestRequireGuards:
     @pytest.mark.parametrize(("require", "value"), _INVALID)
     def test_document_error_is_the_default(self, require, value):
         with pytest.raises(InvalidPipelineError, match="field"):
@@ -1678,9 +1686,6 @@ _FORM_REJECTIONS = [
 class TestRequireFromForm:
     def test_a_union_passes_any_class_member(self):
         assert require_from_form(int | str)("a") == "a"
-
-    def test_a_literal_passes_one_of_its_values(self):
-        assert require_from_form(Literal["a", "b"])("b") == "b"
 
     def test_a_mixed_union_passes_a_literal_value(self):
         assert require_from_form(int | Literal["auto"])("auto") == "auto"

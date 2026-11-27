@@ -14,9 +14,10 @@ node ids, or ``-k EXPR``). When the fix is uncommitted, ``--old PATH=SOURCE``
 for ``SOURCE`` (a file on disk, or ``REF:PATH``), committed through a private index on
 top of ``--ref`` and reachable from no branch.
 
-Outputs: pytest's ``FAILED`` lines and summary from the old code, then a verdict.
-Exits 0 when every selected test fails at ``--ref`` (the tests catch the bug) and 1
-when any passes there (it guards something else, or does not probe the bug).
+Outputs: pytest's ``FAILED`` and ``ERROR`` lines and summary from the old code, then
+a verdict. Exits 0 when every selected test fails or errors at ``--ref`` (the tests
+catch the bug; a test whose body passes but whose teardown errors counts as caught)
+and 1 when any passes there (it guards something else, or does not probe the bug).
 
 Origin: 2026-10-30 audit-triage session, where the same export, copy, and run was
 done by hand. The temp folder is left in place (never deleted).
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -41,7 +43,17 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 GIT = shutil.which("git") or "git"
-PYTEST_FLAGS = ("-q", "-p", "no:randomly", "-p", "no:cacheprovider", "--no-cov")
+PYTEST_FLAGS = (
+    "-q",
+    "--color=no",
+    "-p",
+    "no:randomly",
+    "-p",
+    "no:cacheprovider",
+    "--no-cov",
+)
+SUMMARY_COUNT = re.compile(r"(\d+) (passed|failed|error)")
+SUMMARY_WORDS = (" passed", " failed", " error")
 TEST_PATHS = (
     "tests",
     ":(glob).claude/skills/**/test_*.py",
@@ -122,6 +134,24 @@ def build_old_tree(ref: str, swapped: Iterable[str] = ()) -> Path:
     return folder
 
 
+def is_summary(line: str) -> bool:
+    """Checks whether ``line`` is a pytest failure, error, or summary line."""
+    is_report = line.startswith(("FAILED", "ERROR"))
+    return is_report or any(word in line for word in SUMMARY_WORDS)
+
+
+def is_caught(returncode: int, summary: str) -> bool:
+    """
+    Checks whether pytest's exit code and summary line say every selected test failed.
+
+    A test whose body passes but whose teardown errors is reported as both a pass and
+    an error, so each pass must be matched by an error.
+    """
+    counts = {word: int(count) for count, word in SUMMARY_COUNT.findall(summary)}
+    passed, errors = counts.get("passed", 0), counts.get("error", 0)
+    return returncode == 1 and passed <= errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(__doc__ or "").strip().splitlines()[0]
@@ -133,7 +163,7 @@ def main() -> int:
     selectors = [arg for arg in args.pytest_args if arg != "--"]
     ref = build_snapshot(args.ref, args.old) if args.old else args.ref
     folder = build_old_tree(ref, [swap.split("=", 1)[0] for swap in args.old])
-    command = [sys.executable, "-m", "pytest", *PYTEST_FLAGS, "-o", "addopts=", "-rf"]
+    command = [sys.executable, "-m", "pytest", *PYTEST_FLAGS, "-o", "addopts=", "-rfE"]
     env = {**os.environ, "PYTHONPATH": str(folder)}
     run = subprocess.run(
         [*command, *selectors],
@@ -146,10 +176,10 @@ def main() -> int:
     lines = [
         line.replace(f"{folder}/", "")
         for line in run.stdout.splitlines()
-        if line.startswith("FAILED") or " passed" in line or " failed" in line
+        if is_summary(line)
     ]
     summary = lines[-1] if lines else ""
-    caught = run.returncode == 1 and " passed" not in summary
+    caught = is_caught(run.returncode, summary)
 
     if run.returncode not in {0, 1}:
         verdict = f"no test ran or pytest failed (exit {run.returncode})"

@@ -122,9 +122,9 @@ Then reduce the facades to re-exports so every existing import keeps working
 `from riko.base.locations import LOCATIONS`, consumed by `cast.py`/`currencyformat.py`):
 
 - `riko/base/currencies.py` → re-export `CURRENCY_CODES`, `CURRENCY_SYMBOLS` from
-  `_reference`.
+  the planned `_reference`.
 - `riko/base/locations.py` → re-export `LOCATIONS`. Keep the continent/country
-  docstring, adjusted to say the records now originate in `_reference`.
+  docstring, adjusted to say the records now originate in the planned `_reference`.
 
 Commit: `[REFACTOR] Consolidate currency and location reference data`.
 

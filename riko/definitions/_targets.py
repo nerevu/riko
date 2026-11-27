@@ -31,8 +31,8 @@ from ._write import (
     WriteOperation,
 )
 
-_FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 _FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
+FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 
 
 def validate_target_mode(
@@ -176,7 +176,7 @@ class FileTarget:
         resolved_fmt = resolve_format(self.dest, self.fmt if fmt is None else fmt)
         modes = {WriteMode.REPLACE}
 
-        if resolved_fmt in _FILE_APPEND_FORMATS:
+        if resolved_fmt in FILE_APPEND_FORMATS:
             modes.add(WriteMode.APPEND)
 
         return WriteCapabilities(

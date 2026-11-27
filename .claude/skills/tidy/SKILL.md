@@ -34,26 +34,26 @@ files left out. Untracked files are inside the diff. Then, each under its own
 `--- <name>` header (with its exit code when non-zero), the outputs of the checks §1 and
 §3 open with, run side by side over that diff: `lint` (§3's lint selectors),
 `neighborhood` (the touched neighborhood below, with two lines of context around each
-reference), and `mistake_scan` (§3's leads); plus `heading_drift` when the scope touches
-Markdown, `changelog_widows` when it touches `docs/CHANGES.rst` (check 6), and
-`overlap_scan --files` over each touched `tests/<tier>/test_*.py` (check 9). Never rerun
-any of them by hand on the same tree. A diff over 25kB lands in
-`.claude/tidy-scope.diff`, and the output opens with a hint to read `--edits-only`
-first; read the saved diff in slices with `Read` offsets, never whole. Exit 0 means tidy
-already ran on this exact content: report "nothing to tidy" and stop. Exit 2 means the
-scope is empty: under `/land`, just stop and report it (land records tidy after your
-report); otherwise run `gates.py record tidy` and stop. Never reassemble the scope from
-`git diff` by hand. When the diff is mostly moved code (test reorganizations, file
-splits), `gates.py scope tidy --edits-only` lists just the added lines that no removed
-line carries, `path:line: text`; read those first and the moved spans only where an edit
-sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt` pass),
-`python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's wording
-changes, ignoring line breaks and markup; review those instead of the reflow. The
-`heading_drift` section (already in `--leads` when the scope touches Markdown) lists
-each heading the change adds, removes, or re-levels and exits 1 on a re-level or a
-wrapped issue number turned heading (`## 60:`), the start of a `rumdl fmt` cascade that
-demotes every later heading in the file. Restore the levels and escape the number
-(`\#60`).
+reference), `mistake_scan`, `reuse_scan`, and `reuse_shapes` (§3's leads); plus
+`heading_drift` when the scope touches Markdown, `changelog_widows` when it touches
+`docs/CHANGES.rst` (check 6), and `overlap_scan --files` over each touched
+`tests/<tier>/test_*.py` (check 9). Never rerun any of them by hand on the same tree.
+A diff over 25kB lands in `.claude/tidy-scope.diff`, and the output opens with a hint
+to read `--edits-only` first; read the saved diff in slices with `Read` offsets, never
+whole. Exit 0 means tidy already ran on this exact content: report "nothing to tidy"
+and stop. Exit 2 means the scope is empty: under `/land`, just stop and report it
+(land records tidy after your report); otherwise run `gates.py record tidy` and stop.
+Never reassemble the scope from `git diff` by hand. When the diff is mostly moved code
+(test reorganizations, file splits), `gates.py scope tidy --edits-only` lists just the
+added lines that no removed line carries, `path:line: text`; read those first and the
+moved spans only where an edit sits inside them. When it is mostly a Markdown reflow
+(a `rumdl fmt` pass), `python .claude/skills/tidy/reflow_word_diff.py BASE` lists only
+each file's wording changes, ignoring line breaks and markup; review those instead of
+the reflow. The `heading_drift` section (already in `--leads` when the scope touches
+Markdown) lists each heading the change adds, removes, or re-levels and exits 1 on a
+re-level or a wrapped issue number turned heading (`## 60:`), the start of a
+`rumdl fmt` cascade that demotes every later heading in the file. Restore the levels
+and escape the number (`\#60`).
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one read-only
 agent per top-level package, then applies fixes centrally. Every agent brief ends with
@@ -121,6 +121,29 @@ edit of that line; otherwise just drop it. `mistake_scan.py --classes` prints
 each class's rules or audit probe and the shapes ruled safe; /triage adds a
 fix's ref to its class when it lands (the count is derived from the refs).
 
+The `reuse_scan` section (also in `--leads`) lists code that restates an existing
+helper's body instead of calling it, in both directions: added lines checked against
+every helper, and the whole tree checked against each helper the diff added or
+changed (old code that predates a new helper). Test helpers (`tests/_*.py` and test
+files) are indexed too, for test sites only. Each lead names the helper and what
+its wildcards bound. Adopt the helper (check 3), or mark a deliberate copy with a
+trailing `# reuse-ok: helper`; a `private: promote?` lead is a private helper wanted
+in another file, a `duplicate helper` lead a second definition of the same body.
+The `reuse_shapes` section (`reuse_scan.py --shapes`, also in `--leads`; run
+`--all --tests --shapes` for a sweep, or name a root such as `examples`) lists each
+cluster of near-identical dict, call, and literal constructions a changed line
+joins: members that differ only in their values or by one added, missing, or
+re-keyed entry. Declaration idioms (attrs `field`/`define`, `dataclass`, the pipe
+decorators, `click.option`, `pytest.raises`/`param`/`mark.xfail`/`mark.parametrize`)
+are skipped; `--all-callees` shows them. Each cluster prints its skeleton, the
+varying slots and their values, and samples: align the arbitrary values and share
+one constant or builder, or mark a deliberate member with a trailing `# reuse-ok`.
+`--spans SPEC` keeps only the clusters whose members span the named roots, a comma
+list of terms: `ROOT` (some member lies there), `only:ROOT` (every member lies in an
+`only:` root), `mixed` (two or more roots). `--all --tests --shapes --spans
+examples,tests` finds constructions an example and a test both restate;
+`--spans riko,mixed` finds test or example code rebuilding a riko construction.
+
 For each file in scope, and only the lines the change introduced or the
 neighborhood it affects:
 
@@ -153,7 +176,11 @@ neighborhood it affects:
    source); the same validation run in a classmethod and the constructor;
    `Callable[..., X]` for a fixed signature (a callback `Protocol`); a role
    type spelled out three or more times (a `type` alias); a bool property
-   restating `x.attr is None` that callers cannot narrow through.
+   restating `x.attr is None` that callers cannot narrow through. Before proposing
+   to inline a single-use helper, run `.claude/skills/tidy/complexity_scores.sh
+   <files>` (each function's McCabe score) so the merged caller stays at C90 ≤ 10;
+   keep helpers that hold or sit inside a try/except, are passed by reference, are
+   cached, recursive, a per-item-closing generator, or mirror a sync/async twin.
 4. **Idioms** — truthiness where `is None` is required, `cast` where narrowing
    works, more than one `return`, comments that restate code, a new `noqa` or
    type ignore with no reason.
@@ -234,19 +261,25 @@ neighborhood it affects:
    unsupported names in public and supported-only internal classes, out-of-order or
    misplaced classes and helpers, classes that never name their riko-named subject,
    functional classes with no end-to-end marker, tests that start a process without
-   saying why). Read its full output once; never pipe it through `head`/`grep` and rerun
-   (`--limit` already caps it). Read and verify only those, never whole files. Make the
-   moves with `python .claude/skills/tidy/move_tests.py` (`--check` before a move to
-   public, `--merge` to fold one class into another, `--sort` for in-class order,
+   saying why). It also lists sync/async twins that check different amounts or lack a
+   twin (`twins`), `while True` helpers (`endless`), `once` tests that count nothing
+   (`once`), same-process determinism tests (`determinism`), unbounded async teardowns
+   (`drains`), and `placement` classes whose subject is not a riko name (a concept class
+   belongs in the `tests/__init__.py` list). Read its full output once; never pipe it
+   through `head`/`grep` and rerun (`--limit` already caps it). Read and verify only
+   those, never whole files. Make the moves with
+   `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
+   `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
    `--with-helpers` so a moved method carries the helpers only it used, `--plan-split`
    for each class's footprint before a split; moves repoint doc citations), and find a
    test's current home with `overlap_scan.py --where NAME`. Usage:
    `move_tests.py DEST SPEC... [--before CLASS] [--rename NEW]` (plus `--with-helpers`,
    `--dry-run`), `SPEC` being `path::Class` or `path::Class::method` and `DEST` a path
-   (classes) or `path::Class` (methods); the mode flags above replace `DEST`
+   (classes) or `path::Class` (methods); `--rename` with `DEST` equal to the spec's file
+   renames the class in place; the mode flags above replace `DEST`
    (`--check`/`--sort`/`--delete SPEC...`, `--merge DEST_CLASS SPEC...`,
-   `--drop-row path::TABLE ID...`, `--place path::NAME... --above CLASS`,
+   `--drop-row path::TABLE ID...`, `--place path::NAME... --above NAME`,
    `--plan-split FILE`). Module constants that a move strands below code go back to the
    top with `python .claude/skills/tidy/lift_constants.py FILE [FILE ...] [--dry-run]`
    (logger, then `type` aliases, then constants private first, each helper a constant
@@ -270,6 +303,11 @@ Sort each verified finding into one bucket:
   batched AskUserQuestion (lists, not tables), recommendation first, each
   option saying what it buys and forecloses. Running as a subagent without
   AskUserQuestion, return these framed questions instead of deciding them.
+
+A fix that edits `examples/` is proved behavior-neutral by running
+`python .claude/skills/tidy/snapshot_examples.py OUT` before the edit and
+`python .claude/skills/tidy/snapshot_examples.py --compare OUT` after it (exit 1 and
+the first differing section, log and stderr lines included, on any change; about 6s).
 
 Then check whether any finding class appeared more than once in this run, or matches a
 phrase the Reserved terms table already rules out. If it is regex-able, propose adding

@@ -139,29 +139,29 @@ skip-magic-trailing-comma = true
 future-annotations = true
 
 extend-select = [
+    "B",    # flake8-bugbear: opinionated warnings
+    "C4",   # flake8-comprehensions
+    "C90",  # mccabe complexity (max-complexity below)
+    "D",    # pydocstyle
     "E",    # pycodestyle errors
     "E302", # pycodestyle: Two blank lines before top-level defs
-    "W",    # pycodestyle warnings
-    "UP",   # pyupgrade
-    "I",    # isort
-    "B",    # flake8-bugbear: opinionated warnings
-    "Q",    # flake8-quotes: enforce consistent quote style)
-    "C4",   # flake8-comprehensions
-    "N",    # pep8-naming
-    "D",    # pydocstyle
-    "S",    # flake8-bandit
-    "TC",   # flake8-typing-imports
-    "T20",  # flake8-print
-    "PT",   # flake8-pytest-style
-    "PLC0415", # Import not at top of file
     "ERA",  # eradicate: commented-out code (tests only; see per-file ignores)
+    "I",    # isort
+    "N",    # pep8-naming
+    "PLC0415", # Import not at top of file
+    "PT",   # flake8-pytest-style
+    "Q",    # flake8-quotes: enforce consistent quote style)
     "RUF029",  # unused-async
+    "S",    # flake8-bandit
+    "T20",  # flake8-print
+    "TC",   # flake8-typing-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
 ]
 
 ignore = [
     # docs
     "D101",  # undocumented-public-class
-    "D102",  # undocumented-public-method
     "D103",  # undocumented-public-function
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
@@ -192,7 +192,7 @@ ignore = [
 preview = true
 
 [tool.ruff.lint.mccabe]
-max-complexity = 11
+max-complexity = 10
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]
@@ -200,6 +200,9 @@ split-on-trailing-comma = false
 
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
+    "D101",   # undocumented-public-class (the docs standard covers riko/ only)
+    "D102",   # undocumented-public-method
+    "D103",   # undocumented-public-function
     "S101",   # Use of `assert` detected
     "S102",   # Use of `exec` detected
     "RUF029",  # unused-async
@@ -207,6 +210,16 @@ split-on-trailing-comma = false
 
 "riko/**/*" = [
     "ERA001",  # Commented-out code (enforced in tests only)
+]
+
+"{.claude,benchmarks,examples}/**/*" = [
+    "D101",   # undocumented-public-class (the docs standard covers riko/ only)
+    "D102",   # undocumented-public-method
+    "D103",   # undocumented-public-function
+]
+
+"conftest.py" = [
+    "D103",   # undocumented-public-function (the docs standard covers riko/ only)
 ]
 
 ".claude/**/test_*.py" = [
@@ -243,7 +256,7 @@ headings = false
 # Inspiration snapshots are copies of other projects' readmes: their relative links
 # resolve inside the source project, and GitHub readme conventions (an HTML logo before
 # the title, bold step labels) stay as their authors wrote them.
-"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057"]
+"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057", "MD076"]
 
 [tool.deptry]
 # `manage lint --deps` runs deptry from the repository root. The root conftest.py
@@ -348,26 +361,34 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 316
-uncovered-lowered = 2026-11-19
+uncovered = 298
+uncovered-lowered = 2026-11-26
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
 # `typing.cast` calls. A run fails above either and lowers it on a gain. It records the
 # day as `<key>-lowered`.
 any = 122
-any-lowered = 2026-11-14
-cast = 74
-cast-lowered = 2026-11-16
+any-lowered = 2026-11-21
+cast = 73
+cast-lowered = 2026-11-25
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the
 # `pytest.param` rows without `id=` in `tests/`. Each only goes down: a run fails above
 # either and lowers it on a gain. It records the day as `<key>-lowered`.
-inline-tables = 65
-inline-tables-lowered = 2026-11-14
+inline-tables = 0
+inline-tables-lowered = 2026-11-24
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30
+
+[tool.riko.helpers]
+# Ceiling for `manage lint --helpers`: single-use helpers, private helpers called from
+# one function that are themselves the only caller of another such helper. It only
+# goes down: a run fails above it and lowers it on a gain. It records the day as
+# `<key>-lowered`.
+chains = 8
+chains-lowered = 2026-11-24
 
 [tool.riko.ratchet]
 # Days a ceiling above may hold without being lowered before its ratchet warns.

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Never, Self
 
@@ -11,6 +10,7 @@ from attrs import define, field
 
 from riko.bado._util import maybe_aclosing
 from riko.base._exceptions import PipelineStateError
+from riko.base._iterutils import warn_unclosed
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
@@ -35,7 +35,8 @@ def run_pipeline[T](
     """
     Synchronously runs a pipeline definition in a fresh one-shot execution.
 
-    The execution owns the run's resources for the lifetime of the returned iterator.
+    The execution closes the run's resources when the returned iterator ends or is
+    closed.
 
     Args:
 
@@ -86,8 +87,8 @@ async def arun_pipeline[T](
     """
     Asynchronously runs a pipeline definition in a fresh one-shot execution.
 
-    The execution owns the run's resources for the lifetime of the returned async
-    iterator. Closing an abandoned iterator closes its stream before the execution
+    The execution closes the run's resources when the returned async iterator ends or
+    is closed. Closing an abandoned iterator closes its stream before the execution
     exits.
 
     Args:
@@ -132,8 +133,8 @@ async def arun_pipeline[T](
     async with execution:
         stream = await execution.arun(plan, seed=seed)
 
-        async with maybe_aclosing(stream) as items:
-            async for item in items:
+        async with maybe_aclosing(stream):
+            async for item in stream:
                 yield item
 
 
@@ -292,7 +293,10 @@ class _PipelineStream[T]:
                 state, action = "asynchronous", "synchronously close"
                 raise PipelineStateError(state, action, subject=_SUBJECT)
         elif self._iteration is not None:
-            self._iteration.close()
+            try:
+                self._iteration.close()
+            finally:
+                self._finished = True
 
         self._finished = True
 
@@ -346,12 +350,13 @@ class _PipelineStream[T]:
 
     async def aclose(self) -> None:
         """Stops the run and releases its resources (closing again does nothing)."""
-        if isinstance(self._iteration, AsyncGenerator):
-            await self._iteration.aclose()
-        elif self._iteration is not None:
-            self._iteration.close()
-
-        self._finished = True
+        try:
+            if isinstance(self._iteration, AsyncGenerator):
+                await self._iteration.aclose()
+            elif self._iteration is not None:
+                self._iteration.close()
+        finally:
+            self._finished = True
 
     def __enter__(self) -> Never:
         """
@@ -390,7 +395,7 @@ class _PipelineStream[T]:
         if getattr(self, "_started", False) and not getattr(self, "_finished", True):
             msg = f"unclosed {_SUBJECT}. Iterate it to the end, close it, or "
             msg += "iterate it inside `with pipeline.open(items)`"
-            warnings.warn(msg, ResourceWarning, source=self, stacklevel=1)
+            warn_unclosed(self, msg)
 
 
 @define(eq=False)

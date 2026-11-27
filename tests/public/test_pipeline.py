@@ -10,16 +10,17 @@ import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
 from functools import partial
-from math import inf
+from math import inf, nan
 from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter, sleep
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from conftest import QUIET_LEAKS
 from riko.bado._backend import async_sleep, checkpoint, fail_after, run
 from riko.bado.itertools import alist, as_async, async_map
 from riko.base._config import DEF_CONCURRENCY_LIMIT
@@ -35,7 +36,7 @@ from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
-from riko.ext import ModuleDefinition, normalize_module_name, processor
+from riko.ext import normalize_module_name, processor
 from riko.modules._names import Transforms
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Executor, ModuleName
@@ -54,19 +55,24 @@ from riko.types.modules import (
     StrReplaceConfRule,
     TokenizerRawConf,
 )
-from tests import async_test, skipif_sync
+from tests import X_ROW, X_ROWS, async_test, get_values, skipif_sync
 from tests._execution import (
+    RELAY_DEFINITION,
+    UNION_NODE,
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     RecordingSink,
+    adouble,
     agen_source,
     awaitable_source,
+    build_async_definition,
+    build_sync_definition,
+    double,
     gen_closing_seed,
     registered_modules,
-    relay_pipe,
     tag_source,
 )
-from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
+from tests._lifecycle import EXPECTED, HASHED, ITEMS, VALUE, tokenized
 from tests._resources import (
     CREDENTIAL,
     Connection,
@@ -76,13 +82,14 @@ from tests._resources import (
     sync_cm_factory,
     sync_gen_factory,
 )
+from tests._streams import AsyncPullLog, PullLog
+from tests._workflows import require_module_node
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     from riko.types._pipedef import DagModule
-    from riko.types._streams import Item, Items, Stream
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
+    from riko.types._streams import Item, Items
 
 _FEED = get_path("feed.xml")
 _SORT_CONF_RULE = SortConfRule(dir="desc")
@@ -97,6 +104,7 @@ class _Mod(ModuleName):
     TRUNCATE = "truncate"
 
 
+_HASH = Pipeline.from_module(_Mod.HASH)
 _TRUNCATED = Pipeline().pipe(_Mod.TRUNCATE, conf={"count": 1})
 _PARITY_STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 
@@ -110,6 +118,7 @@ _IN_FLIGHT = DEF_CONCURRENCY_LIMIT + 4
 _BLOCK_SECONDS = 8
 _STOP_BOUND = 5
 _BOOM = pytest.raises(ValueError, match="boom")
+_CLEANUP_FAILED = pytest.raises(RuntimeError, match="cleanup failed")
 _A, _BB, _CCC = {"content": "a"}, {"content": "bb"}, {"content": "ccc"}
 _ASSIGNED = [_A, _BB, {"content": "CCC"}]
 _Q_REF = Param(
@@ -119,6 +128,7 @@ _Q_CONF = ItemBuilderRawConf(attrs=_Q_REF)
 _SEP_CONF = TokenizerRawConf(delimiter=ConfArg(type="text", value={"input": "sep"}))
 _Q_DEFAULT = {"type": "integer", "default": 5}
 _INTEGER = {"type": "integer"}
+_CONTENT_ROWS = [{"content": str(index)} for index in range(20)]
 LIFECYCLE_SRC = [{"content": "x"}, {"content": "y"}]
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
@@ -224,12 +234,6 @@ class TestPipelineConstruction:
         assert dict(pipeline.workflow.nodes) == {}
         assert not pipeline.workflow.is_valid
 
-    def test_pipeline_is_generic_over_item_type(self):
-        alias = Pipeline[int]
-
-        assert get_origin(alias) is Pipeline
-        assert get_args(alias) == (int,)
-
     @pytest.mark.parametrize(("make", "match"), _NON_WORKFLOWS)
     def test_non_workflow_positional_rejected(self, make, match):
         value = make()
@@ -249,6 +253,35 @@ def _assert_embed(node):
     assert node.embed["name"] == "tokenizer"
     assert dict(node.embed["conf"]) == {"delimiter": {"type": "text", "value": " "}}
     assert node.options == _OPTIONS
+
+
+OR_REJECTIONS = [
+    pytest.param(lambda p: p | 3, TypeError, "unsupported", id="or"),
+    pytest.param(lambda p: 3 | p, TypeError, "unsupported", id="ror"),
+    pytest.param(lambda p: p | ("sort", {}), TypeError, "tuple", id="pair"),
+    pytest.param(lambda p: p | len, TypeError, r"\.map\(fn\)", id="function"),
+    pytest.param(
+        lambda p: (
+            p.with_resource("db", Resource.from_external(1))
+            | p.with_resource("db", Resource.from_external(2))
+        ),
+        InvalidPipelineError,
+        "different resources",
+        id="resource-clash",
+    ),
+    pytest.param(
+        lambda p: p | p.with_execution(concurrency=2),
+        InvalidPipelineError,
+        "execution settings",
+        id="settings",
+    ),
+    pytest.param(
+        lambda p: p | p.with_context(Context(inputs={"a": 1})),
+        InvalidPipelineError,
+        "not inputs or a test flag",
+        id="context",
+    ),
+]
 
 
 class TestPipelineChaining:
@@ -341,7 +374,7 @@ class TestPipelineChaining:
         pipeline = Pipeline.from_module("sort").with_resource("db", db) | tagged
         assert pipeline.context is not None
         assert dict(pipeline.context.resources) == {"db": db}
-        assert list(pipeline([{"x": 1}])) == [{"x": 1, "db": 7}]
+        assert list(pipeline(X_ROW)) == [{"x": 1, "db": 7}]
 
     def test_a_module_name_after_a_stream_asks_to_compose_first(self):
         with pytest.raises(TypeError, match="compose the pipeline first"):
@@ -354,36 +387,7 @@ class TestPipelineChaining:
         with pytest.raises(AttributeError):
             getattr(Pipeline.from_module("fetch"), name)
 
-    @pytest.mark.parametrize(
-        ("combine", "error", "match"),
-        [
-            pytest.param(lambda p: p | 3, TypeError, "unsupported", id="or"),
-            pytest.param(lambda p: 3 | p, TypeError, "unsupported", id="ror"),
-            pytest.param(lambda p: p | ("sort", {}), TypeError, "tuple", id="pair"),
-            pytest.param(lambda p: p | len, TypeError, r"\.map\(fn\)", id="function"),
-            pytest.param(
-                lambda p: (
-                    p.with_resource("db", Resource.from_external(1))
-                    | p.with_resource("db", Resource.from_external(2))
-                ),
-                InvalidPipelineError,
-                "different resources",
-                id="resource-clash",
-            ),
-            pytest.param(
-                lambda p: p | p.with_execution(concurrency=2),
-                InvalidPipelineError,
-                "execution settings",
-                id="settings",
-            ),
-            pytest.param(
-                lambda p: p | p.with_context(Context(inputs={"a": 1})),
-                InvalidPipelineError,
-                "not inputs or a test flag",
-                id="context",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("combine", "error", "match"), OR_REJECTIONS)
     def test_or_rejects(self, combine, error, match):
         with pytest.raises(error, match=match):
             combine(Pipeline.from_module("fetch"))
@@ -425,9 +429,16 @@ class TestModuleNameEnum:
         assert len(list(pipeline(SRC))) == count
 
 
+ASYNC_MODULE_SEEDS = [
+    pytest.param(lambda: list(X_ROWS), id="sync-iterable"),
+    pytest.param(agen_source, id="async-iterable"),
+    pytest.param(awaitable_source, id="awaitable"),
+]
+
+
 class TestPipelineIteration:
     def test_an_empty_pipeline_streams_its_seed_unchanged(self):
-        assert list(Pipeline()([{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
+        assert list(Pipeline()(X_ROWS)) == list(X_ROWS)
         assert list(Pipeline()({"x": 1})) == [{"x": 1}]
 
     def test_a_dotted_assignment_leaves_the_seed_untouched(self):
@@ -439,13 +450,8 @@ class TestPipelineIteration:
         assert seed == [{"a": {"b": "hi"}}]
 
     def test_a_source_seed_runs_through_a_registered_module(self) -> None:
-        def double(source, **_):
-            return ({"x": item["x"] * 2} for item in source)
-
-        sync_pipe = cast("SyncModuleWrapper", double)
-
-        with registered_modules(ModuleDefinition(name="doubler", sync_pipe=sync_pipe)):
-            pipeline = [{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")
+        with registered_modules(build_sync_definition(double, name="doubler")):
+            pipeline = X_ROWS | Pipeline.from_module("doubler")
             assert list(pipeline) == [{"x": 2}, {"x": 4}]
             assert list(Pipeline().pipe("doubler")([{"x": 10}])) == [{"x": 20}]
 
@@ -456,21 +462,16 @@ class TestPipelineIteration:
         assert tokenized(VALUE).first(default=None) == EXPECTED[0]
 
     def test_iterating_a_split_pipeline_reads_its_first_branch(self):
-        consumed = []
-
-        def source():
-            consumed.append(1)
-            yield {"x": 1}
-
-        pipeline = source() | Pipeline.from_module("split")
+        source = PullLog(X_ROWS[:1])
+        pipeline = source | Pipeline.from_module("split")
         assert list(pipeline) == [{"x": 1}]
-        assert consumed == [1]
+        assert source.pulled == X_ROWS[:1]
 
     def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
         pipeline = tokenized()
 
         with pytest.raises(RuntimeError, match="boom"):
-            list(boom() | Pipeline.from_module("hash"))
+            list(boom() | _HASH)
 
         assert len(list(pipeline)) == 3
 
@@ -492,7 +493,7 @@ class TestPipelineIteration:
             list(Pipeline())
 
     def test_failing_source_propagates(self):
-        pipeline = boom() | Pipeline.from_module("hash")
+        pipeline = boom() | _HASH
 
         with pytest.raises(RuntimeError, match="boom"):
             list(pipeline)
@@ -506,22 +507,10 @@ class TestAsyncPipelineIteration:
 
         assert [item async for item in Pipeline()(seed())] == [{"x": 1}]
 
-    @pytest.mark.parametrize(
-        "make_seed",
-        [
-            pytest.param(lambda: [{"x": 1}, {"x": 2}], id="sync-iterable"),
-            pytest.param(agen_source, id="async-iterable"),
-            pytest.param(awaitable_source, id="awaitable"),
-        ],
-    )
+    @pytest.mark.parametrize("make_seed", ASYNC_MODULE_SEEDS)
     @async_test
     async def test_a_seed_runs_through_a_registered_async_module(self, make_seed):
-        async def adouble(source, **_):
-            async for item in source:
-                yield {"x": item["x"] * 2}
-
-        async_pipe = cast("AsyncModuleWrapper", adouble)
-        definition = ModuleDefinition(name="adoubler", async_pipe=async_pipe)
+        definition = build_async_definition(adouble, name="adoubler")
 
         with registered_modules(definition):
             pipeline = make_seed() | Pipeline.from_module("adoubler")
@@ -539,15 +528,10 @@ class TestAsyncPipelineIteration:
 
     @async_test
     async def test_async_iterating_a_split_pipeline_reads_its_first_branch(self):
-        consumed = []
-
-        def source():
-            consumed.append(1)
-            yield {"x": 1}
-
-        pipeline = source() | Pipeline.from_module("split")
+        source = PullLog(X_ROWS[:1])
+        pipeline = source | Pipeline.from_module("split")
         assert [item async for item in pipeline] == [{"x": 1}]
-        assert consumed == [1]
+        assert source.pulled == X_ROWS[:1]
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
@@ -577,7 +561,7 @@ class TestOutputParity:
         sync_result, async_result = _both(build)
         expected = ["a", "bb", "ccc"]
         assert sync_result == async_result
-        assert [item.get("content") for item in sync_result] == expected
+        assert get_values(sync_result, "content") == expected
         assert all("h" in item for item in sync_result)
 
 
@@ -587,7 +571,7 @@ RERUNNABLE = [
 ]
 
 
-class TestReiteration:
+class TestPipelineReiteration:
     @pytest.mark.parametrize("build", RERUNNABLE)
     def test_pipeline_replays(self, build):
         pipeline = build()
@@ -596,9 +580,8 @@ class TestReiteration:
         assert len(list(pipeline)) == len(first)
 
     def test_a_generator_seed_reruns_when_handed_a_fresh_seed(self):
-        pipeline = Pipeline.from_module("hash")
-        assert len(list(pipeline(item for item in LIFECYCLE_SRC))) == len(LIFECYCLE_SRC)
-        assert len(list(pipeline(item for item in LIFECYCLE_SRC))) == len(LIFECYCLE_SRC)
+        assert len(list(_HASH(item for item in LIFECYCLE_SRC))) == len(LIFECYCLE_SRC)
+        assert len(list(_HASH(item for item in LIFECYCLE_SRC))) == len(LIFECYCLE_SRC)
 
     def test_chaining_after_a_run_builds_a_fresh_run(self):
         pipeline = tokenized()
@@ -613,7 +596,7 @@ class TestReiteration:
         assert len(list(pipeline)) == 3
 
 
-class TestAsyncReiteration:
+class TestAsyncPipelineReiteration:
     @async_test
     @pytest.mark.parametrize("build", RERUNNABLE)
     async def test_pipeline_replays(self, build):
@@ -624,9 +607,8 @@ class TestAsyncReiteration:
 
     @async_test
     async def test_a_generator_seed_reruns_when_handed_a_fresh_seed(self):
-        pipeline = Pipeline.from_module("hash")
-        first = [item async for item in pipeline(as_async(LIFECYCLE_SRC))]
-        second = [item async for item in pipeline(as_async(LIFECYCLE_SRC))]
+        first = [item async for item in _HASH(as_async(LIFECYCLE_SRC))]
+        second = [item async for item in _HASH(as_async(LIFECYCLE_SRC))]
         assert len(first) == len(second) == len(LIFECYCLE_SRC)
 
     @async_test
@@ -649,9 +631,7 @@ def probe_log():
         finally:
             log.append("closed")
 
-    sync_pipe = cast("SyncModuleWrapper", probe)
-
-    with registered_modules(ModuleDefinition(name="probe", sync_pipe=sync_pipe)):
+    with registered_modules(build_sync_definition(probe, name="probe")):
         yield log
 
 
@@ -664,15 +644,10 @@ CLOSING_SEEDS = [
 
 class TestClose:
     def test_close_before_the_first_item_never_runs_the_source(self):
-        ran: list[int] = []
-
-        def source():
-            ran.append(1)
-            yield {"content": "x"}
-
-        stream = Pipeline.from_module("hash")(source())
+        seed = iter(X_ROWS)
+        stream = _HASH(seed)
         stream.close()
-        assert ran == []
+        assert tuple(seed) == X_ROWS
 
     @pytest.mark.parametrize("build", RERUNNABLE)
     def test_close_is_idempotent(self, build):
@@ -682,51 +657,29 @@ class TestClose:
         assert list(stream) == []
 
     def test_early_close_stops_a_partially_consumed_run(self):
-        consumed: list[int] = []
-        closed: list[bool] = []
-
-        def source():
-            try:
-                for index in range(20):
-                    consumed.append(index)
-                    yield {"content": str(index)}
-            finally:
-                closed.append(True)
-
-        stream = Pipeline.from_module("hash")(source())
+        source = PullLog(_CONTENT_ROWS)
+        stream = _HASH(source)
         assert next(stream)
         stream.close()
-        assert len(consumed) < 20
-        assert closed == [True]
+        assert len(source.pulled) < 20
+        assert source.closes == 1
 
     def test_early_close_closes_an_upstream_node(self) -> None:
-        # The source stays referenced, and the relay reads it with a plain ``for``
-        # loop, so only the run's own close can end it.
-        closed: list[bool] = []
-        sources: list[Stream] = []
-
-        def gen():
-            try:
-                yield {"x": 1}
-                yield {"x": 2}
-            finally:
-                closed.append(True)
+        # The relay reads the source with a plain ``for`` loop, so only the run's own
+        # close can end it.
+        source = PullLog(X_ROWS)
 
         @tag_source
         def src(_items=None, **_):
-            sources.append(gen())
-            return sources[-1]
+            return source
 
-        definitions = (
-            ModuleDefinition(name="itersrc2", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        definitions = (build_sync_definition(src, name="itersrc2"), RELAY_DEFINITION)
 
         with registered_modules(*definitions):
             stream = Pipeline.from_module("itersrc2").pipe("relay")()
             assert next(stream) == {"x": 1}
             stream.close()
-            assert closed == [True]
+            assert source.closes == 1
 
     def test_break_inside_open_closes_the_run_on_leaving_the_block(self, probe_log):
         with Pipeline.from_module("probe").open(SRC) as stream:
@@ -748,7 +701,7 @@ class TestClose:
             finally:
                 closed.append(True)
 
-        with Pipeline.from_module("hash").open(source()) as stream:
+        with _HASH.open(source()) as stream:
             assert next(stream)
             assert closed == []
 
@@ -758,35 +711,29 @@ class TestClose:
     def test_leaving_open_closes_a_closable_async_iterator_seed(self):
         closed: list[str] = []
 
-        with Pipeline.from_module("hash").open(ClosingAsyncIterator(closed)) as stream:
+        with _HASH.open(ClosingAsyncIterator(closed)) as stream:
             assert next(stream)
             assert closed == []
 
         assert closed == ["closed"]
 
     def test_concurrent_open_runs_are_independent(self):
-        pipeline = Pipeline.from_module("hash")
 
-        with pipeline.open(SRC) as left, pipeline.open(SRC[::-1]) as right:
+        with _HASH.open(SRC) as left, _HASH.open(SRC[::-1]) as right:
             pairs = [(next(left), next(right)) for _ in SRC]
 
         lefts, rights = zip(*pairs, strict=True)
-        assert [item["content"] for item in lefts] == ["a", "b", "c"]
-        assert [item["content"] for item in rights] == ["c", "b", "a"]
+        assert get_values(lefts, "content") == ["a", "b", "c"]
+        assert get_values(rights, "content") == ["c", "b", "a"]
 
 
 class TestAsyncClose:
     @async_test
     async def test_close_before_the_first_item_never_runs_the_source(self):
-        ran: list[int] = []
-
-        async def source():
-            ran.append(1)
-            yield {"content": "x"}
-
-        stream = Pipeline.from_module("hash")(source())
+        source = AsyncPullLog(X_ROWS)
+        stream = _HASH(source)
         await stream.aclose()
-        assert ran == []
+        assert source.pulled == ()
 
     @async_test
     @pytest.mark.parametrize("build", RERUNNABLE)
@@ -798,28 +745,18 @@ class TestAsyncClose:
 
     @async_test
     async def test_early_close_stops_a_partially_consumed_run(self):
-        consumed: list[int] = []
-        closed: list[bool] = []
-
-        async def source():
-            try:
-                for index in range(20):
-                    consumed.append(index)
-                    yield {"content": str(index)}
-            finally:
-                closed.append(True)
-
-        stream = Pipeline.from_module("hash")(source())
+        source = AsyncPullLog(_CONTENT_ROWS)
+        stream = _HASH(source)
         assert await anext(stream)
         await stream.aclose()
-        assert len(consumed) < 20
-        assert closed == [True]
+        assert len(source.pulled) < 20
+        assert source.closes == 1
 
     @async_test
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     async def test_early_close_closes_the_seed(self, make_seed):
         closed: list[str] = []
-        stream = Pipeline.from_module("hash")(make_seed(closed))
+        stream = _HASH(make_seed(closed))
         assert await anext(stream)
         assert closed == []
         await stream.aclose()
@@ -827,21 +764,16 @@ class TestAsyncClose:
 
     @async_test
     async def test_afirst_closes_its_run_before_returning(self):
-        consumed: list[int] = []
-
-        async def source():
-            for index in range(20):
-                consumed.append(index)
-                yield {"content": str(index)}
+        source = AsyncPullLog(_CONTENT_ROWS)
 
         with fail_after(1):
             hashed = Pipeline[dict[str, object]].from_module("hash")
-            first = await hashed.afirst(source())
+            first = await hashed.afirst(source)
             gc.collect()
             await checkpoint()
 
         assert first["content"] == "0"
-        assert len(consumed) < 20
+        assert len(source.pulled) < 20
 
     @async_test
     async def test_break_inside_open_closes_the_run_in_the_opening_task(self):
@@ -855,7 +787,7 @@ class TestAsyncClose:
                 closed.append(True)
 
         with fail_after(1):
-            async with Pipeline.from_module("hash").open(seed()) as stream:
+            async with _HASH.open(seed()) as stream:
                 async for _ in stream:
                     break
 
@@ -869,14 +801,13 @@ class TestAsyncClose:
 
     @async_test
     async def test_concurrent_open_runs_are_independent(self):
-        pipeline = Pipeline.from_module("hash")
 
-        async with pipeline.open(SRC) as left, pipeline.open(SRC[::-1]) as right:
+        async with _HASH.open(SRC) as left, _HASH.open(SRC[::-1]) as right:
             pairs = [(await anext(left), await anext(right)) for _ in SRC]
 
         lefts, rights = zip(*pairs, strict=True)
-        assert [item["content"] for item in lefts] == ["a", "b", "c"]
-        assert [item["content"] for item in rights] == ["c", "b", "a"]
+        assert get_values(lefts, "content") == ["a", "b", "c"]
+        assert get_values(rights, "content") == ["c", "b", "a"]
 
 
 async def _coro_source():
@@ -906,7 +837,7 @@ class TestAsyncSourceAdapter:
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     @async_test
     async def test_source_iterates_and_acloses_without_error(self, make_source):
-        stream = make_source() | Pipeline.from_module("hash")
+        stream = make_source() | _HASH
         items = [item async for item in stream]
         await stream.aclose()
         assert len(items) == len(LIFECYCLE_SRC)
@@ -914,7 +845,7 @@ class TestAsyncSourceAdapter:
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
     @async_test
     async def test_source_failure_propagates(self, make_source):
-        pipeline = make_source() | Pipeline.from_module("hash")
+        pipeline = make_source() | _HASH
 
         with pytest.raises(RuntimeError, match="boom"):
             _ = [item async for item in pipeline]
@@ -981,7 +912,7 @@ class TestAsyncMap:
             await async_map(_fail, range(3), limit=limit)
 
 
-class TestFanIn:
+class TestPipelineFanIn:
     @pytest.mark.smoke
     def test_fan_in_merges_every_source(self):
         one = len(list(fanned_in_fetches(_FEED)))
@@ -996,7 +927,7 @@ class TestFanIn:
         assert len(list(merged)) == len(list(fanned_in_fetches(_FEED, _FEED)))
 
 
-class TestAsyncFanIn:
+class TestAsyncPipelineFanIn:
     @pytest.mark.smoke
     @async_test
     async def test_fan_in_merges_every_source(self):
@@ -1006,6 +937,38 @@ class TestAsyncFanIn:
         both = len([item async for item in doubled])
         assert one
         assert both == 2 * one
+
+
+EXECUTOR_SPELLINGS = [
+    pytest.param("thread", Executor.THREAD, id="thread-string"),
+    pytest.param("inline", Executor.INLINE, id="inline-string"),
+    pytest.param(Executor.PROCESS, Executor.PROCESS, id="process-member"),
+    pytest.param(Executor.AUTO, Executor.AUTO, id="auto-member"),
+]
+RESETTABLE_SETTINGS = [
+    pytest.param("executor", "thread", id="executor"),
+    pytest.param("concurrency", 4, id="concurrency"),
+    pytest.param("ordered", True, id="ordered"),
+    pytest.param("event_sink", RecordingSink(), id="event-sink"),
+    pytest.param("shutdown_timeout", 2.5, id="shutdown-timeout"),
+]
+INVALID_SETTINGS = [
+    pytest.param(
+        {"executor": "gpu"},
+        ValueError,
+        "'gpu'. Expected one of auto, inline",
+        id="unknown-executor",
+    ),
+    pytest.param({"concurrency": 0}, ValueError, None, id="zero-concurrency"),
+    pytest.param({"concurrency": "4"}, TypeError, None, id="string-concurrency"),
+    pytest.param({"concurrency": "max"}, TypeError, None, id="named-concurrency"),
+    pytest.param(
+        {"concurrency": True}, TypeError, "must be an int", id="bool-concurrency"
+    ),
+    pytest.param({"ordered": "yes"}, TypeError, None, id="string-ordered"),
+    pytest.param({"shutdown_timeout": -1}, ValueError, None, id="negative-timeout"),
+    pytest.param({"shutdown_timeout": nan}, ValueError, None, id="nan-timeout"),
+]
 
 
 class TestWithExecution:
@@ -1038,15 +1001,7 @@ class TestWithExecution:
         ]
         assert all(each.settings.concurrency == 4 for each in chained)
 
-    @pytest.mark.parametrize(
-        ("executor", "expected"),
-        [
-            ("thread", Executor.THREAD),
-            ("inline", Executor.INLINE),
-            (Executor.PROCESS, Executor.PROCESS),
-            (Executor.AUTO, Executor.AUTO),
-        ],
-    )
+    @pytest.mark.parametrize(("executor", "expected"), EXECUTOR_SPELLINGS)
     def test_executor_accepts_strings_and_members(self, executor, expected):
         pipeline = Pipeline.from_module("fetch").with_execution(executor=executor)
         assert pipeline.settings.executor is expected
@@ -1068,16 +1023,7 @@ class TestWithExecution:
         assert pipeline.settings.shutdown_timeout == pytest.approx(2.5)
         assert pipeline.with_execution().settings == pipeline.settings
 
-    @pytest.mark.parametrize(
-        ("name", "value"),
-        [
-            ("executor", "thread"),
-            ("concurrency", 4),
-            ("ordered", True),
-            ("event_sink", RecordingSink()),
-            ("shutdown_timeout", 2.5),
-        ],
-    )
+    @pytest.mark.parametrize(("name", "value"), RESETTABLE_SETTINGS)
     def test_explicit_none_restores_the_default(self, name, value):
         kwargs = {"executor": "process", "concurrency": 8, name: value}
         pipeline = Pipeline.from_module("fetch").with_execution(**kwargs)
@@ -1088,19 +1034,7 @@ class TestWithExecution:
             assert reset.settings.executor is Executor.PROCESS
             assert reset.settings.concurrency == 8
 
-    @pytest.mark.parametrize(
-        ("kwargs", "error", "match"),
-        [
-            ({"executor": "gpu"}, ValueError, "'gpu'. Expected one of auto, inline"),
-            ({"concurrency": 0}, ValueError, None),
-            ({"concurrency": "4"}, TypeError, None),
-            ({"concurrency": "max"}, TypeError, None),
-            ({"concurrency": True}, TypeError, "must be an int"),
-            ({"ordered": "yes"}, TypeError, None),
-            ({"shutdown_timeout": -1}, ValueError, None),
-            ({"shutdown_timeout": float("nan")}, ValueError, None),
-        ],
-    )
+    @pytest.mark.parametrize(("kwargs", "error", "match"), INVALID_SETTINGS)
     def test_invalid_settings_raise_at_call_time(self, kwargs, error, match):
         with pytest.raises(error, match=match):
             Pipeline.from_module("fetch").with_execution(**kwargs)
@@ -1131,6 +1065,27 @@ def _wait_or_block(item):
     return item
 
 
+PARALLEL_BUILDS = [
+    pytest.param(lambda: tokenized(VALUE), None, id="module-source"),
+    pytest.param(Pipeline, SRC, id="seed"),
+]
+ORDERED_RUNS = [
+    pytest.param(
+        lambda: tokenized(VALUE),
+        None,
+        {"concurrency": 4, "ordered": True},
+        get_values(EXPECTED, "content"),
+        id="ordered",
+    ),
+    pytest.param(Pipeline, SRC, {}, ["a", "b", "c"], id="no-settings"),
+    pytest.param(
+        Pipeline,
+        SRC,
+        {"executor": "inline", "concurrency": 4},
+        ["a", "b", "c"],
+        id="inline",
+    ),
+]
 _STOPPED_RUNS = [
     pytest.param("block", "pass", None, nullcontext(), id="early-close"),
     pytest.param("block", "fail", None, _BOOM, id="failing-sibling"),
@@ -1141,13 +1096,7 @@ _STOPPED_RUNS = [
 class TestExecutionSettings:
     """Run-wide settings: concurrency, ordering, and where per-item work runs."""
 
-    @pytest.mark.parametrize(
-        ("build", "seed"),
-        [
-            pytest.param(lambda: tokenized(VALUE), None, id="module-source"),
-            pytest.param(Pipeline, SRC, id="seed"),
-        ],
-    )
+    @pytest.mark.parametrize(("build", "seed"), PARALLEL_BUILDS)
     def test_parallel_matches_sequential_as_multiset(self, build, seed):
         pipeline = build().hash(options={"assign": "h"})
         sequential = list(pipeline(seed))
@@ -1155,34 +1104,15 @@ class TestExecutionSettings:
         assert len(parallel) == len(sequential) == 3
         assert _by_content(parallel) == _by_content(sequential)
 
-    @pytest.mark.parametrize(
-        ("build", "seed", "settings", "expected"),
-        [
-            pytest.param(
-                lambda: tokenized(VALUE),
-                None,
-                {"concurrency": 4, "ordered": True},
-                [item["content"] for item in EXPECTED],
-                id="ordered",
-            ),
-            pytest.param(Pipeline, SRC, {}, ["a", "b", "c"], id="no-settings"),
-            pytest.param(
-                Pipeline,
-                SRC,
-                {"executor": "inline", "concurrency": 4},
-                ["a", "b", "c"],
-                id="inline",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("build", "seed", "settings", "expected"), ORDERED_RUNS)
     def test_preserves_source_order(self, build, seed, settings, expected):
         pipeline = build().hash(options={"assign": "h"}).with_execution(**settings)
-        assert [item["content"] for item in pipeline(seed)] == expected
+        assert get_values(pipeline(seed), "content") == expected
 
     @pytest.mark.timeout(5)
     @pytest.mark.parametrize("executor", ["inline", "thread", "process"])
     def test_every_executor_produces_the_same_items(self, executor):
-        pipeline = Pipeline().hash(options={"assign": "h"})
+        pipeline = HASHED
         executed = list(pipeline.with_execution(executor=executor)(SRC))
         assert _by_content(executed) == _by_content(pipeline(SRC))
 
@@ -1220,8 +1150,7 @@ class TestExecutionSettings:
         unpicklable = Resource.from_external(SimpleNamespace(fn=lambda: None))
         mapped = Pipeline().map(dict).with_resource("lock", unpicklable)
         pipeline = mapped.with_execution(executor="process", concurrency=2)
-        items = [{"x": 1}, {"x": 2}]
-        assert sorted(pipeline(items), key=itemgetter("x")) == items
+        assert sorted(pipeline(X_ROWS), key=itemgetter("x")) == list(X_ROWS)
 
     @pytest.mark.slow
     @pytest.mark.timeout(5)
@@ -1230,7 +1159,7 @@ class TestExecutionSettings:
         pipeline = mapped.with_execution(executor="process", concurrency=2)
 
         with pytest.raises(BrokenProcessPool):
-            list(pipeline([{"x": 1}, {"x": 2}]))
+            list(pipeline(X_ROWS))
 
     def test_a_none_shutdown_timeout_raises(self) -> None:
         # ``with_execution`` turns ``None`` into the default, so only direct
@@ -1260,20 +1189,13 @@ class TestAsyncBoundedParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_bounded_source_is_not_fully_drained(self, ordered):
-        consumed: list[int] = []
-
-        async def tracking():
-            for index in range(20):
-                consumed.append(index)
-                yield {"content": str(index)}
-
-        hashed = Pipeline.from_module("hash")
-        pipeline = hashed.with_execution(concurrency=2, ordered=ordered)
-        stream = pipeline(tracking())
+        source = AsyncPullLog(_CONTENT_ROWS)
+        pipeline = _HASH.with_execution(concurrency=2, ordered=ordered)
+        stream = pipeline(source)
         first = await anext(stream)
         await stream.aclose()
         assert first.get("content") in {str(index) for index in range(20)}
-        assert len(consumed) < 20
+        assert len(source.pulled) < 20
 
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
@@ -1291,8 +1213,7 @@ class TestAsyncBoundedParallel:
             finally:
                 closed.append(True)
 
-        hashed = Pipeline.from_module("hash")
-        pipeline = hashed.with_execution(concurrency=2, ordered=ordered)
+        pipeline = _HASH.with_execution(concurrency=2, ordered=ordered)
         stream = pipeline(unbounded())
         first = await anext(stream)
         await stream.aclose()
@@ -1305,16 +1226,15 @@ def _fanned_in(names: tuple[str, ...]) -> Pipeline[dict[str, str]]:
     branches = [
         ModuleNode(id=f"b{index}", name=name) for index, name in enumerate(names)
     ]
-    union = ModuleNode(id="u", name="union")
     ports = ["in" if index == 0 else f"in:{index}" for index in range(len(names))]
     edges = tuple(
-        StreamEdge(Endpoint(branch.id, "out"), Endpoint(union.id, port))
+        StreamEdge(Endpoint(branch.id, "out"), Endpoint(UNION_NODE.id, port))
         for branch, port in zip(branches, ports, strict=True)
     )
     flow = Workflow(
-        nodes=[*branches, union],
+        nodes=[*branches, UNION_NODE],
         edges=edges,
-        outputs={"default": Endpoint(union.id, "out")},
+        outputs={"default": Endpoint(UNION_NODE.id, "out")},
         input_schemas={},
     )
     return Pipeline[dict[str, str]](flow)
@@ -1335,8 +1255,9 @@ def branch_log():
 
         return branch
 
-    pipes = {name: cast("AsyncModuleWrapper", build_branch(name)) for name in BRANCHES}
-    definitions = [ModuleDefinition(name=n, async_pipe=p) for n, p in pipes.items()]
+    definitions = [
+        build_async_definition(build_branch(name), name=name) for name in BRANCHES
+    ]
 
     with registered_modules(*definitions):
         yield log
@@ -1344,7 +1265,7 @@ def branch_log():
 
 @pytest.mark.slow
 @skipif_sync
-class TestAsyncFanInParallel:
+class TestAsyncPipelineFanInParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_fan_in_yields_every_branch(self, branch_log, ordered):
@@ -1459,7 +1380,7 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    @pytest.mark.parametrize("name", ["_inputs", "_resources", "extra"])
+    @pytest.mark.parametrize("name", ["inputs", "resources"])
     def test_private_fields_cannot_be_set(self, name: str):
         context = Context()
 
@@ -1538,6 +1459,10 @@ class TestResource:
             Resource.from_factory(factory, cleanup=False)
 
 
+def _open_db() -> Generator[str]:
+    yield "conn"
+
+
 def _reader_workflow() -> Workflow:
     """Builds a one-node workflow whose module declares a ``primary`` resource."""
     node = ModuleNode(id="n", name=READER, resources={"slot": "primary"})
@@ -1556,13 +1481,11 @@ def reader():
     def read(_items=None, **kwargs):
         yield {"got": kwargs["resources"]["slot"]}
 
-    sync_pipe = cast("SyncModuleWrapper", read)
-
-    with registered_modules(ModuleDefinition(name=READER, sync_pipe=sync_pipe)):
+    with registered_modules(build_sync_definition(read, name=READER)):
         yield READER
 
 
-class TestEnvironmentBinding:
+class TestPipelineEnvironmentBinding:
     def test_with_context_derives_without_changing_the_original(self):
         context = Context(inputs={"limit": 5})
         base = Pipeline.from_module("fetch")
@@ -1579,29 +1502,20 @@ class TestEnvironmentBinding:
         assert base.workflow.input_schemas == {"feed": {"type": "string"}}
 
     def test_with_resource_extends_the_bound_context(self):
-        def open_db():
-            yield "conn"
-
         context = Context(inputs={"limit": 5})
         base = Pipeline.from_module("fetch").with_context(context)
-        pipeline = base.with_resource("db", open_db)
+        pipeline = base.with_resource("db", _open_db)
         assert pipeline.context is not None
         assert pipeline.context.inputs == context.inputs
         assert sorted(pipeline.context.resources) == ["db"]
         assert dict(context.resources) == {}
 
     def test_bound_resource_reaches_the_module(self, reader):
-        def open_db():
-            yield "conn"
-
-        pipeline = Pipeline(_reader_workflow()).with_resource("primary", open_db)
+        pipeline = Pipeline(_reader_workflow()).with_resource("primary", _open_db)
         assert list(pipeline) == [{"got": "conn"}]
 
     def test_with_resource_rejects_factory_options_on_a_resource(self):
-        def open_db():
-            yield "conn"
-
-        pipeline = Pipeline.from_module("fetch").with_resource("db", open_db)
+        pipeline = Pipeline.from_module("fetch").with_resource("db", _open_db)
         assert pipeline.context is not None
         resource = pipeline.context.resources["db"]
 
@@ -1669,20 +1583,17 @@ class TestWorkflowInputs:
         assert entered == []
 
 
-class TestAsyncEnvironmentBinding:
+class TestAsyncPipelineEnvironmentBinding:
     @async_test
     async def test_bound_resource_reaches_the_module_async(self, reader):
-        def open_db():
-            yield "conn"
-
         pipeline = Pipeline(_reader_workflow()).with_context(
-            Context().with_resource("primary", open_db)
+            Context().with_resource("primary", _open_db)
         )
         assert [item async for item in pipeline] == [{"got": "conn"}]
 
 
 @PUBSUB_PENDING
-class TestSubscriptions:
+class TestPipelineSubscriptions:
     """Named local subscriptions fed by a publishing pipeline."""
 
     def test_published_items_interleave_with_the_sender(self):
@@ -1753,25 +1664,19 @@ class TestSplit:
         assert right.first() == EXPECTED[0]
 
     def test_reading_a_branch_past_the_split_count_fails_before_reading(self):
-        consumed = []
-
-        def source():
-            consumed.append(1)
-            yield {"x": 1}
-
+        seed = iter(X_ROWS)
         node = ModuleNode(id="split-1", name="split", conf={"splits": 2})
         outputs = {"default": Endpoint("split-1", "out:2")}
         pipeline = Pipeline(Workflow(nodes=[node], outputs=outputs))
 
         with pytest.raises(InvalidPipelineError, match="no output port 'out:2'"):
-            list(pipeline(source()))
+            list(pipeline(seed))
 
-        assert consumed == []
+        assert tuple(seed) == X_ROWS
 
     def test_split_records_its_count_and_isolation_in_the_node_conf(self):
         shared, *_ = Pipeline().split(3, isolate=False)
-        node = shared.workflow.nodes["split-1"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(shared.workflow, "split-1")
         assert dict(node.conf) == {"splits": 3, "isolate": False}
 
     @pytest.mark.parametrize(("splits", "match"), _BAD_SPLITS)
@@ -1780,22 +1685,16 @@ class TestSplit:
             Pipeline().split(splits)  # pyright: ignore[reportArgumentType]
 
     @UNION_PENDING
-    def test_upstream_node_runs_once_for_every_branch(self):
-        consumed: list[int] = []
-
-        def source():
-            for index in range(3):
-                consumed.append(index)
-                yield {"content": str(index)}
-
-        left, right = Pipeline.from_module("hash").split(2)
+    def test_union_of_split_branches_reads_the_upstream_once(self):
+        source = PullLog(_CONTENT_ROWS[:3])
+        left, right = _HASH.split(2)
         merged = Pipeline.union(left, right)  # pyright: ignore[reportAttributeAccessIssue]
-        assert len(list(merged(source()))) == 6
-        assert len(consumed) == 3
+        assert len(list(merged(source))) == 6
+        assert source.pulled == tuple(_CONTENT_ROWS[:3])
 
 
 @PREDICATE_PENDING
-class TestConditionalNodes:
+class TestPipelineConditionalNodes:
     """A node gated on a per-item predicate rather than applied to every item."""
 
     def test_a_gated_node_runs_only_for_matching_items(self):
@@ -1806,11 +1705,11 @@ class TestConditionalNodes:
             options={"assign": "rate"},
             skip_if=lambda item: item.get("kind") != "hourly",
         )
-        assert [item.get("rate") for item in pipeline(items)] == ["$1 / hr", "$1"]
+        assert get_values(pipeline(items), "rate") == ["$1 / hr", "$1"]
 
 
-def _first_in_open(pipeline: Pipeline) -> object:
-    with pipeline.open() as stream:
+def _first_in_open(pipeline: Pipeline, seed: Items | None = None) -> object:
+    with pipeline.open(seed) as stream:
         item = next(stream)
 
     return item
@@ -1827,9 +1726,8 @@ class TestPipelineSeeding:
     """A run takes its seed per call; one whose first node needs input requires it."""
 
     def test_ror_on_a_stream_seeds_a_run(self):
-        hashed = Pipeline.from_module("hash")
         counted = Pipeline.from_module("count")
-        assert list(hashed(SRC) | counted) == [{"count": 3}]
+        assert list(_HASH(SRC) | counted) == [{"count": 3}]
 
     @pytest.mark.parametrize("run", UNSEEDED_RUNS)
     def test_an_unseeded_pipeline_requires_a_seed(self, run):
@@ -1860,9 +1758,65 @@ def _start_and_drop(pipeline: Pipeline) -> None:
     next(stream)
 
 
+def _gen_failing_cleanup() -> Generator[Item]:
+    """Yields ``SRC``, then fails while closing."""
+    try:
+        yield from SRC
+    finally:
+        raise RuntimeError("cleanup failed")
+
+
+def _fail_cleanup(_value: object) -> None:
+    raise RuntimeError("cleanup failed")
+
+
+def _fail_in_open(pipeline: Pipeline, seed: Items) -> None:
+    with pipeline.open(seed) as stream:
+        assert next(stream)
+        raise ValueError("body")
+
+
+async def _afail_in_open(pipeline: Pipeline, seed: Items) -> None:
+    async with pipeline.open(seed) as stream:
+        assert await anext(stream)
+        raise ValueError("body")
+
+
+def _gen_contexts(error: BaseException | None) -> Generator[BaseException]:
+    while error is not None:
+        yield error
+        error = error.__context__
+
+
+FAILING_CLEANUPS = [
+    pytest.param(
+        Pipeline()
+        .map(_tag_db, resources=["db"])
+        .with_resource("db", Resource.from_factory(lambda: 7, cleanup=_fail_cleanup)),
+        lambda: SRC,
+        id="resource",
+    ),
+    pytest.param(Pipeline(), _gen_failing_cleanup, id="source"),
+]
+
 FINISHES = [
     pytest.param(list, id="finished"),
     pytest.param(methodcaller("close"), id="closed"),
+]
+
+
+ABANDONED_ASYNC_RUNS = [
+    pytest.param(_HASH, id="ordered"),
+    pytest.param(
+        _HASH.with_execution(concurrency=2, ordered=False),
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=RuntimeError,
+            reason="abandoning an unordered async run without cancelling the caller "
+            "is not yet implemented",
+        ),
+        id="unordered",
+    ),
 ]
 
 
@@ -1884,11 +1838,11 @@ class TestPipelineStream:
 
     def test_dropping_a_started_unclosed_stream_warns(self):
         with pytest.warns(ResourceWarning, match="unclosed pipeline run"):
-            _start_and_drop(Pipeline.from_module("hash"))
+            _start_and_drop(_HASH)
 
     @pytest.mark.parametrize("finish", FINISHES)
     def test_dropping_a_finished_or_closed_stream_does_not_warn(self, finish):
-        stream = Pipeline.from_module("hash")(SRC)
+        stream = _HASH(SRC)
         assert next(stream)
         finish(stream)
 
@@ -1898,6 +1852,33 @@ class TestPipelineStream:
             gc.collect()
 
         assert not any(map(_is_unclosed_run_warning, caught))
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_a_failed_close_still_finishes_the_run(self, pipeline, seed):
+        stream = pipeline(seed())
+        assert next(stream)
+
+        with _CLEANUP_FAILED:
+            stream.close()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            del stream
+            gc.collect()
+
+        assert not any(map(_is_unclosed_run_warning, caught))
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_leaving_open_early_raises_a_failed_cleanup(self, pipeline, seed):
+        with _CLEANUP_FAILED:
+            _first_in_open(pipeline, seed())
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_a_failed_cleanup_replaces_the_with_block_error(self, pipeline, seed):
+        with pytest.raises(RuntimeError, match="cleanup failed") as info:
+            _fail_in_open(pipeline, seed())
+
+        assert ValueError in map(type, _gen_contexts(info.value))
 
     def test_with_on_a_stream_points_at_open(self):
         stream = Pipeline()(SRC)
@@ -1914,14 +1895,32 @@ class TestAsyncPipelineStream:
         assert [item async for item in stream] == []
         assert await anext(stream, None) is None
 
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
     @async_test
-    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
+    async def test_a_failed_aclose_still_finishes_the_run(self, pipeline, seed):
+        stream = pipeline(seed())
+        assert await anext(stream)
+
+        with _CLEANUP_FAILED:
+            await stream.aclose()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            del stream
+            gc.collect()
+
+        assert not any(map(_is_unclosed_run_warning, caught))
+
+    @QUIET_LEAKS
+    @pytest.mark.parametrize("pipeline", ABANDONED_ASYNC_RUNS)
+    @async_test
+    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self, pipeline):
         source = [{"content": str(index)} for index in range(5)]
 
         with fail_after(1), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
-            async for _ in source | Pipeline.from_module("hash"):
+            async for _ in source | pipeline:
                 break
 
             gc.collect()
@@ -1933,9 +1932,8 @@ class TestAsyncPipelineStream:
 
     @async_test
     async def test_mixing_sync_and_async_iteration_raises(self):
-        pipeline = Pipeline.from_module("hash")
-        sync_stream = pipeline(SRC)
-        async_stream = pipeline(SRC)
+        sync_stream = _HASH(SRC)
+        async_stream = _HASH(SRC)
         assert next(sync_stream)
         assert await anext(async_stream)
 
@@ -1950,6 +1948,23 @@ class TestAsyncPipelineStream:
 
         await sync_stream.aclose()
         await async_stream.aclose()
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    @async_test
+    async def test_leaving_async_open_early_raises_a_failed_cleanup(
+        self, pipeline, seed
+    ):
+        with _CLEANUP_FAILED:
+            async with pipeline.open(seed()) as stream:
+                assert await anext(stream)
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    @async_test
+    async def test_a_failed_cleanup_replaces_the_async_with_block_error(
+        self, pipeline, seed
+    ):
+        with _CLEANUP_FAILED:
+            await _afail_in_open(pipeline, seed())
 
     @async_test
     async def test_async_with_on_a_stream_points_at_open(self):

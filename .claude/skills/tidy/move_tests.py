@@ -10,7 +10,7 @@ Usage:
     python .claude/skills/tidy/move_tests.py --sort SPEC [SPEC ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --delete SPEC [SPEC ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --drop-row path::TABLE ID [ID ...]
-    python .claude/skills/tidy/move_tests.py --place path::NAME [...] --above CLASS
+    python .claude/skills/tidy/move_tests.py --place path::NAME [...] --above NAME
     python .claude/skills/tidy/move_tests.py --place-leads FILE [FILE ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --plan-split FILE
 
@@ -18,7 +18,8 @@ Usage:
 method). ``DEST`` is ``path`` for classes, ``path::Class`` for methods, which are
 appended to the end of that class. ``--before CLASS`` places moved classes above
 ``CLASS`` in ``DEST`` instead of at the end; ``--rename`` renames a single moved
-class (or method).
+class (or method). A whole class whose ``DEST`` is its own file is renamed in place
+instead of moved (see below).
 
 What moves with a spec:
 
@@ -45,7 +46,9 @@ Modes:
   tests, rejection tests (a ``pytest.raises`` with no assertion outside it but
   about the error it binds), then strict-xfail tripwires (a ``strict=True``
   xfail decorator or a module-level marker holding one). The order within each
-  group is kept, and the heuristic classification is printed; ``--kind
+  group is kept, and the heuristic classification is printed. A behavior test
+  whose sync/async twin in the same file is a rejection sorts as a rejection
+  too, as ``overlap_scan.py`` reads it. ``--kind
   TEST=KIND`` (repeatable) reclassifies a misfiled test as ``behavior``,
   ``rejection``, or ``tripwire``.
 
@@ -54,12 +57,13 @@ Modes:
 - ``--drop-row`` removes the ``pytest.param(..., id=ID)`` rows from the
   module-level table ``TABLE``.
 - ``--place`` moves module-level helpers of one file (with their leading
-  comments and trailing ``name.attr = ...`` lines) directly above ``CLASS``, in
-  source order.
+  comments and trailing ``name.attr = ...`` lines) directly above ``NAME`` (a class
+  or another module-level helper), in source order.
 - ``--place-leads`` applies ``overlap_scan.py``'s placement leads to each FILE:
   every helper with one user class moves directly above it (above the sync class
-  of a twin pair). Helpers that a module-level statement also uses are left
-  alone, since moving them could break import order.
+  of a twin pair), or directly above its calling helper when that caller already
+  sits directly above the class. Helpers that a module-level statement also uses
+  are left alone, since moving them could break import order.
 - ``--plan-split`` writes nothing: it prints each test class's line footprint
   (the class plus the helpers only it uses, transitively) and each helper several
   classes share, with its users. A split moves classes whose footprints sum to the
@@ -68,11 +72,19 @@ Modes:
 
 Moves, merges, and renames also repoint backticked citations of the moved symbol
 (``path::Class[::test]`` and ``Class::test``) in ``_docs/`` (archive and research
-excepted), ``CLAUDE.md``, ``CONTRIBUTING.rst``, ``README.rst``, and ``docs/*.rst``;
-``--delete`` lists the citations it leaves dangling. Touched files are then run
-through ``ruff format``. Imports are never sorted or
-pruned here: ``ruff check --fix`` at the gates owns that. A destination name
-collision aborts before anything is written.
+excepted), ``CLAUDE.md``, ``CONTRIBUTING.rst``, ``README.rst``, and ``docs/*.rst``; a
+renamed method's bare ``test`` citations follow it unless another test keeps the old
+name. An in-place class rename (``--rename NEW`` with one ``path::Class`` spec and
+that path as ``DEST``) keeps the class where it is, renames its whole-word uses in
+that file, and rewrites whole-word prose mentions in those docs too, printing each
+rewrite as ``path:line: old -> new``. When ``tests/`` defines more than one class
+with the old name, only path-carrying citations are repointed; its other
+mentions are left and printed as ``path:line: old (ambiguous, left)``. It refuses
+when the new name is already a class under ``tests/`` or used in that file, or when
+the file does not define the old class exactly once. ``--delete`` lists the
+citations it leaves dangling. Touched files are then run through ``ruff format``.
+Imports are never sorted or pruned here: ``ruff check --fix`` at the gates owns that.
+A destination name collision aborts before anything is written.
 """
 
 from __future__ import annotations
@@ -85,11 +97,12 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 DESCRIPTION = "Move test classes or methods between test files."
 RUFF = shutil.which("ruff") or "ruff"
@@ -102,9 +115,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from overlap_scan import (  # noqa: E402
     KIND_OVERRIDES,
     TestFile,
-    get_kind,
+    get_kinds,
     get_misplaced,
-    get_xfail_markers,
     load_supported,
 )
 from overlap_scan import _is_public_module as is_public_module  # noqa: E402
@@ -211,10 +223,9 @@ def get_helpers(
 ) -> tuple[list[ast.stmt], set[str]]:
     defs = {}
 
-    for stmt in tree.body:
-        if stmt is not moved and stmt is not owner:
-            for name in get_defined(stmt):
-                defs[name] = stmt
+    for stmt in (s for s in tree.body if s is not moved and s is not owner):
+        for name in get_defined(stmt):
+            defs[name] = stmt
 
     wanted, queue = {}, list(get_used(moved))
 
@@ -247,6 +258,115 @@ def get_helpers(
     return movable, shared
 
 
+def select_helpers(
+    src_tree: ast.Module,
+    cls: ast.ClassDef,
+    method: ast.FunctionDef | ast.AsyncFunctionDef | None,
+    with_helpers: bool,
+) -> tuple[list[ast.stmt], set[str]]:
+    """Selects the module-level helpers that move with a class or method."""
+    if method is None:
+        helpers, shared = get_helpers(src_tree, cls)
+    elif with_helpers:
+        helpers, shared = get_helpers(src_tree, method, cls)
+    else:
+        helpers = []
+        outside = get_used(method) - set(
+            chain.from_iterable(map(get_defined, cls.body))
+        )
+        defs = set(chain.from_iterable(map(get_defined, src_tree.body)))
+        shared = outside & defs
+
+    return helpers, shared
+
+
+def print_move_plan(
+    spec: Spec, dest: str, helpers: list[ast.stmt], missing: list[str], adds: list[str]
+) -> None:
+    """Prints what a move takes, leaves behind, and imports."""
+    print(f"{spec.path}::{spec.cls}{'::' + spec.method if spec.method else ''}")
+    print(f"  -> {dest}")
+    for helper in helpers:
+        print(f"  helper moved: {', '.join(get_defined(helper))}")
+    for name in missing:
+        print(f"  helper still used in source, NOT moved: {name}")
+    for line in adds:
+        print(f"  import added: {line}")
+
+
+def build_inserts(
+    dest_tree: ast.Module,
+    dest_lines: list[str],
+    dest_cls: str | None,
+    before: str | None,
+    helper_text: str,
+    body: str,
+    adds: list[str],
+) -> dict[int, str]:
+    """Builds the text to insert into the destination, keyed by line index."""
+    if dest_cls is None:
+        insert_text = (helper_text + "\n\n" if helper_text else "") + body
+        if before is None:
+            index = len(dest_lines)
+            insert_text = "\n\n" + insert_text
+        else:
+            index = get_start(find_class(dest_tree, before), dest_lines)
+            insert_text += "\n\n"
+    else:
+        dest_node = find_class(dest_tree, dest_cls)
+        index = dest_node.end_lineno or 0
+        insert_text = "\n" + body
+
+    import_at = max(
+        (
+            s.end_lineno or 0
+            for s in dest_tree.body
+            if isinstance(s, ast.Import | ast.ImportFrom)
+        ),
+        default=0,
+    )
+    inserts = {index: insert_text}
+    if dest_cls is not None and helper_text:
+        inserts[get_start(dest_node, dest_lines)] = helper_text + "\n\n"
+    if adds:
+        imports = "".join(f"{line}\n" for line in adds)
+        inserts[import_at] = imports + inserts.get(import_at, "")
+    return inserts
+
+
+def splice(lines: list[str], drop: set[int], inserts: dict[int, str]) -> str:
+    """Splices ``inserts`` into ``lines``, dropping the line indexes in ``drop``."""
+    out = []
+    for i in range(len(lines) + 1):
+        out.append(inserts.get(i, ""))
+        if i < len(lines) and i not in drop:
+            out.append(lines[i])
+    return "".join(out)
+
+
+def get_import_adds(
+    node: ast.AST,
+    helpers: list[ast.stmt],
+    src_imports: dict[str, str],
+    dest_imports: dict[str, str],
+    same: bool,
+) -> list[str]:
+    """Gets the source imports the moved code uses that the destination lacks."""
+    if same:
+        adds = []
+    else:
+        needed = set(get_used(node)).union(*map(get_used, helpers))
+        adds = sorted(
+            {
+                src_imports[n]
+                for n in needed
+                if n in src_imports and n not in dest_imports
+            }
+        )
+
+    return adds
+
+
 def move(
     dest: str,
     spec: Spec,
@@ -269,24 +389,13 @@ def move(
     if method is None and dest_cls:
         raise SystemExit("moving a class needs DEST as a path")
 
-    if method is None:
-        helpers, shared = get_helpers(src_tree, cls)
-    elif with_helpers and not same:
-        helpers, shared = get_helpers(src_tree, method, cls)
-    else:
-        helpers = []
-        outside = get_used(method) - {s for st in cls.body for s in get_defined(st)}
-        defs = {n for st in src_tree.body for n in get_defined(st)}
-        shared = outside & defs
+    helpers, shared = select_helpers(src_tree, cls, method, with_helpers and not same)
 
     blocks = [(get_start(h, src_lines), h.end_lineno or 0) for h in helpers]
     blocks.append((get_start(node, src_lines), node.end_lineno or 0))
-    moved_text = {}
+    moved_text = {start: "".join(src_lines[start:end]) for start, end in blocks}
     emptied = method is not None and cls.body == [method]
     whole = (get_start(cls, src_lines), cls.end_lineno or 0) if emptied else None
-
-    for start, end in blocks:
-        moved_text[start] = "".join(src_lines[start:end])
 
     body = moved_text.pop(blocks[-1][0])
     if rename is not None:
@@ -298,8 +407,8 @@ def move(
     dest_text = "".join(src_lines) if same else _read(dest_file)
     dest_tree = ast.parse(dest_text)
     dest_lines = dest_text.splitlines(keepends=True)
-    taken = {n for st in dest_tree.body for n in get_defined(st)}
-    new_names = {n for h in helpers for n in get_defined(h)}
+    taken = set(chain.from_iterable(map(get_defined, dest_tree.body)))
+    new_names = set(chain.from_iterable(map(get_defined, helpers)))
     if method is None:
         new_names.add(rename or node.name)
     clash = new_names & taken if not same else set()
@@ -309,79 +418,33 @@ def move(
 
     src_imports = get_imports(src_tree)
     dest_imports = get_imports(dest_tree)
-    needed = set(get_used(node))
-    for helper in helpers:
-        needed |= get_used(helper)
-    adds = (
-        []
-        if same
-        else sorted(
-            {
-                src_imports[n]
-                for n in needed
-                if n in src_imports and n not in dest_imports
-            }
-        )
-    )
+    adds = get_import_adds(node, helpers, src_imports, dest_imports, same)
     missing = [] if same else sorted(shared - taken)
 
-    print(f"{spec.path}::{spec.cls}{'::' + spec.method if spec.method else ''}")
-    print(f"  -> {dest}")
-    for helper in helpers:
-        print(f"  helper moved: {', '.join(get_defined(helper))}")
-    for name in missing:
-        print(f"  helper still used in source, NOT moved: {name}")
-    for line in adds:
-        print(f"  import added: {line}")
+    print_move_plan(spec, dest, helpers, missing, adds)
 
     if dry:
         return []
 
-    if method is None:
-        insert_text = (helper_text + "\n\n" if helper_text else "") + body
-        if before is None:
-            index = len(dest_lines)
-            insert_text = "\n\n" + insert_text
-        else:
-            index = get_start(find_class(dest_tree, before), dest_lines)
-            insert_text += "\n\n"
-    else:
-        dest_node = find_class(dest_tree, dest_cls[0])
-        index = dest_node.end_lineno or 0
-        insert_text = "\n" + body
-
-    import_at = max(
-        (
-            s.end_lineno or 0
-            for s in dest_tree.body
-            if isinstance(s, ast.Import | ast.ImportFrom)
-        ),
-        default=0,
-    )
-    removed = {i for start, end in blocks for i in range(start, end)}
+    removed = set(chain.from_iterable(range(start, end) for start, end in blocks))
     if whole is not None:
         removed |= set(range(*whole))
         print(f"  removed emptied class {spec.cls}")
-    inserts = {index: insert_text}
-    if method is not None and helper_text:
-        inserts[get_start(dest_node, dest_lines)] = helper_text + "\n\n"
-    if adds:
-        imports = "".join(f"{line}\n" for line in adds)
-        inserts[import_at] = imports + inserts.get(import_at, "")
-
-    def splice(lines: list[str], drop: set[int]) -> str:
-        out = []
-        for i in range(len(lines) + 1):
-            out.append(inserts.get(i, ""))
-            if i < len(lines) and i not in drop:
-                out.append(lines[i])
-        return "".join(out)
+    inserts = build_inserts(
+        dest_tree,
+        dest_lines,
+        dest_cls[0] if method is not None else None,
+        before,
+        helper_text,
+        body,
+        adds,
+    )
 
     if same:
-        spec.path.write_text(splice(src_lines, removed))
+        spec.path.write_text(splice(src_lines, removed, inserts))
         touched = [spec.path]
     else:
-        dest_file.write_text(splice(dest_lines, set()))
+        dest_file.write_text(splice(dest_lines, set(), inserts))
         spec.path.write_text(
             "".join(line for i, line in enumerate(src_lines) if i not in removed)
         )
@@ -410,10 +473,22 @@ def _gen_doc_paths():
     yield from sorted((ROOT / "docs").glob("*.rst"))
 
 
-def rewrite_citations(
-    old: tuple[str, str, str | None], new: tuple[str, str, str | None]
-) -> None:
-    """Repoints doc citations of a moved or renamed test class or method."""
+def has_test_named(name: str) -> bool:
+    paths = sorted((ROOT / "tests").glob("*/test_*.py"))
+    return any(
+        isinstance(node, FUNCTION_NODES) and node.name == name
+        for path in paths
+        for node in ast.walk(ast.parse(path.read_text()))
+    )
+
+
+def build_citation_rewrite(
+    old: tuple[str, str, str | None],
+    new: tuple[str, str, str | None],
+    *,
+    bare_class: bool = True,
+) -> Callable[[str], str]:
+    """Builds the text rewrite that repoints citations of a moved or renamed test."""
     (old_path, old_cls, old_method), (new_path, new_cls, new_method) = old, new
     old_short = old_path.removeprefix("tests/")
     new_short = new_path.removeprefix("tests/")
@@ -427,23 +502,101 @@ def rewrite_citations(
     renamed_cls = (
         re.compile(rf"`{re.escape(old_cls)}(?=::)") if old_method is None else None
     )
+    lone = None
+    if old_method is not None and new_method not in {None, old_method}:
+        lone = None if has_test_named(old_method) else old_method
+    lone_pattern = None if lone is None else re.compile(rf"`{re.escape(lone)}(?=`|\[)")
 
     def _with_path(match: re.Match[str]) -> str:
         path = new_path if match[1] else new_short
         return f"`{path}::{new_symbol}"
 
+    def _rewrite(text: str) -> str:
+        updated = with_path.sub(_with_path, text)
+        if bare is not None:
+            updated = bare.sub(f"`{new_symbol}", updated)
+        if bare_class and renamed_cls is not None and new_cls != old_cls:
+            updated = renamed_cls.sub(f"`{new_cls}", updated)
+        if lone_pattern is not None:
+            updated = lone_pattern.sub(f"`{new_method}", updated)
+        return updated
+
+    return _rewrite
+
+
+def rewrite_citations(
+    old: tuple[str, str, str | None], new: tuple[str, str, str | None]
+) -> None:
+    """Repoints doc citations of a moved or renamed test class or method."""
+    rewrite = build_citation_rewrite(old, new)
+
     for path in _gen_doc_paths():
         if not path.exists():
             continue
         text = path.read_text()
-        updated = with_path.sub(_with_path, text)
-        if bare is not None:
-            updated = bare.sub(f"`{new_symbol}", updated)
-        if renamed_cls is not None and new_cls != old_cls:
-            updated = renamed_cls.sub(f"`{new_cls}", updated)
+        updated = rewrite(text)
         if updated != text:
             path.write_text(updated)
             print(f"  citations repointed in {path.relative_to(ROOT)}")
+
+
+def load_test_class_counts() -> Counter[str]:
+    """Loads how many times each class name is defined under ``tests/``."""
+    paths = sorted((ROOT / "tests").rglob("*.py"))
+    return Counter(
+        node.name
+        for path in paths
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.ClassDef)
+    )
+
+
+def rename_class(spec: Spec, new: str, dry: bool) -> list[Path]:
+    """Renames a test class in place and repoints its mentions in the docs."""
+    old = spec.cls
+    text = spec.path.read_text()
+    word = re.compile(rf"\b{re.escape(old)}\b")
+    defined = [
+        node
+        for node in ast.walk(ast.parse(text))
+        if isinstance(node, ast.ClassDef) and node.name == old
+    ]
+    counts = load_test_class_counts()
+
+    if len(defined) != 1:
+        raise SystemExit(f"{spec.path} defines class {old} {len(defined)} times")
+    if counts[new]:
+        raise SystemExit(f"a class named {new} already exists under tests/")
+    if re.search(rf"\b{re.escape(new)}\b", text):
+        raise SystemExit(f"{spec.path} already uses the name {new}")
+
+    ambiguous = counts[old] > 1
+    rel = _rel(spec.path)
+    rewrite = build_citation_rewrite(
+        (rel, old, None), (rel, new, None), bare_class=not ambiguous
+    )
+    texts = {spec.path: (text, word.sub(new, text))}
+
+    for path in (p for p in _gen_doc_paths() if p.exists()):
+        body = path.read_text()
+        cited = rewrite(body)
+        texts[path] = (body, cited if ambiguous else word.sub(new, cited))
+
+    for path, (before, after) in texts.items():
+        pairs = zip(before.splitlines(), after.splitlines(), strict=True)
+        for number, (line, updated) in enumerate(pairs, 1):
+            if line != updated:
+                print(f"{_rel(path)}:{number}: {old} -> {new}")
+            if word.search(updated):
+                print(f"{_rel(path)}:{number}: {old} (ambiguous, left)")
+
+    print(f"renamed {spec.path}::{old} -> {new}")
+    writes = {path: after for path, (before, after) in texts.items() if after != before}
+
+    for path, after in ({} if dry else writes).items():
+        path.write_text(after)
+
+    return [] if dry else [spec.path]
 
 
 def _read(path: Path) -> str:
@@ -492,7 +645,7 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
     lines = text.splitlines(keepends=True)
     tree = ast.parse(text)
     cls = find_class(tree, spec.cls)
-    markers = get_xfail_markers(tree)
+    kinds = get_kinds(tree)
     members = list(cls.body)
     first = members[0]
     has_doc = isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
@@ -503,7 +656,8 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
         start = get_start(stmt, lines)
         end = stmt.end_lineno or 0
         chunk = "".join(lines[start:end]).rstrip("\n") + "\n"
-        chunks.append((get_kind(stmt, markers), index, chunk, stmt))
+        kind = kinds.get((cls.name, getattr(stmt, "name", "")), 0)
+        chunks.append((kind, index, chunk, stmt))
 
     ordered = sorted(chunks, key=lambda c: (c[0], c[1]))
     names = {0: "other", 1: "behavior", 2: "rejection", 3: "tripwire"}
@@ -634,20 +788,10 @@ def _gen_row_ids(element: ast.expr):
                 yield value.value
 
 
-def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
-    text = path.read_text()
-    lines = text.splitlines(keepends=True)
-    tree = ast.parse(text)
-    found = None
-
-    for stmt in tree.body:
-        if table in get_defined(stmt):
-            found = stmt
-
-    value = getattr(found, "value", None)
-    if not isinstance(value, ast.List | ast.Tuple):
-        raise SystemExit(f"{path}: no module-level list or tuple named {table}")
-
+def get_row_spans(
+    text: str, lines: list[str], elements: list[ast.expr], ids: list[str]
+) -> tuple[list[tuple[int, int]], set[str]]:
+    """Gets the text span of each row with one of ``ids``, and the ids not found."""
     offsets = [0]
     for line in lines:
         offsets.append(offsets[-1] + len(line))
@@ -657,7 +801,6 @@ def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
         return offsets[lineno - 1] + len(prefix)
 
     spans, missing = [], set(ids)
-    elements = value.elts
 
     for index, element in enumerate(elements):
         row_ids = set(_gen_row_ids(element)) & set(ids)
@@ -677,6 +820,25 @@ def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
             start = line_start
             end = text.rfind("\n", 0, end) + 1 if index + 1 < len(elements) else end
         spans.append((start, end))
+
+    return spans, missing
+
+
+def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
+    text = path.read_text()
+    lines = text.splitlines(keepends=True)
+    tree = ast.parse(text)
+    found = None
+
+    for stmt in tree.body:
+        if table in get_defined(stmt):
+            found = stmt
+
+    value = getattr(found, "value", None)
+    if not isinstance(value, ast.List | ast.Tuple):
+        raise SystemExit(f"{path}: no module-level list or tuple named {table}")
+
+    spans, missing = get_row_spans(text, lines, value.elts, ids)
 
     if missing:
         raise SystemExit(f"{path}::{table}: no rows with id {sorted(missing)}")
@@ -726,14 +888,18 @@ def place(specs: list[Spec], above: str, dry: bool) -> list[Path]:
     if missing:
         raise SystemExit(f"{path}: no module-level {missing}")
 
-    target = get_start(find_class(tree, above), lines)
+    target = (
+        segments[above][0]
+        if above in segments
+        else get_start(find_class(tree, above), lines)
+    )
     blocks = sorted(segments[name] for name in names)
     print(f"{path}: placing {', '.join(names)} above {above}")
 
     if dry:
         return []
 
-    removed = {i for start, end in blocks for i in range(start, end)}
+    removed = set(chain.from_iterable(range(start, end) for start, end in blocks))
     text = "\n\n".join("".join(lines[s:e]).rstrip("\n") for s, e in blocks)
     out = []
 
@@ -767,13 +933,38 @@ def place_leads(paths: list[Path], dry: bool) -> list[Path]:
     return touched
 
 
-def main() -> int:
+def parse_specs(args: argparse.Namespace) -> tuple[str, list[Spec]]:
+    """Parses the positional arguments into DEST and specs, checking their options."""
+    dest = ""
+
+    if args.check or args.sort or args.delete or args.place:
+        specs = [Spec.parse(text) for text in args.args]
+    else:
+        dest, *rest = args.args
+        if not rest:
+            raise SystemExit("need DEST and at least one SPEC")
+        specs = [Spec.parse(text) for text in rest]
+
+    if args.rename and len(specs) > 1:
+        raise SystemExit("--rename takes a single spec")
+
+    if args.place and args.above is None:
+        raise SystemExit("--place needs --above NAME")
+
+    return dest, specs
+
+
+def main() -> int:  # noqa: C901
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "args", nargs="+", help="DEST SPEC... (or SPEC... with --check/--sort)"
     )
     parser.add_argument("--before", help="place moved classes above this class")
-    parser.add_argument("--rename", help="rename the single moved class or method")
+    parser.add_argument(
+        "--rename",
+        help="rename the single moved class or method (a class in place when DEST "
+        "is its own file)",
+    )
     parser.add_argument(
         "--with-helpers",
         action="store_true",
@@ -799,7 +990,11 @@ def main() -> int:
     mode.add_argument(
         "--plan-split", action="store_true", help="print FILE's class footprints"
     )
-    parser.add_argument("--above", help="with --place: the class to place above")
+    parser.add_argument(
+        "--above",
+        metavar="NAME",
+        help="with --place: the class or helper to place above",
+    )
     parser.add_argument(
         "--kind",
         action="append",
@@ -817,9 +1012,10 @@ def main() -> int:
     )
 
     if args.plan_split:
-        for path in args.args:
-            for line in gen_split_plan(Path(path)):
-                print(line)
+        for line in chain.from_iterable(
+            gen_split_plan(Path(path)) for path in args.args
+        ):
+            print(line)
         return 0
 
     if args.place_leads:
@@ -830,25 +1026,13 @@ def main() -> int:
         path, _, name = table.partition("::")
         touched = set(drop_rows(Path(path), name, ids, args.dry_run))
         return _fix(touched)
-    touched = set()
-    status = 0
-    dest = ""
-
-    if args.check or args.sort or args.delete or args.place:
-        specs = [Spec.parse(text) for text in args.args]
-    else:
-        dest, *rest = args.args
-        if not rest:
-            raise SystemExit("need DEST and at least one SPEC")
-        specs = [Spec.parse(text) for text in rest]
-
-    if args.rename and len(specs) > 1:
-        raise SystemExit("--rename takes a single spec")
+    dest, specs = parse_specs(args)
 
     if args.place:
-        if args.above is None:
-            raise SystemExit("--place needs --above CLASS")
         return _fix(set(place(specs, args.above, args.dry_run)))
+
+    touched = set()
+    status = 0
 
     for spec in specs:
         if args.delete:
@@ -865,6 +1049,14 @@ def main() -> int:
             touched |= set(sort_class(spec, args.dry_run))
         elif args.merge:
             touched |= set(merge(dest, spec, args.dry_run, args.with_helpers))
+        elif (
+            args.rename is not None
+            and spec.method is None
+            and Path(dest).resolve() == spec.path.resolve()
+        ):
+            if args.before is not None:
+                raise SystemExit("an in-place --rename takes no --before")
+            touched |= set(rename_class(spec, args.rename, args.dry_run))
         else:
             touched |= set(
                 move(

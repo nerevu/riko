@@ -10,26 +10,24 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 from functools import partial
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Self
 
-from riko.bado.itertools import aiter_sentinel
+from riko.bado._util import maybe_async
+from riko.bado.itertools import aauto_close, aiter_sentinel
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._iterutils import log_failure
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.types._io import resolve_closer
 from riko.types._streams import require_async_stream
-from riko.types._wrappers import (
-    AsyncFunc,
-    Func,
-    require_async_wrapper,
-    require_sync_wrapper,
-)
+from riko.types._wrappers import Func, require_async_wrapper, require_sync_wrapper
 
 from ._prepared import NO_PIPE_MSG
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from riko.types._streams import AsyncStreamOf, Item
+    from riko.types._streams import Item
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -44,10 +42,10 @@ type Drain[T] = Callable[[AsyncIterator[T]], Iterator[T]]
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
-class LoopCall(Protocol):
-    """Runs an awaitable-returning callable to completion from a worker thread."""
+class Bridge(Protocol):
+    """Runs an awaitable to completion on an event loop and returns its result."""
 
-    def __call__[R](self, func: AsyncFunc[R], /) -> R: ...
+    def __call__[R](self, value: Awaitable[R], /) -> R: ...
 
 
 class WorkerCall(Protocol):
@@ -58,31 +56,71 @@ class WorkerCall(Protocol):
     ) -> Awaitable[R]: ...
 
 
-def to_sync[T](call: LoopCall, stream: AsyncIterator[T]) -> Iterator[T]:
+class to_sync[T]:  # noqa: N801
     """
-    Re-exposes an async stream as a lazy synchronous item stream.
+    Reads an async stream from sync code, then closes the stream.
 
-    The caller owns ``stream`` and should close it. This only reads it.
+    Exhausting, failing, or closing the result closes ``stream``.
 
     Args:
 
-        call: Runs an awaitable-returning callable to completion on the event loop from
-            the calling thread.
+        bridge: Runs an awaitable to completion on the event loop that runs
+            ``stream`` and returns its result.
 
         stream: The async iterator to read.
 
-    Yields:
+    Raises:
 
-        Each item ``stream`` produces.
+        Exception: Whatever closing ``stream`` raises. A close failure after a read
+            error is noted on that error instead.
+
+    Examples:
+
+        >>> from riko import as_async, run
+        >>> from riko.bado._util import asyncify, syncify
+        >>>
+        >>> stream = to_sync(syncify, as_async([1, 2]))
+        >>> run(asyncify, list, stream)
+        [1, 2]
 
     """
-    while True:
+
+    __slots__ = ("_bridge", "_open", "stream")
+
+    def __init__(self, bridge: Bridge, stream: AsyncIterator[T]) -> None:
+        self._bridge = bridge
+        self.stream = stream
+        self._open = [True]
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> T:
         try:
-            item = call(stream.__anext__)
+            item = self._bridge(maybe_async(anext, self.stream))
         except StopAsyncIteration:
-            break
+            self.close()
+            raise StopIteration from None
+        except BaseException as primary:
+            try:
+                self.close()
+            except Exception as failure:  # noqa: BLE001 (noted on the primary)
+                log_failure(primary, failure, "closing the stream")
+
+            raise
+
+        return item
+
+    def close(self) -> None:
+        """Closes ``stream`` on its event loop (closing again does nothing)."""
+        try:
+            # A single atomic pop, so concurrent callers close only once.
+            self._open.pop()
+        except IndexError:
+            pass
         else:
-            yield item
+            if (closer := resolve_closer(self.stream, is_async=True)) is not None:
+                self._bridge(maybe_async(closer))
 
 
 def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
@@ -90,23 +128,39 @@ def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
     return next(stream, MISSING)
 
 
-def to_async[T](func: WorkerCall, stream: Iterator[T]) -> AsyncStreamOf[T]:
+def to_async[T](
+    func: WorkerCall, stream: Iterator[T], *, inline: bool = False
+) -> aauto_close[T]:
     """
-    Re-exposes a blocking item stream as a lazy async item stream.
+    Reads a blocking stream from async code, then closes the stream.
 
-    The caller owns ``stream`` and should close it. This only reads it.
+    Exhausting, failing, or closing the result closes ``stream``.
 
     Args:
 
         func: Runs a blocking callable off the event loop.
         stream: The synchronous iterator to read.
 
+    Kwargs:
+
+        inline: Whether to run ``stream``'s close on the event loop instead of a worker.
+
     Returns:
 
         The async stream over ``stream`` that pulls one item per request.
 
+    Examples:
+
+        >>> from riko import alist, run
+        >>> from riko.bado._util import asyncify
+        >>>
+        >>> stream = to_async(asyncify, iter([1, 2]))
+        >>> run(alist, stream)
+        [1, 2]
+
     """
-    return aiter_sentinel(partial(func, _next_or_missing), stream, MissingType)
+    pulled = aiter_sentinel(partial(func, _next_or_missing), stream, MissingType)
+    return aauto_close(pulled, stream, inline=inline)
 
 
 def _copy_wrapper_meta(

@@ -670,8 +670,9 @@ or ``inf``.
   and async runs (``16``). It takes a whole number, never ``inf``, because streaming
   maps need a finite worker count. Pass ``limit=inf`` to ``riko.async_map`` to lift
   the cap for one call.
-- ``RIKO_NODE_THREADS``: the threads that sync-only modules share in async runs on
-  one event loop (``40``).
+- ``RIKO_NODE_THREADS``: threads for work that cannot run natively: i.e., a sync-only
+  module that reads its whole input in one call in an async run, and the sync inputs of
+  an async-only module in a sync run (``40``).
 - ``RIKO_STREAMING_THRESHOLD``: the response size, in bytes, above which fetched
   content is streamed instead of buffered (``1048576``).
 - ``RIKO_ENCODING``: the default text encoding (``utf-8``).
@@ -974,11 +975,15 @@ module name raises ``UnsupportedModuleError`` before anything runs. A ``Pipeline
 carries no state of its own, so there is nothing to inspect or reset afterwards. Run it
 again, with a fresh seed if it takes one.
 
-Each run owns its resources and releases them when it is exhausted or closed. Otherwise
-it issues a ``ResourceWarning`` if a resource was left open for garbage collection. If
-you intend to stop early, use the context manager
-``with pipeline.open(items) as stream:`` (``async with`` for async iteration). Leaving
-the block closes the run.
+Each run closes its resources when it is exhausted or closed. Otherwise it issues a
+``ResourceWarning`` if a resource was left open for garbage collection. If you intend to
+stop early, use the context manager ``with pipeline.open(items) as stream:``
+(``async with`` for async iteration). Leaving the block closes the run.
+
+If a run fails and a cleanup also fails, you still get the run's error. Each cleanup
+failure is logged and added to it as a note (see its ``__notes__``). If the run
+succeeded, a single cleanup failure is raised as is, and several are raised together as
+an ``ExceptionGroup``.
 
 How do I change how much riko logs?
 -----------------------------------

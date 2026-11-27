@@ -102,12 +102,6 @@ class Substitution(NamedTuple):
     replacements: int = 0
 
 
-def _gen_candidates(word: str, rules: Sequence[RegexRule]) -> Iterator[_Candidate]:
-    for pos, rule in enumerate(rules):
-        for match in rule["match"].finditer(word):
-            yield match.start(), pos, match
-
-
 def _gen_substitutions(
     word: str, rules: Sequence[RegexRule]
 ) -> Iterator[tuple[str, int]]:
@@ -117,7 +111,12 @@ def _gen_substitutions(
     Where matches overlap, the leftmost wins and the earlier rule breaks a tie. A rule
     with ``count`` 1 replaces only the first match it wins.
     """
-    candidates = sorted(_gen_candidates(word, rules), key=itemgetter(0, 1))
+    found = (
+        (match.start(), pos, match)
+        for pos, rule in enumerate(rules)
+        for match in rule["match"].finditer(word)
+    )
+    candidates: list[_Candidate] = sorted(found, key=itemgetter(0, 1))
     counts: Counter[int] = Counter()
     cursor = 0
     empty_at = -1

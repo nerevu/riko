@@ -8,10 +8,13 @@ import re
 from itertools import chain
 from typing import TYPE_CHECKING, NamedTuple
 
+from riko.base._iterutils import gen_instances
+
+from ._import_graph import load_ast
 from ._shipped_text import gen_blocks, gen_files
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
 _EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
@@ -31,10 +34,14 @@ class BannedTerm(NamedTuple):
 
         instead: The replacement wording the reserved-terms rules give.
 
+        split: Whether up to three words may sit between the phrase's words. E.g., for
+            phrasal verbs like "tears the run down".
+
     """
 
     phrase: str
     instead: str
+    split: bool = False
 
 
 BANNED_TERMS: tuple[BannedTerm, ...] = (
@@ -46,6 +53,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("cross-mode", "sync or async"),
     BannedTerm("host-mode", "sync or async"),
     BannedTerm("other mode", "sync or async"),
+    BannedTerm("color", "sync or async"),
     BannedTerm("both sides", "sync and async"),
     BannedTerm("other side", "the sync or async counterpart"),
     BannedTerm("chosen side", "the sync or async run"),
@@ -92,16 +100,17 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("connector package", "plugin or integration"),
     BannedTerm("provider command", "backend command"),
     BannedTerm("teardown", "cleanup"),
-    BannedTerm("tear down", "clean up or close"),
-    BannedTerm("tears down", "cleans up or closes"),
-    BannedTerm("torn down", "cleaned up or closed"),
+    BannedTerm("tear down", "clean up or close", split=True),
+    BannedTerm("tears down", "cleans up or closes", split=True),
+    BannedTerm("torn down", "cleaned up or closed", split=True),
     BannedTerm("closeable", "closable"),
 )
 
 
 def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
     """Compiles a phrase into a whole-word, case-insensitive pattern."""
-    words = r"\s+".join(re.escape(word) for word in term.phrase.split())
+    separator = r"\s+(?:\w+\s+){0,3}" if term.split else r"\s+"
+    words = separator.join(re.escape(word) for word in term.phrase.split())
     return re.compile(rf"\b{words}s?\b", re.IGNORECASE)
 
 
@@ -201,33 +210,35 @@ def _gen_pairs(
 def _gen_issues(
     patterns: tuple[tuple[BannedTerm, re.Pattern[str]], ...],
     *roots: Path,
-    excluded: frozenset[str] = _EXCLUDED_NAMES,
+    excluded: Iterable[str] = _EXCLUDED_NAMES,
 ) -> Iterator[TermIssue]:
     """Walks ``roots`` for every ``patterns`` match in their scannable files."""
-    for root in roots:
-        for path in gen_files(root, excluded):
-            for start, block in gen_blocks(path):
-                pairs = _gen_pairs(block, *patterns)
+    paths = chain.from_iterable(gen_files(root, *excluded) for root in roots)
 
-                for match, term in sorted(pairs, key=lambda pair: pair[0].start()):
-                    lineno = start + block.count("\n", 0, match.start())
-                    yield TermIssue(path, lineno, match.group(0), term)
+    for path in paths:
+        for start, block in gen_blocks(path):
+            pairs = _gen_pairs(block, *patterns)
+
+            for match, term in sorted(pairs, key=lambda pair: pair[0].start()):
+                lineno = start + block.count("\n", 0, match.start())
+                yield TermIssue(path, lineno, match.group(0), term)
 
 
 def _gen_resolver_issues(*roots: Path) -> Iterator[TermIssue]:
     """Walks ``roots`` for classes named ``*Resolver`` beyond the reserved three."""
-    for root in roots:
-        for path in gen_files(root, _EXCLUDED_NAMES):
-            if path.suffix == ".py":
-                tree = ast.parse(path.read_text(encoding="utf-8"))
-                nodes = ast.walk(tree)
-                classes = (node for node in nodes if isinstance(node, ast.ClassDef))
+    paths = chain.from_iterable(gen_files(root, *_EXCLUDED_NAMES) for root in roots)
 
-                for node in classes:
-                    match = _RESOLVER_CLASS.fullmatch(node.name)
+    for path in paths:
+        if path.suffix == ".py":
+            tree = load_ast(path)
+            nodes = ast.walk(tree)
+            classes = gen_instances(nodes, ast.ClassDef)
 
-                    if match and match.group(1) not in _RESOLVER_STEMS:
-                        yield TermIssue(path, node.lineno, node.name, RESOLVER_CLASS)
+            for node in classes:
+                match = _RESOLVER_CLASS.fullmatch(node.name)
+
+                if match and match.group(1) not in _RESOLVER_STEMS:
+                    yield TermIssue(path, node.lineno, node.name, RESOLVER_CLASS)
 
 
 def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:

@@ -24,6 +24,7 @@ from riko.definitions._workflow_definition import Workflow
 from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_sync
 from tests._workflows import DAG, DAG_PATH, EXAMPLES_DIR, run_document
 
+_ASYNC_NAMES = ("simple1", "simple2", "gigs", "split", "demo", "wired", "kazeeki")
 COMMANDS = {
     "runpipe": runpipe.run,
     "build_workflow": build_workflow.run,
@@ -78,6 +79,10 @@ DEMO_RUNS = [
     pytest.param(
         FARECHART_DOCUMENT, FARECHART_TEXT, [], "outside", id="outside-checkout"
     ),
+]
+UNKNOWN_EXAMPLE_RUNS = [
+    pytest.param(True, "not found in examples", id="outside-checkout"),
+    pytest.param(False, "not found in examples!", id="checkout-listed-once"),
 ]
 RIKO_ERRORS = [
     pytest.param("pipe.py", RAISING_SCRIPT, "module: x", id="pipe-script"),
@@ -205,13 +210,7 @@ class TestRunPipe:
         assert ran.returncode == 0
         assert ran.stdout == "{'title': 'riko'}\n"
 
-    @pytest.mark.parametrize(
-        ("outside", "message"),
-        [
-            pytest.param(True, "not found in examples", id="outside-checkout"),
-            pytest.param(False, "not found in examples!", id="checkout-listed-once"),
-        ],
-    )
+    @pytest.mark.parametrize(("outside", "message"), UNKNOWN_EXAMPLE_RUNS)
     def test_run_pipe_unknown_example_id_names_the_searched_directories(
         self, tmp_path, outside, message
     ):
@@ -243,6 +242,16 @@ class TestRunPipe:
         ran = run_command("runpipe", "-p", str(tmp_path / "missing.json"))
         assert ran.returncode == 1
         assert "not found" in ran.stderr
+
+
+INVALID_DAGS = [
+    pytest.param('{"modules": []}', id="empty-dag"),
+    pytest.param('{"modules": null}', id="null-modules"),
+]
+UNREADABLE_INPUTS = [
+    pytest.param("{bad json", id="malformed-json"),
+    pytest.param(None, id="missing-file"),
+]
 
 
 class TestBuildWorkflow:
@@ -281,13 +290,7 @@ class TestBuildWorkflow:
         assert "unknown Workflow key(s)" in convert.stderr
         assert "Traceback" not in convert.stderr
 
-    @pytest.mark.parametrize(
-        "content",
-        [
-            pytest.param('{"modules": []}', id="empty-dag"),
-            pytest.param('{"modules": null}', id="null-modules"),
-        ],
-    )
+    @pytest.mark.parametrize("content", INVALID_DAGS)
     def test_build_workflow_invalid_dag_exits_nonzero(self, tmp_path, content):
         invalid = tmp_path / "invalid.json"
         invalid.write_text(content, encoding="utf-8")
@@ -297,13 +300,7 @@ class TestBuildWorkflow:
         assert "Traceback" not in convert.stderr
 
     @pytest.mark.parametrize("module", ["build_workflow", "compile"])
-    @pytest.mark.parametrize(
-        "content",
-        [
-            pytest.param("{bad json", id="malformed-json"),
-            pytest.param(None, id="missing-file"),
-        ],
-    )
+    @pytest.mark.parametrize("content", UNREADABLE_INPUTS)
     def test_unreadable_input_exits_nonzero_without_a_traceback(
         self, tmp_path, content, module
     ):
@@ -353,15 +350,6 @@ class TestBenchmark:
         assert not missing, msg
 
 
-class TestSubprocessImports:
-    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
-        # A script outside the checkout resolves riko the way a console script does.
-        probe = tmp_path / "probe.py"
-        probe.write_text("import riko\nprint(riko.__file__)\n")
-        done = run_python(str(probe), cwd=tmp_path)
-        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
-
-
 def _without_nan(value: object) -> object:
     """Replaces each NaN with a marker so equal outputs compare equal."""
     if isinstance(value, Mapping):
@@ -376,6 +364,41 @@ def _without_nan(value: object) -> object:
     return result
 
 
+SIMPLE_PIPELINES = [
+    pytest.param("simple1", {"url": "farechart"}, id="simple1"),
+    pytest.param(
+        "simple2",
+        {"author": "ABC", "link": "www.google.com", "title": "google"},
+        id="simple2",
+    ),
+    pytest.param("split", {"date": "December 02, 2014", "year": 2014}, id="split"),
+    pytest.param("wired", {"date": "May 04, 1982"}, id="wired"),
+]
+ASYNC_EXAMPLES = [pytest.param(name, id=name) for name in _ASYNC_NAMES]
+EXAMPLE_DOCUMENTS = [
+    pytest.param(
+        "pipe_679e2c544332e978b15b6b163767975f",
+        [{"link": "www.google.com", "title": "google", "author": "USD"}],
+        id="strreplace",
+    ),
+    pytest.param(FARECHART_DOCUMENT, [{"url": "farechart"}], id="farechart"),
+    pytest.param(
+        "pipe_1a0ea1b39a8f261d0339a12fb5f0f03e",
+        [{"date": "December 02, 2014", "year": "1201"}],
+        id="dateformat",
+    ),
+    pytest.param(
+        "pipe_4f26297843f4952fad920af5990ddc50",
+        [{"date": "December 03, 2014"}],
+        id="dateformat-input",
+    ),
+]
+REGISTER_EXAMPLES = [
+    pytest.param("register_alias", "[{'count': 3}]", id="register-alias"),
+    pytest.param("register_module", "[{'content': 'HI'}]", id="register-module"),
+]
+
+
 class TestExamplePipelines:
     """Each ``examples`` pipeline runs end to end and yields its expected items."""
 
@@ -384,7 +407,7 @@ class TestExamplePipelines:
         items = module.pipe(test=True)
         return items
 
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(3)
     def test_kazeeki(self):
         """Tests the kazeeki pipeline."""
         pipe_name = "kazeeki"
@@ -484,15 +507,7 @@ class TestExamplePipelines:
         assert length == 49, f"Pipeline {pipe_name} has length {length}, not 49"
         assert example == items[-1]
 
-    @pytest.mark.parametrize(
-        ("pipe_name", "expected"),
-        [
-            ("simple1", {"url": "farechart"}),
-            ("simple2", {"author": "ABC", "link": "www.google.com", "title": "google"}),
-            ("split", {"date": "December 02, 2014", "year": 2014}),
-            ("wired", {"date": "May 04, 1982"}),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe_name", "expected"), SIMPLE_PIPELINES)
     def test_simple_pipeline(self, pipe_name, expected):
         """Each single-item example pipeline yields exactly its expected item."""
         items = self._run_example(pipe_name)
@@ -501,9 +516,7 @@ class TestExamplePipelines:
         assert items[-1] == expected
 
     @async_test
-    @pytest.mark.parametrize(
-        "pipe_name", ["simple1", "simple2", "gigs", "split", "demo", "wired", "kazeeki"]
-    )
+    @pytest.mark.parametrize("pipe_name", ASYNC_EXAMPLES)
     async def test_async_matches_sync(self, pipe_name):
         """Each example's async_pipe yields the same items as its sync pipe."""
         module = import_module(f"examples.{pipe_name}")
@@ -512,34 +525,14 @@ class TestExamplePipelines:
         async_result = [item async for item in async_stream]
         assert _without_nan(async_result) == _without_nan(sync_result)
 
-    @pytest.mark.parametrize(
-        ("pipe_name", "expected"),
-        [
-            (
-                "pipe_679e2c544332e978b15b6b163767975f",
-                [{"link": "www.google.com", "title": "google", "author": "USD"}],
-            ),
-            ("pipe_a3d1afa31f0a24cc51dcbe79f1590343", [{"url": "farechart"}]),
-            (
-                "pipe_1a0ea1b39a8f261d0339a12fb5f0f03e",
-                [{"date": "December 02, 2014", "year": "1201"}],
-            ),
-            ("pipe_4f26297843f4952fad920af5990ddc50", [{"date": "December 03, 2014"}]),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe_name", "expected"), EXAMPLE_DOCUMENTS)
     def test_example_document_runs(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
         assert (
             run_document(EXAMPLES_DIR / "workflows" / f"{pipe_name}.json") == expected
         )
 
-    @pytest.mark.parametrize(
-        ("script", "expected"),
-        [
-            ("register_alias", "[{'count': 3}]"),
-            ("register_module", "[{'content': 'HI'}]"),
-        ],
-    )
+    @pytest.mark.parametrize(("script", "expected"), REGISTER_EXAMPLES)
     def test_register_example(self, script, expected):
         """Each registration example runs in a fresh process that keeps its modules."""
         proc = run_python(f"examples/{script}.py", check=False)

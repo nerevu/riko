@@ -72,7 +72,7 @@ reimplement.
 
 - Move `Executor`, `_POOLS`, `_PoolHandle`, `get_worker_cnt`, `get_chunksize`, and the
   bounded-parallel map machinery from `riko/runtime/collections.py` into a private
-  execution home (e.g. `riko/execution/_pools.py`) so
+  execution home (e.g. `riko/execution/_pools.py`; landed 2026-09-28) so
   `with_execution(executor=..., concurrency=..., ordered=...)` can consume them later.
 - Port the pool-ownership/lifecycle characterization tests alongside the code.
 - Guards: the import-contract half of `manage lint --all` (the new module classifies
@@ -230,12 +230,13 @@ Depends on steps 2–3 (no remaining consumers). **Code generation survives this
 step 3 rebuilt it on `riko/runtime/_codegen.py` over canonical v2, so
 `compile_pipe`/`compile-pipe` are unaffected by everything below.
 
-- Delete from `riko/runtime/_compile.py` the generation half: `compile_pipe_def`,
-  `stringify_pipe`, `_gen_string_modules`, `_gen_pykwargs`, `_get_input_module`, and the
-  v1 templates `riko/runtime/templates/pypipe.txt` / `pypipe_async.txt`.
-- Delete the parse/build half: `parse_pipe_def`, `_index_pipe_def` (and its inlined
-  `GraphIndex` assembly — the un-deduped v1 half noted at iter.1), `_gen_steps`,
-  `build_pipeline`, `abuild_pipeline`, `get_pipeline_dependencies`, and
+- Delete (landed 2026-10-03) from `riko/runtime/_compile.py` the generation half:
+  `compile_pipe_def`, `stringify_pipe`, `_gen_string_modules`, `_gen_pykwargs`,
+  `_get_input_module`, and the v1 templates `riko/runtime/templates/pypipe.txt` /
+  `pypipe_async.txt`.
+- Delete (landed 2026-10-03) the parse/build half: `parse_pipe_def`, `_index_pipe_def`
+  (and its inlined `GraphIndex` assembly — the un-deduped v1 half noted at iter.1),
+  `_gen_steps`, `build_pipeline`, `abuild_pipeline`, `get_pipeline_dependencies`, and
   `get_pipeline_inputs`.
 - Remove `build_pipeline`/`parse_pipe_def`/`get_pipeline_dependencies` from
   `riko/__init__.py` and the `COMPILE` set in `riko/base/_api_surface.py` (→
@@ -272,12 +273,13 @@ step 3 rebuilt it on `riko/runtime/_codegen.py` over canonical v2, so
   to `tests/internal/test_codegen.py`; the vacuous "imports no compiler" resolver test
   became `test_resolver.py::TestResolverDispatcher::test_missing_stored_workflow_raises`
   (pins `UnsupportedModuleError` for `pipe_missing`); `test_basics.py` gained
-  `test_loop_subpipe_embed` and `test_loop_count_all_assign` pinning the exact outputs
-  of the two loop fixtures that only the codegen parity test reached;
-  `test_index_workflow_orders_and_indexes` now also asserts `GraphIndex.dependents`.
-  Docs: CHANGES "Removed" bullet names `extract_dependencies` (the v0.77.3 name) and the
-  graph-index "Changes" bullet was folded into the `Workflow` bullet as a `validate()`
-  cycle rejection; FAQ/MIGRATION/CLAUDE.md/KEY_PATHS/INTERNALS/API_SURFACE prose swept.
+  `test_whole_stream[loop-subpipe-embed]` and `test_whole_stream[loop-count-all-assign]`
+  pinning the exact outputs of the two loop fixtures that only the codegen parity test
+  reached; `test_workflow_index_orders_and_indexes` now also asserts the index's
+  `upstream` and `downstream` maps. Docs: CHANGES "Removed" bullet names
+  `extract_dependencies` (the v0.77.3 name) and the graph-index "Changes" bullet was
+  folded into the `Workflow` bullet as a `validate()` cycle rejection;
+  FAQ/MIGRATION/CLAUDE.md/KEY_PATHS/INTERNALS/API_SURFACE prose swept.
 
 ## Step 6 — `SINK_NAMES` + `Sinks`: defer to R5C, recorded now
 

@@ -93,6 +93,14 @@ Inputs:
     --unclassified lists the ``[FIX]`` commits since the last tag (or ``--since REF``)
                    that no class's refs and no ``NON_BEHAVIORAL`` entry cite, one
                    ``sha subject`` per line; exits 1 when any is listed
+    --status SHA   prints each fix's replay status, one ``sha status`` line per sha
+                   (repeatable, or several after one flag): ``non-behavioral``,
+                   ``probe-only`` (cited only in classes with no rule), ``explained``
+                   (each ruled class's ref carries a ``;`` note), ``unexplained`` (a
+                   ruled class cites it with no note), or ``uncited``; ``probe-only``
+                   appends ``: class, ...`` (every citing class), ``explained`` the
+                   ruled classes, and ``unexplained`` the ruled classes whose ref needs
+                   a note
     --rewrap       rewrite this file's ``CLASS_HISTORY`` source with every string
                    re-wrapped to 88 columns (run after adding a ref; then
                    ``ruff format``)
@@ -143,16 +151,21 @@ import subprocess
 import sys
 from collections import Counter
 from functools import cache
+from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 type _Methods = dict[str, ast.FunctionDef | ast.AsyncFunctionDef]
+type ReplayStatus = Literal[
+    "non-behavioral", "probe-only", "explained", "unexplained", "uncited"
+]
 
 _NONE_RECORDED = "none recorded yet"
 _REF_GROUP = re.compile(r"\(\d\d-\d\d ([^()]*(?:\([^()]*\)[^()]*)*)\)")
+_CITED_GROUP = re.compile(rf"\b([0-9a-f]{{7,40}}) {_REF_GROUP.pattern}")
 _RULE_ROW = re.compile(r"^ {4}(RM\d+) (\S+) ", re.MULTILINE)
 _SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 _NOTE_TOKEN = re.compile(r"`(\w+)`|(\b\w*_\w+)|(\w+)\(\)")
@@ -280,11 +293,18 @@ CLASS_HISTORY = {
             "once); 7ee178c7 (10-31 loop aclosing, async_merge aclosing); c6a3838c "
             "(11-01 owned values by type, raw return, async close()); d229b9b9 (11-03 "
             "unify closers); d7528227 (11-05 fetch responses; missing ExitStack); "
-            "ef55b123 (11-13 async processor streams; missing early close); 2d9d3306 "
+            "ef55b123 (11-13 async processor streams; missing early close); 5de5cc80 "
             "(11-19 adapted async-only streams, worker-thread embed drain; closer "
-            "pairs); a2009845 (11-19 loop embed results; bare fold); 2d9d3306 (11-20 "
+            "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
-            "stream, splitter cascade at node start; cancellation window, failed iter)"
+            "stream, splitter cascade at node start; cancellation window, failed "
+            "iter); 909a7369 (11-22 async-only hand-through); 909a7369 (11-23 native "
+            "async inputs, seed and root wrappers run-owned); 909a7369 (11-23 callable "
+            "stream wrappers own their input); cc8af8f0 (11-25 cancelled aauto_close "
+            "aclose stops before later closers; cancellation mid-close); cc8af8f0 "
+            "(11-25 auto_close source whose iterator is a separate object; no close "
+            "call); cc8af8f0 (11-25 auto_close skipped an async-only close silently); "
+            "cc8af8f0 (11-26 maybe_closing async-only)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -304,7 +324,8 @@ CLASS_HISTORY = {
             "is-None fallbacks); e937e766 (10-05 port null); 0705f0cd (10-29 falsy "
             "input iterables); 7ee178c7 (10-31 regex, falsy func, rename '', DotDict "
             "''); 2bdc13e6 (11-11 skip_if presence); da63a1a3 (11-14 filter missing "
-            "fields)"
+            "fields); 75dcdbd3 (11-25 gen_assignments yielded None read as empty; next "
+            "default, not a falsy test)"
         ),
         'feed `0`, `False`, and `""` to every optional field and check each is kept',
         (
@@ -314,14 +335,17 @@ CLASS_HISTORY = {
     ),
     "parity": BugClass(
         (
-            "072730e2 (09-12 async kwargs drained); ef566c5e (09-30 async and "
-            "awaitable sources); 85e25563 (10-28 async write/aggregate sources); "
-            "cb4ab17d (10-28 async_write iterables); 0cfbfc62 (10-29 lazy async "
-            "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
+            "072730e2 (09-12 async kwargs drained; source shape); ef566c5e (09-30 "
+            "async and awaitable sources; source shape); 85e25563 (10-28 async "
+            "write/aggregate sources; source shape); cb4ab17d (10-28 async_write "
+            "iterables; source shape); 0cfbfc62 (10-29 lazy async processor reads; "
+            "source shape); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
             "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
-            "async HTTP status); 24a19342 (11-17 split branches in both colors); none "
-            "RM801-shaped (source shape, status handling, not keyword drift); daa41ecf "
-            "(11-21 twin type/subtype/identity)"
+            "async HTTP status; status handling); 6dba2fe3 (11-17 split branches in "
+            "both colors; branch behavior, no keyword drift); none RM801-shaped "
+            "(source shape, status handling, not keyword drift); 6ad28467 (11-21 twin "
+            "type/subtype/identity; attributes, not keywords); cc8af8f0 (11-25 native "
+            "splitter list branches; branch type, not keywords)"
         ),
         (
             "run each sync/async twin on the same input, an error status and a bad "
@@ -334,7 +358,7 @@ CLASS_HISTORY = {
             "e937e766 (10-05 parse_dag keys, alias collisions, id collisions, registry "
             "shadow); 39b93e99 (10-29 duplicate entry points; no JSON load); 05fd5672 "
             "(10-29 entry-point keys; no JSON load); 7ee178c7 (10-31 dup JSON keys, "
-            "migrate keys, target shadow, codegen names); 5f64f9f9 (11-19 `format` "
+            "migrate keys, target shadow, codegen names); 6921e8a8 (11-19 `format` "
             "alias over an explicit null `fmt`; not a JSON key)"
         ),
         (
@@ -354,7 +378,7 @@ CLASS_HISTORY = {
             "47c409b5 (09-03 numeric strings); 9f1af91c (10-28 text-only XML root); "
             "682124d4 (10-28 DotDict non-str keys); 3a177544 (11-03 sort untyped "
             "values); e0f6e05b (11-03 empty CSV export); f82af774 (11-14 unindexable "
-            "pairs); 0361ec29 (11-21 split count guard)"
+            "pairs); 4f642c6d (11-21 split count guard)"
         ),
         (
             "feed mixed-type, empty, and wrong-shape values to every sort, export, and "
@@ -388,7 +412,7 @@ CLASS_HISTORY = {
         (
             "e937e766 (10-05 deep-frozen definitions); fe0ef32a (10-14 DotDict nested "
             "writes; not a record field); 1906d375 (10-21 definition snapshots; no "
-            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 24a19342 "
+            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 6dba2fe3 "
             "(11-17 Tee _Read; introduced in the same commit)"
         ),
         "mutate the list/dict/set a caller passed in and check the record is unchanged",
@@ -398,8 +422,8 @@ CLASS_HISTORY = {
         (
             "df5b36fd (10-29 fetch timeout); f3f371ad (10-29 async_map limit); "
             "7ee178c7 (10-31 async fetch timeout; not a default); c6a3838c (11-01 "
-            "async cleanup under for; missing bound); 24a19342 (11-17 branch lag; "
-            "missing bound); e5448a49 (11-19 splitter branches collected before the "
+            "async cleanup under for; missing bound); 6dba2fe3 (11-17 branch lag; "
+            "missing bound); 33c481e4 (11-19 splitter branches collected before the "
             "count check; missing bound)"
         ),
         "run each wait, read, and pool against a source that never answers",
@@ -413,7 +437,8 @@ CLASS_HISTORY = {
         (
             "cdbeda1a (10-31 port spellings); ededc9ce (11-03 regex field case); "
             "83630c28 (11-03 dotted/case rename fields); 9bbcf0ab (11-14 ModuleName "
-            "resolvers)"
+            "resolvers); 466a3477 (11-23 split phrasal-verb ban); bbdd385b (11-27 "
+            "Decimal negative zero identity)"
         ),
         (
             "try a case variant, dotted form, zero-padded index, or NewType/str twin "
@@ -429,7 +454,9 @@ CLASS_HISTORY = {
         (
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
             "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
-            "5052114a (11-21 failed close on a failed build)"
+            "61aaa929 (11-21 failed close on a failed build); b2eceb31 (11-26 tee "
+            "interrupted copy left the close failure off the interrupt); 34a7ef31 "
+            "(11-27 failed run close left the run unfinished)"
         ),
         (
             "make a worker, task, or cleanup step die or raise, once and twice, and "
@@ -464,8 +491,9 @@ CLASS_HISTORY = {
     "bad-config": BugClass(
         (
             "fb7ea681 (10-29 out-of-range settings); 597a0181 (11-03 int cast "
-            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); 34fe7bf7 "
-            "(11-19 cast_datetime timestamp overflow)"
+            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); fcf97e1c "
+            "(11-19 cast_datetime timestamp overflow; a named callee, not "
+            "runtime-chosen)"
         ),
         (
             "set each RIKO_* variable and conf number to malformed, out-of-range, inf, "
@@ -511,7 +539,10 @@ CLASS_HISTORY = {
         _NONE_RECORDED,
     ),
     "serializer-framing": BugClass(
-        "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline)",
+        (
+            "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline); 6a47419b "
+            "(11-27 export appended a second JSON document)"
+        ),
         (
             "write zero, one, and several records in each format, appending too, and "
             "check headers, separators, and terminators appear once where required"
@@ -520,7 +551,7 @@ CLASS_HISTORY = {
     ),
     "colors": BugClass(
         (
-            "24a19342 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
+            "6dba2fe3 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
             "in the same commit)"
         ),
         "compare method names across each sync/async class pair",
@@ -528,7 +559,7 @@ CLASS_HISTORY = {
     ),
     "find-slice": BugClass(
         (
-            "7ee178c7 (10-31 fetchpage.get_string); 5f64f9f9 (11-19 legacy port "
+            "7ee178c7 (10-31 fetchpage.get_string); 6921e8a8 (11-19 legacy port "
             "suffix; removeprefix() not find())"
         ),
         (
@@ -540,8 +571,8 @@ CLASS_HISTORY = {
     ),
     "kwarg-shadow": BugClass(
         (
-            "b0f523b7 (11-17 call keywords; a missing `/`); 8837d68b (11-19 "
-            "prepare_call wrapper, _call_direct wrapper/items)"
+            "a9079f9b (11-17 call keywords; a missing `/`); 322664c6 (11-19 "
+            "prepare_call wrapper, _call_direct wrapper/items; a missing `/`)"
         ),
         (
             "pass a keyword named like each bound parameter through every `**kwargs` "
@@ -552,14 +583,26 @@ CLASS_HISTORY = {
             "error is accurate and `item` is a reserved keyword"
         ),
     ),
+    "inert-knob": BugClass(
+        "466a3477 (11-22 C90 selected; mccabe table configured without its rule)",
+        (
+            "for each [tool.ruff.lint.<plugin>] table, confirm its rule prefix is "
+            "selected; for each [tool.*] threshold, confirm the tool that reads it "
+            "runs"
+        ),
+        (
+            "a threshold read only by an explicit heavyweight check (pylint strict, "
+            "pyright verify) that the standard lint suite leaves out"
+        ),
+    ),
     "other": BugClass(
         (
             "5196ad3a (09-09 default sink mode); ae33e7ba (09-09 FeedParserDict key "
             "remap); ff6a6030 (09-12 autorss Attributes guard); 8b95ee51 (10-28 "
             "http-prefixed file names); 186f976d (10-29 Context shipped to workers); "
             "bffd2dc0 (10-29 self-embedding workflow); 46d7c568 (10-31 half-applied "
-            "register); 263fffe7 (11-03 registry-unaware metadata); d3c2d047 (11-19 "
-            "subscripted generic alias inference); de16d9dc (11-20 is_async_callable "
+            "register); 263fffe7 (11-03 registry-unaware metadata); 5f351de8 (11-19 "
+            "subscripted generic alias inference); ee464524 (11-20 is_async_callable "
             "through partial)"
         ),
         (
@@ -693,8 +736,7 @@ def _is_frozen_record(cls: ast.ClassDef) -> bool:
 def _calls_close(body: list[ast.stmt]) -> bool:
     return any(
         isinstance(n, ast.Attribute) and n.attr in {"close", "aclose"}
-        for stmt in body
-        for n in ast.walk(stmt)
+        for n in chain.from_iterable(map(ast.walk, body))
     )
 
 
@@ -933,11 +975,10 @@ class Scanner(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _check_test(self, node: ast.AST, test: ast.AST) -> None:
-        target = (
-            test.operand
-            if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)
-            else test
-        )
+        if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+            target = test.operand
+        else:
+            target = test
 
         if isinstance(target, ast.BoolOp):
             for value in target.values:
@@ -1064,17 +1105,16 @@ class Scanner(ast.NodeVisitor):
                 "hash-order",
                 "join over a set; order varies with PYTHONHASHSEED",
             )
-        elif name in {"json.load", "json.loads"} or (
-            name in {"load", "loads"} and self._json_imported
-        ):
-            if not any(kw.arg == "object_pairs_hook" for kw in node.keywords):
-                self.add(
-                    node,
-                    "RM301",
-                    "last-wins",
-                    f"{name}() keeps the last of duplicate keys; "
-                    "pass object_pairs_hook",
-                )
+        elif (
+            name in {"json.load", "json.loads"}
+            or (name in {"load", "loads"} and self._json_imported)
+        ) and not any(kw.arg == "object_pairs_hook" for kw in node.keywords):
+            self.add(
+                node,
+                "RM301",
+                "last-wins",
+                f"{name}() keeps the last of duplicate keys; pass object_pairs_hook",
+            )
         elif (
             name == "bool"
             and len(node.args) == 1
@@ -1569,11 +1609,17 @@ def gen_files(args: argparse.Namespace) -> Iterator[Path]:
                 yield path
 
 
-def gen_class_table() -> Iterator[str]:
+def _get_rule_codes() -> dict[str, list[str]]:
     codes: dict[str, list[str]] = {}
 
     for code, kind in _RULE_ROW.findall(__doc__ or ""):
         codes.setdefault(kind, []).append(code)
+
+    return codes
+
+
+def gen_class_table() -> Iterator[str]:
+    codes = _get_rule_codes()
 
     for kind, entry in sorted(CLASS_HISTORY.items(), key=lambda x: (-x[1].count, x[0])):
         rules = " ".join(codes.get(kind, [])) or "probe-only"
@@ -1651,7 +1697,7 @@ def gen_unclassified(
 ) -> Iterator[str]:
     base = since or git("describe", "--tags", "--abbrev=0").strip()
     texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL) if texts is None else texts
-    cited = {sha for text in texts for sha in _SHA.findall(text)}
+    cited = set(chain.from_iterable(map(_SHA.findall, texts)))
     log = git("log", "--format=%h %s", f"{base}..HEAD", r"--grep=^\[FIX\]")
 
     for line in log.splitlines():
@@ -1668,6 +1714,50 @@ def report_unclassified(since: str | None = None) -> int:
         print(line)
 
     return int(bool(lines))
+
+
+def get_replay_status(sha: str) -> tuple[ReplayStatus, list[str]]:
+    """
+    Gets a fix's replay status from ``NON_BEHAVIORAL`` and ``CLASS_HISTORY``.
+
+    Shas compare on their first 8 characters. The classes are every class citing the
+    fix for ``probe-only``, the ruled ones for ``explained``, the ruled ones whose
+    citing ref has no ``;`` note for ``unexplained``, and none otherwise.
+    """
+    short = sha[:8]
+    codes = _get_rule_codes()
+    notes = {
+        kind: [
+            ";" in group
+            for cited, group in _CITED_GROUP.findall(entry.refs)
+            if cited[:8] == short
+        ]
+        for kind, entry in CLASS_HISTORY.items()
+    }
+    cited = [kind for kind, groups in notes.items() if groups]
+    ruled = [kind for kind in cited if kind in codes]
+    bare = [kind for kind in ruled if not all(notes[kind])]
+
+    if short in {entry[:8] for entry in NON_BEHAVIORAL}:
+        status: tuple[ReplayStatus, list[str]] = ("non-behavioral", [])
+    elif bare:
+        status = ("unexplained", bare)
+    elif ruled:
+        status = ("explained", ruled)
+    elif cited:
+        status = ("probe-only", cited)
+    else:
+        status = ("uncited", [])
+
+    return status
+
+
+def report_status(shas: list[str]) -> int:
+    for sha in shas:
+        status, kinds = get_replay_status(sha)
+        print(f"{sha} {status}: {', '.join(kinds)}" if kinds else f"{sha} {status}")
+
+    return 0
 
 
 def resolve_successor(sha: str) -> str | None:
@@ -1725,7 +1815,7 @@ def remap_class_history(path: Path = Path(__file__), since: str | None = None) -
     """
     reachable = git("rev-list", "HEAD").split()
     texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL)
-    cited = sorted({sha for text in texts for sha in _SHA.findall(text)})
+    cited = sorted(set(chain.from_iterable(map(_SHA.findall, texts))))
     stale = [sha for sha in cited if not any(h.startswith(sha) for h in reachable)]
     successors = {sha: s for sha in stale if (s := resolve_successor(sha)) is not None}
 
@@ -1796,6 +1886,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tests", action="store_true")
     parser.add_argument("--classes", action="store_true")
     parser.add_argument("--unclassified", action="store_true")
+    parser.add_argument("--status", action="extend", nargs="+", default=[])
     parser.add_argument("--rewrap", action="store_true")
     parser.add_argument("--remap", action="store_true")
     args = parser.parse_args(argv)
@@ -1805,6 +1896,8 @@ def main(argv: list[str] | None = None) -> int:
         result = 0
     elif args.unclassified:
         result = report_unclassified(args.since)
+    elif args.status:
+        result = report_status(args.status)
     elif args.rewrap:
         result = rewrap_class_history()
     elif args.remap:

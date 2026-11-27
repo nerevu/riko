@@ -9,7 +9,7 @@ from itertools import chain
 from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
-from ._import_graph import FUNCTION_NODES, FunctionNode
+from ._import_graph import FUNCTION_NODES, load_ast
 from ._shipped_text import gen_files, gen_text
 
 if TYPE_CHECKING:
@@ -72,25 +72,13 @@ class LiteralIssue(NamedTuple):
         return f"{self.path}:{self.lineno} {found!r} -> use {instead}"
 
 
-def _get_string_defaults(node: FunctionNode) -> dict[str, str]:
-    """Maps each parameter whose signature default is a string to that string."""
-    args = node.args
-    positional = [*args.posonlyargs, *args.args]
-    defaulted = positional[len(positional) - len(args.defaults) :]
-    pairs = [
-        *zip(defaulted, args.defaults, strict=True),
-        *zip(args.kwonlyargs, args.kw_defaults, strict=True),
-    ]
-    return {
-        arg.arg: default.value
-        for arg, default in pairs
-        if isinstance(default, ast.Constant) and isinstance(default.value, str)
-    }
-
-
 def _gen_bare_default_issues(path: Path) -> Iterator[LiteralIssue]:
-    """Flags a docstring ``(default: word)`` whose parameter defaults to ``"word"``."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    """
+    Flags a docstring ``(default: word)`` whose parameter defaults to ``"word"``.
+
+    Only a parameter whose signature default is a string can match.
+    """
+    tree = load_ast(path)
 
     nodes = (
         node
@@ -103,7 +91,18 @@ def _gen_bare_default_issues(path: Path) -> Iterator[LiteralIssue]:
         value = doc.value if isinstance(doc, ast.Expr) else None
 
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
-            defaults = _get_string_defaults(node)
+            args = node.args
+            positional = [*args.posonlyargs, *args.args]
+            defaulted = positional[len(positional) - len(args.defaults) :]
+            pairs = chain(
+                zip(defaulted, args.defaults, strict=True),
+                zip(args.kwonlyargs, args.kw_defaults, strict=True),
+            )
+            defaults = {
+                arg.arg: default.value
+                for arg, default in pairs
+                if isinstance(default, ast.Constant) and isinstance(default.value, str)
+            }
 
             for offset, line in enumerate(value.value.splitlines()):
                 match = _BARE_STRING_DEFAULT.pattern.match(line)
@@ -133,18 +132,19 @@ def gen_literal_issues(*roots: Path) -> Iterator[LiteralIssue]:
         One :class:`LiteralIssue` per match, in path then line order.
 
     """
-    for root in roots:
-        for path in gen_files(root, _EXCLUDED_NAMES):
-            text_issues = (
-                LiteralIssue(path, lineno, match.group(0), rule)
-                for lineno, line in gen_text(path)
-                for rule in LITERAL_RULES
-                for match in rule.pattern.finditer(line)
-            )
-            is_python = path.suffix == ".py"
-            default_issues = _gen_bare_default_issues(path) if is_python else ()
-            issues = chain(text_issues, default_issues)
-            yield from sorted(issues, key=attrgetter("lineno"))
+    paths = chain.from_iterable(gen_files(root, *_EXCLUDED_NAMES) for root in roots)
+
+    for path in paths:
+        text_issues = (
+            LiteralIssue(path, lineno, match.group(0), rule)
+            for lineno, line in gen_text(path)
+            for rule in LITERAL_RULES
+            for match in rule.pattern.finditer(line)
+        )
+        is_python = path.suffix == ".py"
+        default_issues = _gen_bare_default_issues(path) if is_python else ()
+        issues = chain(text_issues, default_issues)
+        yield from sorted(issues, key=attrgetter("lineno"))
 
 
 __all__ = ["LITERAL_RULES", "LiteralIssue", "LiteralRule", "gen_literal_issues"]

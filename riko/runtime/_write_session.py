@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, BinaryIO
 from riko.bado._backend import Path as AsyncPath
 from riko.bado._backend import async_open
 from riko.bado._util import asyncify
-from riko.bado.itertools import as_async
+from riko.bado.itertools import alist, as_async
 from riko.base._config import ENCODING
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.base._guards import is_mapping
@@ -155,7 +155,7 @@ class _FileWriteSession:
 
 class _SyncFileWriteSession(_FileWriteSession):
     r"""
-    A live, execution-owned file write session.
+    A live file write session the execution closes.
 
     Acquires the destination once, receives items (``Item``/``Items``) via
     :meth:`write`, then commits with :meth:`finalize` or abandons with :meth:`abort`
@@ -316,19 +316,16 @@ class _SyncFileWriteSession(_FileWriteSession):
         self._require_open()
         self._write_item(value) if is_mapping(value) else self._write_items(value)
 
-    def _framed_content(self) -> ConversionOutput | str:
-        if self._staged is not None:
-            content = self._staged
-        elif self._buffer:
-            content = self._serialize(self._buffer)
-        else:
-            content = ""
-
-        return content
-
     def _commit(self) -> WriteResult:
         if not self._incremental:
-            if content := self._framed_content():
+            if self._staged is not None:
+                content: ConversionOutput | str = self._staged
+            elif self._buffer:
+                content = self._serialize(self._buffer)
+            else:
+                content = ""
+
+            if content:
                 with Path(self.path).open("wb") as f:
                     self._written += f.write(_cast_bytes(content))
         elif self._handle is not None:
@@ -457,7 +454,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
     async def _aserialize(
         self, items: Feed, validate: bool = False
     ) -> ConversionOutput | str:
-        collected = [item async for item in as_async(items)]
+        collected = await alist(items)
 
         if validate:
             collected = self._gen_csv_records(collected)
@@ -537,19 +534,16 @@ class _AsyncFileWriteSession(_FileWriteSession):
         else:
             await self._awrite_items(value)
 
-    async def _aframed_content(self) -> ConversionOutput | str:
-        if self._staged is not None:
-            content = self._staged
-        elif self._buffer:
-            content = await self._aserialize(self._buffer)
-        else:
-            content = ""
-
-        return content
-
     async def _acommit(self) -> WriteResult:
         if not self._incremental:
-            if content := await self._aframed_content():
+            if self._staged is not None:
+                content: ConversionOutput | str = self._staged
+            elif self._buffer:
+                content = await self._aserialize(self._buffer)
+            else:
+                content = ""
+
+            if content:
                 async with await async_open(self.path, "wb") as f:
                     self._written += await f.write(_cast_bytes(content))
         elif self._ahandle is not None:
@@ -608,7 +602,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 @contextmanager
 def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     """
-    A resource lifecycle that acquires a file write session and tears it down.
+    A resource lifecycle that acquires a file write session and closes it.
 
     The lifecycle only acquires and releases the session. Committing (finalize) or
     abandoning (abort) is the execution host's decision and made before the ``with``
@@ -765,7 +759,7 @@ async def awrite_through(
     Passes each item through a lazily acquired write session unchanged.
 
     The async counterpart of :func:`write_through`; the session is opened on first
-    iteration. Exception-sensitive early-close and terminate semantics are owned by
+    iteration. Exception-sensitive early-close and terminate semantics belong to
     the execution layer and remain partial here.
 
     Args:

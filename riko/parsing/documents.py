@@ -115,6 +115,32 @@ def _is_type_match(type_: str, token: str) -> bool:
 
 
 class LinkParser(HTMLParser):
+    """
+    Collects HTML tags with an ``href`` that match a set of link types.
+
+    Each matching tag becomes an entry holding its attributes plus ``link`` (the
+    resolved ``href``) and ``tag``. With no link types, every tag with an ``href``
+    matches.
+
+    Kwargs:
+
+        strict: Whether only the ``type`` attribute decides a match. When False, an
+            ``href`` ending in an accepted type also matches.
+
+        link_type: The accepted link types, in preference order.
+
+        base_url: The URL that relative ``href`` values resolve against. Without it,
+            links stay as written.
+
+    Examples:
+
+        >>> parser = LinkParser(link_type="rss+xml", base_url="https://example.com/")
+        >>> parser.feed('<link type="application/rss+xml" href="/feed.xml">')
+        >>> [entry["link"] for entry in parser.entry]
+        ['https://example.com/feed.xml']
+
+    """
+
     strict: bool
     link_type: tuple[str, ...]
     base_url: str | None
@@ -141,7 +167,27 @@ class LinkParser(HTMLParser):
             self.link_type = tuple(link_type)
 
     def keyfunc(self, entry: Item) -> int:
-        # sort according to the order of self.link_type
+        """
+        Ranks an entry by the position of its type among the accepted link types.
+
+        Args:
+
+            entry: A collected link entry.
+
+        Returns:
+
+            The index of the first accepted type the entry matches, or the number of
+            accepted types when it matches none, so unmatched entries sort last.
+
+        Examples:
+
+            >>> parser = LinkParser(link_type=("atom+xml", "rss+xml"))
+            >>> parser.keyfunc({"type": "application/rss+xml"})
+            1
+            >>> parser.keyfunc({"type": "text/html"})
+            2
+
+        """
         count = len(self.link_type)
         enumerated = enumerate(self.link_type)
         type_ = str(entry.get("type", ""))
@@ -149,6 +195,7 @@ class LinkParser(HTMLParser):
         return next(pos, count)
 
     def reset(self) -> None:
+        """Discards the collected entries and text along with the parser state."""
         HTMLParser.reset(self)
         self.entry = iter(())
         self.data = StringIO()
@@ -156,6 +203,15 @@ class LinkParser(HTMLParser):
     def handle_starttag(
         self, tag: str, attrs: Sequence[tuple[str, str | None]]
     ) -> None:
+        """
+        Collects a start tag as an entry when its link matches.
+
+        Args:
+
+            tag: The tag name.
+            attrs: The tag's attributes as name/value pairs.
+
+        """
         entry = dict(attrs)
         link = entry.get("href")
         type_ = entry.get("type") or ""
@@ -173,6 +229,14 @@ class LinkParser(HTMLParser):
             self.entry = chain(self.entry, [entry])
 
     def handle_data(self, data: str) -> None:
+        """
+        Writes a line of text.
+
+        Args:
+
+            data: The text between tags.
+
+        """
         self.data.write(f"{data}\n")
 
 
@@ -552,39 +616,35 @@ def _get_ijson_source(content: FileLike | str) -> BinaryIOLike | None:
     return source
 
 
-def _find_json_event(events: Iterator[JsonEvent], path: str) -> JsonEvent:
+def _gen_streamed_records(source: BinaryIOLike, path: str) -> Stream:
     """
-    Gets the parse event that starts the value at ``path``.
+    Streams the items of the JSON value at ``path`` without loading the document.
 
     Keys match case-insensitively, the way ``DotDict`` paths do.
-
     """
-    keys = path.lower().split(".") if path else []
-    matched: list[str] = []
-    found = "", "", MISSING
-
-    for prefix, kind, value in events:
-        if len(matched) == len(keys):
-            found = prefix, kind, value
-            break
-
-        expected = keys[len(matched)]
-        joined = ".".join(matched)
-
-        if kind == "map_key" and prefix == joined and str(value).lower() == expected:
-            matched.append(str(value))
-
-    return found
-
-
-def _gen_streamed_records(source: BinaryIOLike, path: str) -> Stream:
     if ijson is None:
         raise ImportError("ijson is required for streamed JSON parsing")
 
+    keys = path.lower().split(".") if path else []
+    matched: list[str] = []
+    found: JsonEvent = "", "", MISSING
+
     with ReplayReader(source) as reader:
         try:
-            events = ijson.parse(reader, use_float=True)
-            prefix, kind, value = _find_json_event(events, path)
+            for event in ijson.parse(reader, use_float=True):
+                if len(matched) == len(keys):
+                    found = event
+                    break
+
+                event_prefix, event_kind, event_value = event
+                expected = keys[len(matched)]
+                joined = ".".join(matched)
+                is_key = event_kind == "map_key" and event_prefix == joined
+
+                if is_key and str(event_value).lower() == expected:
+                    matched.append(str(event_value))
+
+            prefix, kind, value = found
 
             if kind in {"start_array", "start_map"}:
                 reader.replay()
@@ -611,6 +671,42 @@ def _get_json_value(document: object, path: str) -> object:
     return value
 
 
+def _gen_markup_records(
+    content: FileLike | str, ext: str, html5: bool, path: str
+) -> Stream:
+    """Parses an XML or HTML document into one item per element at ``path``."""
+    if ext == "xml":
+        root = xml2etree(content, xml=True, html5=html5).getroot()
+    else:
+        root = xml2etree(content, xml=False, html5=html5).getroot()
+
+    if path and root is not None:
+        replaced = "/".join(path.split("."))
+
+        for element in xpath(root, replaced):
+            yield element2dict(element)
+    elif root is not None:
+        yield element2dict(root)
+
+
+def _parse_json_document(content: FileLike | str) -> object:
+    """Parses JSON text or a JSON file, logging a malformed one as ``MISSING``."""
+    if isinstance(content, str):
+        try:
+            document = loads(content)
+        except JSONDecodeError as e:
+            logger.error(e)
+            document = MISSING
+    else:
+        try:
+            document = load(content)
+        except (JSONDecodeError, ValueError) as e:
+            logger.error(e)
+            document = MISSING
+
+    return document
+
+
 def any2dict(
     content: FileLike | RikoDict | list[RikoDict | None] | str,
     ext: str | None = "xml",
@@ -632,37 +728,12 @@ def any2dict(
     elif isinstance(content, list):
         yield from gen_non_null(content)
     elif ext and ext in {"xml", "html"}:
-        if ext == "xml":
-            root = xml2etree(content, xml=True, html5=html5).getroot()
-        else:
-            root = xml2etree(content, xml=False, html5=html5).getroot()
-
-        if path and root is not None:
-            replaced = "/".join(path.split("."))
-
-            for element in xpath(root, replaced):
-                yield element2dict(element)
-        elif root is not None:
-            yield element2dict(root)
+        yield from _gen_markup_records(content, ext, html5, path)
+    elif ext == "json" and (source := _get_ijson_source(content)) is not None:
+        yield from _gen_streamed_records(source, path)
     elif ext == "json":
-        if (source := _get_ijson_source(content)) is not None:
-            yield from _gen_streamed_records(source, path)
-        elif isinstance(content, str):
-            try:
-                json = loads(content)
-            except JSONDecodeError as e:
-                logger.error(e)
-            else:
-                value = _get_json_value(json, path)
-                yield from _gen_json_records(value, path)
-        else:
-            try:
-                json_obj = load(content)
-            except (JSONDecodeError, ValueError) as e:
-                logger.error(e)
-            else:
-                value = _get_json_value(json_obj, path)
-                yield from _gen_json_records(value, path)
+        if (document := _parse_json_document(content)) is not MISSING:
+            yield from _gen_json_records(_get_json_value(document, path), path)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):

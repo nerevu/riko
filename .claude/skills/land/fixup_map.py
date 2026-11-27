@@ -3,6 +3,7 @@ Maps a working-tree change onto fixup targets among the branch's own commits.
 
 Usage: python .claude/skills/land/fixup_map.py [--cached] [--patches DIR] [--base REF]
        [--blame-only]
+       python .claude/skills/land/fixup_map.py --fixes [--base REF]
 
 The branch's own commits are those past its merge point: ``REF..HEAD`` where REF
 defaults to the nearest merge-base with ``next`` or ``main`` (local, else ``origin/``).
@@ -24,6 +25,13 @@ hunks blame vouches for are offered.
 
 Prints a short table, never the hunks themselves. ``--patches DIR`` also writes
 one ``<sha>.patch`` per candidate target, ready for the rehearsal worktree.
+
+``--fixes`` looks at committed fixes instead of the working tree: for each ``[FIX]``
+commit past the merge point, it blames the ``riko/`` lines the fix removed (at the
+fix's parent) and lists the branch commits that wrote them (after following ``fixup!``
+chains), most lines first. Each is a *lead* for a ``fold`` step of
+``rehearse_plan.py``, not a verdict: a refactor that only moved the lines shows up
+too, so confirm the bug existed at the target before folding the fix into it.
 """
 
 from __future__ import annotations
@@ -34,10 +42,11 @@ import keyword
 import re
 import subprocess
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import cache
+from itertools import chain
 from pathlib import Path
 
 DESCRIPTION = "Map a working-tree change onto fixup targets."
@@ -305,6 +314,47 @@ def classify(
     return result
 
 
+def count_fix_origins(sha: str, commits: dict[str, str]) -> Counter[str]:
+    """Counts the branch commits that wrote the ``riko/`` lines a fix removed."""
+    origins: Counter[str] = Counter()
+    diff = parse_diff(git("diff", "--no-renames", "-U0", f"{sha}^", sha, "--", "riko/"))
+
+    for hunk in (h for f in diff if f.status == "M" for h in f.hunks):
+        if hunk.old_count:
+            span = f"{hunk.old_start},{hunk.old_start + hunk.old_count - 1}"
+            out = git("blame", "-l", "-s", "-L", span, f"{sha}^", "--", hunk.path)
+            blamed = (line.split()[0].lstrip("^") for line in out.splitlines() if line)
+            origins.update(
+                target
+                for blame in blamed
+                if blame in commits
+                and (target := resolve_target(blame, commits)) is not None
+            )
+
+    return origins
+
+
+def print_fix_leads(base: str) -> None:
+    """Prints each ``[FIX]`` commit's in-branch origins as fold leads."""
+    commits = branch_commits(base)
+    fixes = [sha for sha, subject in commits.items() if subject.startswith("[FIX]")]
+    print(f"{len(fixes)} [FIX] commits past {base[:10]}")
+    print("  leads, not verdicts: confirm the bug existed at the target before folding")
+
+    for sha in fixes:
+        origins = count_fix_origins(sha, commits)
+        origins.pop(sha, None)
+        print(f"\n  {sha[:10]} {commits[sha][:60]}")
+
+        for origin, count in origins.most_common():
+            print(f"    {count:4}  {origin[:10]} {commits[origin][:60]}")
+
+        if not origins:
+            print(
+                "    none (the removed lines predate the branch, or none were removed)"
+            )
+
+
 def write_patches(
     directory: Path, candidates: dict[str, list[Hunk]], files: list[FileDiff]
 ) -> None:
@@ -317,34 +367,53 @@ def write_patches(
         for hunk in hunks:
             by_file[hunk.path].append(hunk)
 
-        body = [
-            line
-            for path, path_hunks in by_file.items()
-            for line in (
-                *headers[path],
-                *(x for h in path_hunks for x in (h.header, *h.lines)),
+        body = list(
+            chain.from_iterable(
+                (
+                    *headers[path],
+                    *chain.from_iterable((h.header, *h.lines) for h in path_hunks),
+                )
+                for path, path_hunks in by_file.items()
             )
-        ]
+        )
         (directory / f"{target[:10]}.patch").write_text("\n".join(body) + "\n")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument(
-        "--cached", action="store_true", help="map only the staged diff"
-    )
-    parser.add_argument(
-        "--patches", type=Path, help="write <sha>.patch per candidate target"
-    )
-    parser.add_argument(
-        "--base", help="merge point (default: nearest merge-base with next or main)"
-    )
-    parser.add_argument(
-        "--blame-only", action="store_true", help="offer only single-blame hunks"
-    )
-    args = parser.parse_args()
+def join_dependents(
+    candidates: dict[str, list[Hunk]], dependent: dict[str, list[tuple[Hunk, set[str]]]]
+) -> None:
+    """Moves each dependent hunk into its target once the target defines its names."""
+    for target, items in list(dependent.items()):
+        moved = True
 
-    base = args.base or merge_point()
+        while moved:
+            provided = set(chain.from_iterable(map(defined_names, candidates[target])))
+            joining = [(h, m) for h, m in items if m <= provided]
+            items = [(h, m) for h, m in items if not m <= provided]
+            candidates[target].extend(h for h, _ in joining)
+            moved = bool(joining)
+
+        dependent[target] = items
+
+
+def print_candidates(
+    candidates: dict[str, list[Hunk]], commits: dict[str, str], latest: set[int]
+) -> None:
+    """Prints each fixup target with its hunks, starring latest-touch matches."""
+    for target, hunks in candidates.items():
+        print(f"  {target[:10]} {commits[target][:60]}")
+
+        for h in hunks:
+            mark = "*" if id(h) in latest else " "
+            where = f"{h.path}:{h.new_start}"
+            print(f"   {mark}{where}  +{len(h.added)}/-{h.removed}  {h.summary}")
+
+    if not candidates:
+        print("  none")
+
+
+def map_change(args: argparse.Namespace, base: str) -> None:
+    """Maps the working-tree (or staged) change onto fixup targets."""
     commits = branch_commits(base)
     # a rename would pair a new path with an old one blame cannot find in HEAD
     diff_args = ("diff", "--no-renames", "-U3", "--cached" if args.cached else "HEAD")
@@ -378,34 +447,14 @@ def main() -> None:
         else:
             candidates[target].append(hunk)
 
-    for target, items in list(dependent.items()):
-        moved = True
-
-        while moved:
-            provided = {n for h in candidates[target] for n in defined_names(h)}
-            joining = [(h, m) for h, m in items if m <= provided]
-            items = [(h, m) for h, m in items if not m <= provided]
-            candidates[target].extend(h for h, _ in joining)
-            moved = bool(joining)
-
-        dependent[target] = items
-
+    join_dependents(candidates, dependent)
     candidates = {k: v for k, v in candidates.items() if v}
     dependent = {k: v for k, v in dependent.items() if v}
     print(f"{len(commits)} commits past {base[:10]}, {total} hunks")
     print("\nFIXUP CANDIDATES (read each hunk before offering it)")
     print("  * = latest touch, not blame: offer only if the subject fits the hunk")
 
-    for target, hunks in candidates.items():
-        print(f"  {target[:10]} {commits[target][:60]}")
-
-        for h in hunks:
-            mark = "*" if id(h) in latest else " "
-            where = f"{h.path}:{h.new_start}"
-            print(f"   {mark}{where}  +{len(h.added)}/-{h.removed}  {h.summary}")
-
-    if not candidates:
-        print("  none")
+    print_candidates(candidates, commits, latest)
 
     print("\nKEPT IN THE NEW COMMIT")
     untracked = git("ls-files", "--others", "--exclude-standard").split()
@@ -417,7 +466,7 @@ def main() -> None:
         print(f"  {count:4} {reason}")
 
     for target, items in dependent.items():
-        names = sorted({n for _, missing in items for n in missing})
+        names = sorted(set(chain.from_iterable(missing for _, missing in items)))
         shown = ", ".join(names[:6]) + (", ..." if len(names) > 6 else "")
         label = f"single-target on {target[:10]}, need names absent there"
         print(f"  {len(items):4} {label}: {shown}")
@@ -425,6 +474,32 @@ def main() -> None:
     if args.patches is not None and candidates:
         write_patches(args.patches, candidates, files)
         print(f"\npatches written to {args.patches}/")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument(
+        "--cached", action="store_true", help="map only the staged diff"
+    )
+    parser.add_argument(
+        "--patches", type=Path, help="write <sha>.patch per candidate target"
+    )
+    parser.add_argument(
+        "--base", help="merge point (default: nearest merge-base with next or main)"
+    )
+    parser.add_argument(
+        "--blame-only", action="store_true", help="offer only single-blame hunks"
+    )
+    parser.add_argument(
+        "--fixes", action="store_true", help="list fold leads for [FIX] commits"
+    )
+    args = parser.parse_args()
+    base = args.base or merge_point()
+
+    if args.fixes:
+        print_fix_leads(base)
+    else:
+        map_change(args, base)
 
 
 if __name__ == "__main__":

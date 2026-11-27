@@ -12,10 +12,7 @@ from riko.base._iterutils import sort_stably
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-
-def _get_dist_name(ep: EntryPoint) -> str:
-    """Gets the name of the plugin declaring ``ep``, or a placeholder."""
-    return "an unknown plugin" if ep.dist is None else ep.dist.name
+_UNKNOWN_PLUGIN = "an unknown plugin"
 
 
 class Registry[T]:
@@ -72,12 +69,6 @@ class Registry[T]:
 
         return grouped
 
-    def _require_unique(self, name: str) -> None:
-        if name in self._collisions:
-            dists = sorted(set(map(_get_dist_name, self._collisions[name])))
-            msg = f"{self.label} entry point {name!r} is declared by more than one "
-            raise ValueError(msg + f"plugin ({', '.join(dists)}); keep one")
-
     def _load_entry_point(self, name: str) -> T | None:
         """
         Loads the entry-point tier's entry for ``name``, if one declares it.
@@ -85,11 +76,24 @@ class Registry[T]:
         Every caller gets the same entry. Threads racing on a first load may each run
         the entry point, but only the first result is kept. Loading one must not have
         side effects.
+
+        Raises:
+
+            ValueError: If more than one plugin declares ``name``, or the loaded entry
+                is keyed by another name.
+
         """
         ep = self._entry_points.get(name)
 
         if name not in self._loaded and ep is not None:
-            self._require_unique(name)
+            if (collisions := self._collisions.get(name)) is not None:
+                dists = {
+                    _UNKNOWN_PLUGIN if e.dist is None else e.dist.name
+                    for e in collisions
+                }
+                msg = f"{self.label} entry point {name!r} is declared by more than one "
+                raise ValueError(msg + f"plugin ({', '.join(sorted(dists))}); keep one")
+
             loaded = self._load(ep)
 
             if (key := self._key(loaded)) != name:

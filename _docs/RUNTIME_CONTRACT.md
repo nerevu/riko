@@ -121,7 +121,8 @@ behave like ordinary async iterators — riko does not detect or recreate a cons
 deleted at v1-cutover step 4, 2026-10-02.)
 
 This describes the shipped API only. A seed may itself be one-shot; riko does not
-recreate it, so a second run takes a fresh seed.
+recreate it, so a second run takes a fresh seed. A seed closes when the run is done
+reading it or when the execution exits, whichever is first.
 
 ## 6. Async execution and backpressure
 

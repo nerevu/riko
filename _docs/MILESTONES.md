@@ -34,12 +34,13 @@ core.
 
 ---
 
-## Milestone 1 (Phases 1–7)
+## P-track milestone 1 (Phases 1–7)
 
-Everything the M1 filemap/tests specified shipped. As-built locations live in
-`IMPLEMENTED.md`, while phase decisions/carryovers live in `PHASE_CHECKLISTS.md`.
+Everything the P-track milestone 1 filemap/tests specified shipped. As-built locations
+live in `IMPLEMENTED.md`, while phase decisions/carryovers live in
+`PHASE_CHECKLISTS.md`.
 
-The M1 exit-test tree includes:
+The P-track milestone 1 exit-test tree includes:
 
 - `tests/public/test_modules.py` (P1 tiers), `test_config_public.py` (P2);
 - `tests/internal/test_config_dynamic.py` (since merged) / `test_preparation.py`
@@ -50,7 +51,7 @@ The M1 exit-test tree includes:
 
 ---
 
-## Milestone 2 (Phases 8–14)
+## P-track milestone 2 (Phases 8–14)
 
 The P-track remains useful for status/history, but architecture has since been
 reconciled across workflow definition, execution, resources, cache, effects, state,
@@ -272,10 +273,11 @@ Do not copy owner-level contract tests here.
 
 ---
 
-## M2 exit
+## P-track milestone 2 exit
 
-M2 is complete when retained P8/P9/P10 foundations and the reconciled R0–R12
-implementation sequence satisfy their owner-level exit criteria, the M1 suite remains
-unregressed, Pyright is clean on the public surface, `Workflow` v2/private execution are
-established, and at least one external extension proves registration + resources +
-sync/async adaptation + pub/sub or StateStore integration with **no Core edit**.
+P-track milestone 2 is complete when retained P8/P9/P10 foundations and the reconciled
+R0–R12 implementation sequence satisfy their owner-level exit criteria, the P-track
+milestone 1 suite remains unregressed, Pyright is clean on the public surface,
+`Workflow` v2/private execution are established, and at least one external extension
+proves registration + resources + sync/async adaptation + pub/sub or StateStore
+integration with **no Core edit**.

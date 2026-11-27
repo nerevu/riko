@@ -36,6 +36,7 @@ from attrs import define, field
 from attrs.validators import is_callable
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import resolve_str
 from riko.base._guards import is_mapping, require_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._require_guards import (
@@ -415,7 +416,7 @@ class WriteNode(RikoNode):
             id=id,
             name="write",
             backend=prepared.target.backend,
-            dest=None if location is None else str(location),
+            dest=resolve_str(location, None),
             fmt=prepared.fmt,
             mode=prepared.operation.mode,
             keys=prepared.operation.keys,
@@ -445,7 +446,7 @@ class CacheNode(RikoNode):
 
 @define(frozen=True, slots=True, kw_only=True)
 class SubscribeNode(RikoNode):
-    """A node owning subscription policy for a published stream."""
+    """A node that sets subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
     policy: FrozenPolicy = field(

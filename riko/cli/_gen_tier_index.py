@@ -18,6 +18,8 @@ from riko.base._config import LINE_LENGTH
 from riko.base._paths import TESTS_DIR
 from riko.base._strutils import get_codegen_note, wrap_words
 
+from ._import_graph import load_ast
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
@@ -87,17 +89,6 @@ def _build_row(name: str, *subjects: str, width: int) -> str:
     return "\n".join(lines) if text else lead.rstrip()
 
 
-def _gen_rows(tier: Path) -> Iterator[str]:
-    paths = sorted(tier.glob("test_*.py"))
-    width = max((len(path.name) for path in paths), default=0)
-
-    for path in paths:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        subjects = [subject for subject, _ in gen_subjects(tree)]
-        row = _build_row(path.name, *subjects, width=width)
-        yield f"{row}\n"
-
-
 def build_index_rows(tier: Path) -> str:
     """
     Renders a tier folder's index rows from its test files.
@@ -111,7 +102,16 @@ def build_index_rows(tier: Path) -> str:
         One row per ``test_*.py`` file in name order, each line ending in a newline.
 
     """
-    return "".join(_gen_rows(tier))
+    paths = sorted(tier.glob("test_*.py"))
+    width = max((len(path.name) for path in paths), default=0)
+    rows: list[str] = []
+
+    for path in paths:
+        tree = load_ast(path)
+        subjects = [subject for subject, _ in gen_subjects(tree)]
+        rows.append(f"{_build_row(path.name, *subjects, width=width)}\n")
+
+    return "".join(rows)
 
 
 def generate_tier_index(tier: Path) -> str:

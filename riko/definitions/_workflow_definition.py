@@ -629,16 +629,16 @@ class Workflow:
         """
         Builds a workflow with ``nodes`` appended in order.
 
-        The previous default output streams into ``node``, and the workflow appends any
-        new resources the ``node`` binds at the end.
+        The previous default output streams into the first node. Each node streams into
+        the next. The workflow appends any new resources the nodes bind at the end.
 
         Args:
 
-            node: The node to append.
+            nodes: The nodes to append.
 
         Returns:
 
-            A new workflow whose default output is ``node``'s output.
+            A new workflow whose default output is the last node's output.
 
         Raises:
 
@@ -857,6 +857,24 @@ class Workflow:
         if not self.is_valid:
             self._validate_graph()
 
+    def _validate_references(self) -> None:
+        """
+        Validates that every resource and input reference resolves.
+
+        Raises:
+
+            InvalidPipelineError: If a node refers to an undeclared resource or to an
+                input with no schema.
+
+        """
+        inputs = self.referenced_inputs
+
+        if undeclared := sorted(self.referenced_resources.difference(self.resources)):
+            msg = f"unresolved resource reference(s): {undeclared}"
+            raise InvalidPipelineError(msg)
+        elif unresolved := sorted(inputs.difference(self.input_schemas)):
+            raise InvalidPipelineError(f"unresolved input reference(s): {unresolved}")
+
     def _validate_graph(self) -> None:
         """
         Validates the graph against every check ``validate`` lists.
@@ -868,7 +886,6 @@ class Workflow:
         """
         self.validate_input_schemas()
         endpoints = {endpoint.node for endpoint in self.endpoints}
-        inputs = self.referenced_inputs
 
         if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
@@ -890,12 +907,10 @@ class Workflow:
         elif cyclic := list(self.index.cyclic):
             msg = f"edges form a cycle through node(s): {cyclic}"
             raise InvalidPipelineError(msg)
-        elif undeclared := sorted(self.referenced_resources.difference(self.resources)):
-            msg = f"unresolved resource reference(s): {undeclared}"
-            raise InvalidPipelineError(msg)
-        elif unresolved := sorted(inputs.difference(self.input_schemas)):
-            raise InvalidPipelineError(f"unresolved input reference(s): {unresolved}")
-        elif not self.outputs:
+
+        self._validate_references()
+
+        if not self.outputs:
             msg = "workflow exposes no workflow output; declare 'outputs'"
             raise InvalidPipelineError(msg)
 

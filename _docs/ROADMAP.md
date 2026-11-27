@@ -202,6 +202,7 @@ The complete `§0–27` routing map:
 | [tabular-interop.md](gameplans/tabular-interop.md) | Authoritative in-memory Pandas/Arrow/Polars boundary and representation conversion details. |
 | [artifact-conversion.md](gameplans/artifact-conversion.md) | Serialized codecs/reports/rendered artifacts. |
 | [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules. |
+| [entity-resolution.md](gameplans/entity-resolution.md) | Generic record linkage: layered exact/normalized/fuzzy/probabilistic/semantic matching, scored/explained match results, review thresholds, bounded blocking, optional linkage adapters. |
 | [reference-data.md](gameplans/reference-data.md) | Currency/location reference-data consolidation. |
 
 ### Extensibility & tooling

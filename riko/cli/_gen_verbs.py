@@ -8,6 +8,7 @@ from itertools import chain
 from re import DOTALL, Match, Pattern, compile
 from typing import TYPE_CHECKING, Literal
 
+from riko.base._funcutils import compose
 from riko.base._paths import ROOT_DIR
 from riko.base._strutils import get_codegen_note, wrap_words
 from riko.base._verbs import VERB_PAIRS, VERBS
@@ -21,6 +22,7 @@ type TableFormat = Literal["md", "rst"]
 _CODE = compile(r"`([^`]+)`")
 _NBSP = "\x00"
 _NOTE = get_codegen_note("--verbs")
+_OLD, _NEW = "MUST NOT", f"MUST{_NBSP}NOT"
 
 _RST_WIDTHS: dict[str, tuple[int, ...]] = {
     "verbs": (13, 11, 22, 24, 20, 30, 22),
@@ -49,6 +51,7 @@ VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
     ),
 }
 
+_word_lens = compose(partial(map, len), str.split)
 _sub = partial(_CODE.sub, r"``\1``")
 
 
@@ -87,21 +90,6 @@ def _render_md(table: Sequence[Sequence[str]]) -> str:
     return "\n".join(map(_pipe_cap, lines))
 
 
-def _gen_word_lens(*cells: Sequence[str]) -> Iterator[int]:
-    for col in zip(*cells, strict=True):
-        yield max(chain.from_iterable(map(len, cell.split()) for cell in col))
-
-
-def _gen_cells(table: Sequence[Sequence[str]]) -> Iterator[list[str]]:
-    for row in table:
-        yield [_sub(cell).replace("MUST NOT", f"MUST{_NBSP}NOT") for cell in row]
-
-
-def _gen_widths(caps: Iterable[int], word_lens: Iterable[int]) -> Iterator[int]:
-    for cap, word_len in zip(caps, word_lens, strict=True):
-        yield max(cap, word_len)
-
-
 def __gen_parts(
     wrapped_pairs: Iterable[tuple[Sequence[str], int]], i: int
 ) -> Iterator[str]:
@@ -109,25 +97,20 @@ def __gen_parts(
         yield (lines[i] if i < len(lines) else "").replace(_NBSP, " ").ljust(width)
 
 
-def _gen_lines(row: Iterable[str], widths: Sequence[int]) -> Iterator[str]:
-    row_pairs = zip(row, widths, strict=True)
-    wrapped = [wrap_words(cell, width) for cell, width in row_pairs]
-    wrapped_pairs = list(zip(wrapped, widths, strict=True))
-    _gen_parts = partial(__gen_parts, wrapped_pairs)
-    height = max(map(len, wrapped))
-    yield from (_pipe_cap(_gen_parts(i)) for i in range(height))
-
-
 def _render_rst(table: Sequence[Sequence[str]], caps: Sequence[int]) -> str:
-    cells = list(_gen_cells(table))
-    word_lens = _gen_word_lens(*cells)
-    widths = list(_gen_widths(caps, word_lens))
+    cells = [[_sub(cell).replace(_OLD, _NEW) for cell in row] for row in table]
+    cols = zip(*cells, strict=True)
+    word_lens = (max(chain.from_iterable(map(_word_lens, col))) for col in cols)
+    widths = [max(cap, size) for cap, size in zip(caps, word_lens, strict=True)]
     _rule = lambda char: _cap((char * (width + 2) for width in widths), "+")
-    header, *body = cells
-    lines = [_rule("-"), *_gen_lines(header, widths), _rule("=")]
+    lines = [_rule("-")]
 
-    for row in body:
-        lines.extend([*_gen_lines(row, widths), _rule("-")])
+    for index, row in enumerate(cells):
+        pairs = zip(row, widths, strict=True)
+        wrapped = [wrap_words(cell, width) for cell, width in pairs]
+        _gen_parts = partial(__gen_parts, list(zip(wrapped, widths, strict=True)))
+        lines.extend(_pipe_cap(_gen_parts(i)) for i in range(max(map(len, wrapped))))
+        lines.append(_rule("=" if index == 0 else "-"))
 
     return "\n".join(lines)
 

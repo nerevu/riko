@@ -158,37 +158,12 @@ def _order_groups(*names: str) -> list[str]:
     return [*canonical, *extra]
 
 
-def _get_members(*entries: NameEntry) -> dict[str, str]:
-    members: dict[str, str] = {}
-
-    for entry in sorted(entries, key=lambda e: e.name):
-        member = entry.member
-
-        if member in members:
-            raise ValueError(
-                f"module ids {members[member]!r} and {entry.name!r} both map to "
-                f"enum member {member!r}; give one an explicit enum_name"
-            )
-
-        members[member] = entry.name
-
-    return members
-
-
 def _gen_class_blocks(groups: Mapping[str, Iterable[NameEntry]]) -> Iterator[str]:
     for class_name in _order_groups(*groups):
-        members = _get_members(*groups.get(class_name, []))
-        lines = [f'    {member} = "{mid}"' for member, mid in members.items()]
+        entries = sorted(groups.get(class_name, []), key=lambda e: e.name)
+        lines = [f'    {entry.member} = "{entry.name}"' for entry in entries]
         body = lines or ["    pass"]
         yield "\n".join([f"class {class_name}(ModuleName):", *body])
-
-
-def _gen_aliases(
-    class_name: str, *entries: NameEntry
-) -> Iterator[tuple[str, str, str]]:
-    for entry in sorted(entries, key=lambda e: e.name):
-        line = f"    {entry.alias} = {class_name}.{entry.member}"
-        yield (entry.name, line, entry.alias)
 
 
 def _generate_module_block(groups: Mapping[str, Iterable[NameEntry]]) -> str:
@@ -196,9 +171,10 @@ def _generate_module_block(groups: Mapping[str, Iterable[NameEntry]]) -> str:
     aliases: list[tuple[str, str]] = []
 
     for class_name in _order_groups(*groups):
-        entries = groups.get(class_name, [])
+        for entry in sorted(groups.get(class_name, []), key=lambda e: e.name):
+            mid, alias = entry.name, entry.alias
+            line = f"    {alias} = {class_name}.{entry.member}"
 
-        for mid, line, alias in _gen_aliases(class_name, *entries):
             if alias in alias_ids:
                 raise ValueError(
                     f"module ids {alias_ids[alias]!r} and {mid!r} both map to "

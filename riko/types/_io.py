@@ -5,17 +5,18 @@ from __future__ import annotations
 from functools import partial
 from pathlib import Path
 from random import choice
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal
 
 from riko._package import default_user_agent
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
+    ASYNC_CLOSE_MSG,
+    AsyncClosable,
     SyncClosable,
-    _is_async_close,
+    get_async_closer,
     get_sync_closer,
     is_async_callable,
-    isinstance_strict,
 )
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
     from ._enums import UserAgentLike
     from ._resource import Cleanup
-    from ._wrappers import AsyncFunc, Func
+    from ._wrappers import Func
 
 type PathLike = str | Path
 type Closable = SyncClosable | AsyncClosable
@@ -37,52 +38,9 @@ _USER_AGENT_POOLS: dict[str, tuple[str, ...]] = {
     UserAgent.DESKTOP: DESKTOP_USER_AGENTS,
     UserAgent.MOBILE: MOBILE_USER_AGENTS,
 }
-ASYNC_CLOSE_MSG = (
-    "a value whose only close is async cannot be closed under `for`; produce it "
-    "with an async resource factory or lifecycle, or iterate with `async for`"
-)
-
-
-@runtime_checkable
-class AsyncClosable(Protocol):
-    async def aclose(self) -> object | None: ...
 
 
 PathLikeType: tuple[type[str], type[Path]] = (str, Path)
-
-
-def get_async_closer(value: object) -> AsyncFunc[object] | None:
-    """
-    Gets the method that closes ``value`` on an event loop.
-
-    ``aclose`` is preferred over an async def ``close``.
-
-    Args:
-
-        value: The value to inspect.
-
-    Returns:
-
-        The value's ``aclose`` or async ``close``, or ``None`` when it has neither.
-
-    Examples:
-
-        >>> class Client:
-        ...     async def close(self):
-        ...         pass
-        >>>
-        >>> get_async_closer(Client()).__name__, get_async_closer(1)
-        ('close', None)
-
-    """
-    closer = None
-
-    if isinstance_strict(value, AsyncClosable):
-        closer = value.aclose
-    elif isinstance_strict(value, SyncClosable) and _is_async_close(value.close, value):
-        closer = value.close
-
-    return closer
 
 
 def resolve_closer[T](
@@ -92,23 +50,23 @@ def resolve_closer[T](
     is_async: bool | None = None,
 ) -> Closer | None:
     """
-    Resolves the way an owner closes ``value``, if any.
+    Resolves the way ``value`` is closed, if any.
 
-    A ``cleanup`` is bound to the value in place of its own close. Under a sync owner
+    A ``cleanup`` is bound to the value in place of its own close. Under a sync close
     (``is_async=False``) an async cleanup, or a value whose only close is async, is
-    rejected. An async owner (``True``) prefers the async close. An owner of either
-    kind (``None``) prefers the sync one.
+    rejected. An async close (``True``) prefers the async close; either kind
+    (``None``) prefers the sync one.
 
     Args:
 
-        value: The owned value.
+        value: The value to close.
 
     Kwargs:
 
         cleanup: The cleanup to call with ``value``, ``False`` to leave it open, or
             ``None`` for the value's own close.
 
-        is_async: Whether the owner closes on an event loop, or ``None`` for either.
+        is_async: Whether the close runs on an event loop, or ``None`` for either.
 
     Returns:
 
@@ -117,7 +75,7 @@ def resolve_closer[T](
 
     Raises:
 
-        InvalidPipelineError: If a sync owner would need an event loop to close
+        InvalidPipelineError: If a sync close would need an event loop to close
             ``value`` or run ``cleanup``.
 
     Examples:
@@ -166,20 +124,20 @@ def require_closer[T](
     is_async: bool | None = None,
 ) -> Closer | None:
     """
-    Requires a way to close an owned resource value, and gets it.
+    Requires a way to close a resource value, and gets it.
 
     The closer is chosen as ``resolve_closer`` does; a value with no close and no
     ``cleanup`` is an error here rather than a value left open.
 
     Args:
 
-        value: The owned resource value.
+        value: The resource value to close.
 
     Kwargs:
 
         cleanup: The cleanup to call with ``value``, ``False`` to leave it open, or
             ``None`` for the value's own close.
-        is_async: Whether the owner closes on an event loop, or ``None`` for either.
+        is_async: Whether the close runs on an event loop, or ``None`` for either.
 
     Returns:
 
@@ -188,7 +146,7 @@ def require_closer[T](
     Raises:
 
         TypeError: If the value has no close and no ``cleanup`` is given.
-        InvalidPipelineError: If a sync owner would need an event loop to close
+        InvalidPipelineError: If a sync close would need an event loop to close
             ``value`` or run ``cleanup``.
 
     Examples:
@@ -207,8 +165,8 @@ def require_closer[T](
     closer = resolve_closer(value, cleanup, is_async=is_async)
 
     if cleanup is not False and closer is None:
-        msg = "Must provide a Closable value or cleanup function for riko owned "
-        msg += f"resources. Not a {type(value).__name__}. If this value's lifecycle is "
+        msg = "Must provide a Closable value or cleanup function for a resource riko "
+        msg += f"closes. Not a {type(value).__name__}. If this value's lifecycle is "
         msg += "externally managed, use Resource.from_external(...) instead."
         raise TypeError(msg)
 

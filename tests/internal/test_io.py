@@ -1,19 +1,19 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides internal tests for URL/file I/O, re-encoding, and async stream helpers."""
+"""Provides internal tests for URL/file I/O, re-encoding, feeds, and writes."""
 
 from __future__ import annotations
 
+import csv
+import json
 import socket
 import threading
-import warnings
 from contextlib import contextmanager, suppress
 from functools import partial
-from inspect import iscoroutinefunction
 from io import BytesIO, StringIO
 from os import environ, linesep
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
-from unittest.mock import ANY, Mock, PropertyMock, patch
+from unittest.mock import Mock, PropertyMock, patch
 from urllib.request import urlopen
 from urllib.response import addinfourl
 
@@ -23,36 +23,9 @@ from requests.exceptions import ChunkedEncodingError, HTTPError, Timeout
 
 from riko._package import __version__
 from riko.bado import as_async, run
-from riko.bado._backend import (
-    CapacityLimiter,
-    HTTPStatusError,
-    Semaphore,
-    TimeoutException,
-    async_sleep,
-    lowlevel,
-)
-from riko.bado._backend import asyncify as backend_asyncify
-from riko.bado._util import (
-    async_get,
-    async_partial,
-    async_return,
-    asyncify,
-    gather_results,
-    maybe_async,
-)
-from riko.bado.itertools import (
-    aauto_close,
-    alist,
-    async_map,
-    async_map_ordered_stream,
-    async_map_stream,
-    async_merge,
-)
-from riko.base._config import settings
+from riko.bado._backend import HTTPStatusError, TimeoutException, async_sleep
+from riko.bado._util import async_get, gather_results, maybe_aclosing
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
-from riko.base._guards import is_async_callable
-from riko.base._iterutils import auto_close
-from riko.base._sentinels import MISSING
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 from riko.definitions._targets import build_write
 from riko.definitions._write import WriteResult
@@ -86,32 +59,22 @@ from riko.runtime._write_session import (
     write_through,
 )
 from riko.types._enums import Formats, UserAgent
-from riko.types._io import require_closer
-from tests import async_test, is_installed, run_python, skipif_sync
+from tests import async_test, get_values, is_installed, run_python, skipif_sync
 from tests._lifecycle import ITEMS
 from tests._loopback import ForwardOnly, loopback_url
-from tests._resources import AsyncConnection, Connection
-from tests._streams import Closable, gen_items
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Iterator
+    from collections.abc import Generator, Iterator
 
     from riko.types._enums import UserAgentLike
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
-    from riko.types._wrappers import AsyncFunc, Func
+    from riko.types._wrappers import Func
 
 _LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 
 
-async def _double(x: int) -> int:
-    return x * 2
-
-
-_MAP = partial(async_map_stream, _double, range(3))
-_ORDERED = partial(async_map_ordered_stream, _double, range(3))
-_MERGE = partial(async_merge, [])
 _X0, _X1 = [{"x": 0}], [{"x": 1}]
 _CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
 _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
@@ -132,22 +95,43 @@ ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
     reason="atomic replace-write publication is not yet implemented",
 )
 
-ASYNC_GET_SCRIPT = """
+# An appended CSV row follows the existing header, not the new item's key order.
+CSV_HEADER_ORDER_PENDING = pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="appending CSV rows in the existing header's column order is not yet "
+    "implemented",
+)
+
+FETCH_TIMEOUT_SCRIPT = """
+import json
 import sys
 from time import monotonic
 from riko.bado import run
-from riko.bado._backend import TimeoutException
 from riko.bado._util import async_get
+from riko.io._async import async_url_open
+from riko.io._sync import Fetch
 
-async def main():
+async def open_url(url):
+    await async_url_open(url)
+
+def timed(func, *args):
     start = monotonic()
 
     try:
-        await async_get(sys.argv[1])
-    except TimeoutException:
-        print(monotonic() - start)
+        func(*args)
+    except Exception:
+        pass
 
-run(main)
+    return monotonic() - start
+
+url = sys.argv[1]
+waits = {
+    "fetch": timed(Fetch, url),
+    "async_url_open": timed(run, open_url, url),
+    "async_get": timed(run, async_get, url),
+}
+print(json.dumps(waits))
 """
 
 
@@ -273,8 +257,8 @@ class TestLoadRssLinks:
         path = tmp_path / "page.html"
         path.write_text(_FEED_PAGE)
         url = path.as_uri()
-        links = [entry.get("link") for entry in load_rss_links(url, **kwargs)]
-        alinks = [entry.get("link") for entry in await aload_rss_links(url, **kwargs)]
+        links = get_values(load_rss_links(url, **kwargs), "link")
+        alinks = get_values(await aload_rss_links(url, **kwargs), "link")
         assert links == alinks == expected
 
     @async_test
@@ -286,8 +270,8 @@ class TestLoadRssLinks:
         )
         url = path.as_uri()
         expected = [(tmp_path / "feed.xml").as_uri(), "file:///atom.xml"]
-        links = [entry.get("link") for entry in load_rss_links(url)]
-        alinks = [entry.get("link") for entry in await aload_rss_links(url)]
+        links = get_values(load_rss_links(url), "link")
+        alinks = get_values(await aload_rss_links(url), "link")
         assert links == alinks == expected
 
     @pytest.mark.parametrize("link_type", EMPTY_LINK_TYPES)
@@ -451,16 +435,6 @@ class TestFetch:
         mock_requests.assert_called_once()
         mock_urlopen.assert_not_called()
         assert mock_requests.call_args.args[0] == target
-
-    def test_default_timeout_comes_from_settings(self):
-        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
-        response = Mock()
-        response.headers = {"Content-Type": "text/plain"}
-
-        with patch("riko.io._sync.requests.get", return_value=response) as mock_get:
-            Fetch("http://example.com/feed.txt", binary=True)
-
-        assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
 
     def test_a_failed_status_check_closes_the_response(self):
         """An HTTP error closes the streamed response before it propagates."""
@@ -670,30 +644,18 @@ class TestAsyncUrlOpen:
         assert f.ext == "xml"
         assert f.content_type == content_type
 
-    @async_test
-    async def test_default_timeout_comes_from_settings(self, monkeypatch):
-        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
-        seen: dict[str, object] = {}
-        stub = stub_async_get(b"{}", "application/json")
-
-        async def async_get(url: str, **kwargs: object):
-            seen.update(kwargs)
-            return await stub(url, **kwargs)
-
-        monkeypatch.setattr("riko.io._async.async_get", async_get)
-        await async_url_open(URL)
-        assert seen["timeout"] == settings.fetch_timeout
-
     @pytest.mark.simulated_network
     @skipif_sync
-    def test_async_get_waits_the_configured_fetch_timeout(self):
-        """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
+    def test_fetches_wait_the_configured_fetch_timeout(self):
+        """``RIKO_FETCH_TIMEOUT`` bounds every untimed fetch on a stalled server."""
         env = environ | {"RIKO_FETCH_TIMEOUT": "0.2"}
 
-        with stalled_url() as url:
-            run = run_python("-c", ASYNC_GET_SCRIPT, url, env=env)
+        with stalled_url(stall=1) as url:
+            run = run_python("-c", FETCH_TIMEOUT_SCRIPT, url, env=env)
 
-        assert float(run.stdout) < 2
+        waits = json.loads(run.stdout)
+        assert list(waits) == ["fetch", "async_url_open", "async_get"]
+        assert [name for name, wait in waits.items() if wait >= 1] == []
 
     @async_test
     async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
@@ -820,12 +782,27 @@ class TestAsyncUrlOpen:
                 assert sync_result == f.read()
 
 
+FOREIGN_NEWLINES = [
+    pytest.param(b"abc\r\rdef", ["abc", "", "def"], id="doubled-cr"),
+    pytest.param(b"\rabc", ["", "abc"], id="leading-cr"),
+    pytest.param(b"abc\rdef\r", ["abc", "def", ""], id="trailing-cr"),
+]
 PARTIAL_READS = [
     pytest.param(
         b"abc\nde\n", BytesReencoder, list, [b"c\n", b"de\n"], id="bytes-iter"
     ),
     pytest.param(b"abc\nde\n", BytesReencoder, bytes, b"c\nde\n", id="bytes-buffer"),
     pytest.param("abc\nde\n", TextReencoder, list, ["c\n", "de\n"], id="text-iter"),
+]
+EMPTY_SOURCES = [
+    pytest.param(b"", TextReencoder, {}, "", id="text"),
+    pytest.param(b"", BytesReencoder, {}, b"", id="bytes"),
+    pytest.param(b"\xff\xfe", TextReencoder, {"fromenc": "utf-16"}, "", id="utf16-bom"),
+]
+BOM_READS = [
+    pytest.param(TextReencoder, {}, "﻿<r/>\n", id="text-keeps-bom"),
+    pytest.param(TextReencoder, {"remove_BOM": True}, "<r/>\n", id="text-drops-bom"),
+    pytest.param(BytesReencoder, {"remove_BOM": True}, b"<r/>\n", id="bytes-drops-bom"),
 ]
 
 
@@ -866,14 +843,7 @@ class TestReencode:
         assert reader.readlines() == [f"abc{linesep}", f"def{linesep}", "ghi"]
         assert bare == ["abc", "def", "ghi"]
 
-    @pytest.mark.parametrize(
-        ("data", "expected"),
-        [
-            (b"abc\r\rdef", ["abc", "", "def"]),
-            (b"\rabc", ["", "abc"]),
-            (b"abc\rdef\r", ["abc", "def", ""]),
-        ],
-    )
+    @pytest.mark.parametrize(("data", "expected"), FOREIGN_NEWLINES)
     def test_foreign_newlines_keep_blank_lines(self, data, expected):
         """Each carriage return ends exactly one line, so blank lines survive."""
         full = TextReencoder(BytesIO(data)).read()
@@ -904,28 +874,14 @@ class TestReencode:
         data = "a\nb\nc\n".encode("utf-16")
         assert BytesReencoder(BytesIO(data), "utf-16").read() == b"a\nb\nc\n"
 
-    @pytest.mark.parametrize(
-        ("data", "cls", "kwargs", "expected"),
-        [
-            (b"", TextReencoder, {}, ""),
-            (b"", BytesReencoder, {}, b""),
-            (b"\xff\xfe", TextReencoder, {"fromenc": "utf-16"}, ""),
-        ],
-    )
+    @pytest.mark.parametrize(("data", "cls", "kwargs", "expected"), EMPTY_SOURCES)
     def test_empty_source_reads_empty(self, data, cls, kwargs, expected):
         """A source with no content reads as empty instead of raising."""
         reader = cls(BytesIO(data), **kwargs)
         assert reader.read() == expected
         assert reader.readline() == expected
 
-    @pytest.mark.parametrize(
-        ("cls", "kwargs", "expected"),
-        [
-            (TextReencoder, {}, "﻿<r/>\n"),
-            (TextReencoder, {"remove_BOM": True}, "<r/>\n"),
-            (BytesReencoder, {"remove_BOM": True}, b"<r/>\n"),
-        ],
-    )
+    @pytest.mark.parametrize(("cls", "kwargs", "expected"), BOM_READS)
     def test_remove_bom_strips_the_byte_order_mark(self, cls, kwargs, expected):
         """``remove_BOM`` drops a leading byte order mark; it is kept by default."""
         data = b"\xef\xbb\xbf<r/>\n"
@@ -987,11 +943,12 @@ class TestReencode:
 
 COLLECTION_EXPORT_OPTIONS = [
     pytest.param("tuple", (), {"mode": "w"}, "mode", id="tuple-writer-option"),
+    pytest.param("list", (), {"mode": "w"}, "mode", id="list-writer-option"),
     pytest.param("list", (), {"indent": 2}, "indent", id="list-converter"),
 ]
 
 
-class TestConversionFuncs:
+class TestExportConverters:
     """The ``export`` converter registry mirrors ``Formats`` and drives ``export``."""
 
     def test_encoding_reaches_a_converter_that_takes_it(self, monkeypatch, tmp_path):
@@ -1034,591 +991,6 @@ class TestChunkContent:
             f.write(data)
             f.seek(0)
             assert list(_chunk_content(f, 3)) == expected
-
-
-class TestAsyncMap:
-    @async_test
-    async def test_a_missing_result_keeps_its_slot(self):
-        """A function returning the missing sentinel still gets its slot."""
-
-        async def missing(_):
-            return MISSING
-
-        assert await async_map(missing, [1, 2]) == [MISSING, MISSING]
-
-
-async def _forever(closed: list[bool]):
-    index = 0
-
-    try:
-        while True:
-            yield index
-            index += 1
-    finally:
-        closed.append(True)
-
-
-def _close_sync(stream: Closable, *closables: object, times: int = 1) -> None:
-    wrapper = auto_close(stream, *closables)
-
-    for _ in range(times):
-        wrapper.close()
-
-
-def _close_async(stream: Closable, *closables: object, times: int = 1) -> None:
-    async def main() -> None:
-        wrapper = aauto_close(stream, *closables)
-
-        for _ in range(times):
-            await wrapper.aclose()
-
-    run(main)
-
-
-def _drain_sync(stream: Closable, *closables: object) -> list[int]:
-    return list(auto_close(stream, *closables))
-
-
-def _drain_async(stream: Closable, *closables: object) -> list[int]:
-    return run(alist, aauto_close(stream, *closables))
-
-
-def _start_sync(closes: list[str], *, finish: bool) -> None:
-    wrapper = auto_close(iter([1, 2]), Closable("a", closes))
-    next(wrapper)
-
-    if finish:
-        wrapper.close()
-
-
-def _start_async(closes: list[str], *, finish: bool) -> None:
-    async def main() -> None:
-        wrapper = aauto_close(as_async([1, 2]), Closable("a", closes))
-        await anext(wrapper)
-
-        if finish:
-            await wrapper.aclose()
-
-    run(main)
-
-
-def _gen_tracked(closes: list[str]) -> Iterator[int]:
-    try:
-        yield from (1, 2)
-    finally:
-        closes.append("gen")
-
-
-async def _agen_tracked(closes: list[str]) -> AsyncIterator[int]:
-    try:
-        for value in (1, 2):
-            yield value
-    finally:
-        closes.append("agen")
-
-
-def _drop_sync_streams(closes: list[str]) -> None:
-    next(auto_close(_gen_tracked(closes), (x for x in "ab")))
-
-
-def _drop_async_streams(closes: list[str]) -> None:
-    async def main() -> None:
-        await anext(aauto_close(_agen_tracked(closes), _gen_tracked(closes)))
-
-    run(main)
-
-
-AUTO_CLOSERS = [
-    pytest.param(_close_sync, id="sync"),
-    pytest.param(_close_async, id="async", marks=skipif_sync),
-]
-AUTO_CLOSE_STARTERS = [
-    pytest.param(_start_sync, "auto_close", id="sync"),
-    pytest.param(_start_async, "aauto_close", id="async", marks=skipif_sync),
-]
-AUTO_CLOSE_UNCLOSED = [
-    pytest.param(_start_sync, "auto_close", ["a"], id="sync-closes"),
-    pytest.param(_start_async, "aauto_close", [], id="async", marks=skipif_sync),
-]
-
-AUTO_CLOSE_STREAMS_ONLY = [
-    pytest.param(_drop_sync_streams, ["gen"], id="sync"),
-    pytest.param(_drop_async_streams, ["agen"], id="async", marks=skipif_sync),
-]
-
-AUTO_CLOSE_DRAINS = [
-    pytest.param(_drain_sync, id="sync"),
-    pytest.param(_drain_async, id="async", marks=skipif_sync),
-]
-
-
-class _BrokenClosable(Closable):
-    """Stands in for a value whose close records itself, then fails."""
-
-    def close(self) -> None:
-        super().close()
-        raise OSError(f"{self.name} close failed")
-
-
-class TestAutoClose:
-    """Test the wrappers that close a stream's backing values when iteration ends."""
-
-    @pytest.mark.parametrize("close", AUTO_CLOSERS)
-    def test_close_before_read_closes_everything(self, close):
-        closes = []
-        close(Closable("stream", closes), Closable("a", closes), Closable("b", closes))
-        assert closes == ["stream", "a", "b"]
-
-    @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
-    def test_stream_error_closes_and_propagates(self, drain):
-        closes = []
-        stream = Closable("stream", closes, ValueError("boom"))
-
-        with pytest.raises(ValueError, match="boom"):
-            drain(stream, Closable("a", closes))
-
-        assert closes == ["stream", "a"]
-
-    @pytest.mark.parametrize("close", AUTO_CLOSERS)
-    def test_several_failed_closes_raise_together(self, close):
-        closes = []
-        broken = (_BrokenClosable("a", closes), _BrokenClosable("b", closes))
-
-        with pytest.raises(ExceptionGroup, match="multiple errors") as info:
-            close(Closable("stream", closes), *broken)
-
-        assert closes == ["stream", "a", "b"]
-        assert len(info.value.exceptions) == 2
-
-    @pytest.mark.parametrize("close", AUTO_CLOSERS)
-    def test_single_failed_close_raises_after_every_close(self, close):
-        closes = []
-        values = (_BrokenClosable("a", closes), Closable("b", closes))
-
-        with pytest.raises(OSError, match="a close failed"):
-            close(Closable("stream", closes), *values)
-
-        assert closes == ["stream", "a", "b"]
-
-    @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
-    def test_close_failure_after_a_read_error_is_noted_on_it(self, drain):
-        closes = []
-        stream = Closable("stream", closes, ValueError("boom"))
-
-        with pytest.raises(ValueError, match="boom") as info:
-            drain(stream, _BrokenClosable("a", closes))
-
-        failure = OSError("a close failed")
-        assert info.value.__notes__ == [f"closing the source also failed: {failure!r}"]
-        assert closes == ["stream", "a"]
-
-    @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
-    def test_close_failure_after_exhaustion_raises(self, drain):
-        closes = []
-
-        with pytest.raises(OSError, match="a close failed"):
-            drain(Closable("stream", closes), _BrokenClosable("a", closes))
-
-        assert closes == ["stream", "a"]
-
-    @pytest.mark.parametrize("close", AUTO_CLOSERS)
-    def test_second_close_does_nothing(self, close):
-        closes = []
-        close(Closable("stream", closes), Closable("a", closes), times=2)
-        assert closes == ["stream", "a"]
-
-    def test_none_closable_is_skipped(self):
-        closes = []
-        _close_sync(Closable("stream", closes), None, Closable("a", closes))
-        assert closes == ["stream", "a"]
-
-    @pytest.mark.parametrize(("start", "name", "closed"), AUTO_CLOSE_UNCLOSED)
-    def test_dropping_a_started_unclosed_wrapper_warns(self, start, name, closed):
-        closes = []
-
-        with pytest.warns(ResourceWarning, match=f"unclosed {name} stream"):
-            start(closes, finish=False)
-
-        assert closes == closed
-
-    @pytest.mark.parametrize(("start", "name"), AUTO_CLOSE_STARTERS)
-    def test_dropping_a_closed_wrapper_does_not_warn(self, start, name):
-        closes = []
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            start(closes, finish=True)
-
-        assert closes == ["a"]
-        assert caught == []
-
-    @pytest.mark.parametrize(("drop", "closed"), AUTO_CLOSE_STREAMS_ONLY)
-    def test_dropping_an_unclosed_wrapper_of_streams_does_not_warn(self, drop, closed):
-        closes = []
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            drop(closes)
-
-        assert closes == closed
-        assert caught == []
-
-
-ACLOSE_CASES = [
-    pytest.param(Connection, Connection.close, id="sync-cleanup"),
-    pytest.param(Connection, None, id="sync-close"),
-    pytest.param(AsyncConnection, AsyncConnection.aclose, id="async-cleanup"),
-    pytest.param(AsyncConnection, None, id="async-close"),
-]
-
-
-class TestRequireCloser:
-    """Test the closer a value or its cleanup resolves to."""
-
-    @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
-    @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
-    @async_test
-    async def test_closer_runs_inline_or_on_a_worker(
-        self, client_class, cleanup, inline
-    ) -> None:
-        client = client_class()
-        closer = require_closer(client, cleanup, is_async=True)
-        assert closer is not None
-        await maybe_async.using(inline=inline)(closer)
-        assert client.closed is True
-
-
-def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
-    state = {"current": 0, "peak": 0}
-
-    async def leaf(x: int) -> int:
-        state["current"] += 1
-        state["peak"] = max(state["peak"], state["current"])
-        await async_sleep(0.01)
-        state["current"] -= 1
-        return x
-
-    return state, leaf
-
-
-def _sync_forever(closed: list[bool]):
-    index = 0
-
-    try:
-        while True:
-            yield index
-            index += 1
-    finally:
-        closed.append(True)
-
-
-STREAM_OPTION_REJECTIONS = [
-    pytest.param({"limit": 0}, "limit must be at least 1", id="limit"),
-    pytest.param({"buffer": -1}, "buffer cannot be negative", id="buffer"),
-]
-
-
-class TestAsyncMapStream:
-    """
-    Test the bounded-memory async map streams.
-
-    ``async_map_stream`` is concurrent, order-independent, and bounded-memory;
-    ``async_map_ordered_stream`` keeps the same bound while preserving source order.
-    """
-
-    @skipif_sync
-    @pytest.mark.parametrize(
-        "stream",
-        [
-            pytest.param(async_map_stream, id="unordered"),
-            pytest.param(async_map_ordered_stream, id="ordered"),
-        ],
-    )
-    def test_empty_source_yields_nothing(self, stream):
-        assert run(alist, stream(_double, [], limit=4)) == []
-
-    @skipif_sync
-    def test_accepts_async_source(self):
-        async def gen():
-            for i in range(5):
-                yield i
-
-        results = run(alist, async_map_stream(_double, gen(), limit=2))
-        assert sorted(results) == [0, 2, 4, 6, 8]
-
-    @pytest.mark.parametrize(
-        ("stream", "bound"),
-        [
-            pytest.param(async_map_stream, 3 + 2 + 2, id="unordered"),
-            pytest.param(async_map_ordered_stream, 2 * (3 + 2), id="ordered"),
-        ],
-    )
-    @async_test
-    async def test_backpressure_bounds_inflight(self, stream, bound):
-        """An unbounded-ish source with a slow consumer must not run far ahead."""
-        total = 200
-        produced = 0
-
-        async def gen():
-            nonlocal produced
-            for i in range(total):
-                produced += 1
-                yield i
-
-        seen = 0
-
-        async for _ in stream(_double, gen(), limit=3, buffer=2):
-            seen += 1
-            assert produced - seen <= bound
-            await lowlevel.checkpoint()
-
-        assert produced == total == seen
-
-    @skipif_sync
-    def test_ordered_preserves_source_order_under_skew(self):
-        """The slowest item is first, so an unordered map would reorder it."""
-
-        async def slow_first(i: int) -> int:
-            await async_sleep((5 - i) * 0.01)
-            return i
-
-        result = run(alist, async_map_ordered_stream(slow_first, range(6), limit=3))
-        assert result == list(range(6))
-
-    @async_test
-    async def test_shared_budget_caps_nested_fanout(self):
-        """
-        Share one concurrency budget across leaf maps.
-
-        An outer fan-out of 4 items, each with 5 leaf operations, has 20 potential
-        operations but never exceeds a budget of 3. The outer fan-out remains
-        unbudgeted to avoid deadlock.
-        """
-        state, leaf = _budgeted_probe()
-        budget = Semaphore(3)
-
-        async def source(i: int) -> list[int]:
-            leaves = async_map_stream(leaf, range(5), limit=10, budget=budget)
-            return [r async for r in leaves]
-
-        outer = async_map_stream(source, range(4), limit=10)
-        results = [r async for r in outer]
-        assert len(results) == 4
-        assert state["peak"] <= 3
-
-    @pytest.mark.parametrize(
-        ("stream", "arrange"),
-        [
-            pytest.param(async_map_stream, sorted, id="unordered"),
-            pytest.param(async_map_ordered_stream, list, id="ordered"),
-        ],
-    )
-    @async_test
-    async def test_shared_budget_caps_concurrent_streams(self, stream, arrange):
-        """Two concurrent maps sharing a budget of 3 never exceed it."""
-        state, leaf = _budgeted_probe()
-        budget = Semaphore(3)
-
-        async def collect() -> list[int]:
-            mapped = stream(leaf, range(10), limit=4, budget=budget)
-            return [r async for r in mapped]
-
-        results = await gather_results([collect(), collect()])
-        assert [arrange(result) for result in results] == [list(range(10))] * 2
-        assert 1 < state["peak"] <= 3
-
-    @pytest.mark.parametrize(
-        ("stream", "firsts"),
-        [
-            pytest.param(async_map_stream, {0, 2}, id="unordered"),
-            pytest.param(async_map_ordered_stream, {0}, id="ordered"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "source", [_forever, _sync_forever], ids=["async-source", "sync-source"]
-    )
-    @async_test
-    async def test_early_close_stops_workers_and_closes_source(
-        self, stream, firsts, source
-    ):
-        closed: list[bool] = []
-        items = source(closed)
-        mapped = stream(_double, items, limit=2)
-        first = await anext(mapped)
-        await mapped.aclose()
-        assert first in firsts
-        assert closed == [True]
-
-    @skipif_sync
-    @pytest.mark.parametrize(
-        "build", [_MAP, _ORDERED, _MERGE], ids=["map", "ordered", "merge"]
-    )
-    @pytest.mark.parametrize(("kwargs", "match"), STREAM_OPTION_REJECTIONS)
-    def test_rejects_bad_limit_or_buffer(self, build, kwargs, match):
-        with pytest.raises(ValueError, match=match):
-            run(alist, build(**kwargs))
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="sliding-window async ordered mapping is not yet implemented",
-    )
-    @async_test
-    async def test_ordered_yields_ready_results_while_a_later_item_runs(self):
-        """A slow second item never holds back the first result or the third start."""
-        log: list[str] = []
-
-        async def slow_second(i: int) -> int:
-            log.append(f"start {i}")
-            await async_sleep(0.05 if i == 1 else 0)
-            log.append(f"done {i}")
-            return i
-
-        async for i in async_map_ordered_stream(slow_second, range(4), limit=2):
-            log.append(f"yield {i}")
-
-        assert log.index("yield 0") < log.index("done 1")
-        assert log.index("start 2") < log.index("done 1")
-
-
-class TestAsyncMerge:
-    @async_test
-    async def test_early_close_closes_every_source(self):
-        """Closing the merge after one item closes every source cleanly."""
-        closed: list[bool] = []
-        merged = async_merge([_forever(closed), _forever(closed)], limit=2)
-        await anext(merged)
-        await merged.aclose()
-        assert closed == [True, True]
-
-    @skipif_sync
-    def test_async_merge_yields_every_value(self):
-        """More iterables than ``limit`` still merge in full."""
-        iterables = [gen_items([1, 2]), gen_items([3, 4]), gen_items([5])]
-        assert sorted(run(alist, async_merge(iterables, limit=2))) == [1, 2, 3, 4, 5]
-
-    @async_test
-    async def test_async_merge_interleaves_across_iterables(self):
-        """A fast iterable's items surface before a slow one finishes (incremental)."""
-        slow = gen_items(["slow1", "slow2"], delay=0.05)
-        fast = gen_items(["fast1", "fast2"])
-        out = [item async for item in async_merge([slow, fast], limit=2)]
-        assert sorted(out) == ["fast1", "fast2", "slow1", "slow2"]
-        assert out.index("fast2") < out.index("slow2")
-
-
-class TestGatherResults:
-    @async_test
-    async def test_gather_results_preserves_none_positions(self):
-        """A legitimate ``None`` result stays in place; output aligns with inputs."""
-        awaitables = [async_return(None), async_return(1), async_return(None)]
-        result = await gather_results(awaitables)
-        assert result == [None, 1, None]
-
-
-def _echo(value: int, **options: object) -> tuple[int, dict[str, object], int]:
-    return value, options, threading.get_ident()
-
-
-async def _aecho(value: int, **options: object) -> tuple[int, dict[str, object], int]:
-    return _echo(value, **options)
-
-
-def _echo_later(value: int, **options: object) -> Awaitable[tuple]:
-    return _aecho(value, **options)
-
-
-class _AsyncEcho:
-    async def __call__(
-        self, value: int, **options: object
-    ) -> tuple[int, dict[str, object], int]:
-        return _echo(value, **options)
-
-
-RUNNER_CALLABLES = [
-    pytest.param(_echo, id="sync"),
-    pytest.param(_aecho, id="async"),
-    pytest.param(_echo_later, id="sync-returns-awaitable"),
-]
-RUNNERS = [
-    pytest.param(maybe_async, id="inline"),
-    pytest.param(asyncify, id="worker"),
-    pytest.param(asyncify.using(abandon_on_cancel=True), id="abandoning-worker"),
-]
-RUNNER_THREADS = [
-    pytest.param(maybe_async, True, id="inline"),
-    pytest.param(maybe_async.using(inline=False), False, id="inline-using-worker"),
-    pytest.param(asyncify, False, id="worker"),
-    pytest.param(asyncify.using(inline=True), True, id="worker-using-inline"),
-]
-ASYNC_CALLABLES = [
-    pytest.param(maybe_async, id="inline-runner"),
-    pytest.param(asyncify, id="worker-runner"),
-    pytest.param(partial(_AsyncEcho()), id="partial-of-async-instance"),
-    pytest.param(partial(partial(_aecho)), id="nested-partial"),
-    pytest.param(partial(partial(_AsyncEcho())), id="nested-partial-of-async-instance"),
-]
-RUNNER_PARTIALS = [
-    pytest.param(async_partial, id="async_partial"),
-    pytest.param(asyncify.partial, id="worker-partial"),
-]
-
-
-class TestAsyncRunner:
-    """Test the runner that awaits a sync or async callable's result."""
-
-    @pytest.mark.parametrize("runner", RUNNERS)
-    @pytest.mark.parametrize("func", RUNNER_CALLABLES)
-    @async_test
-    async def test_runner_forwards_every_argument_to_the_callee(
-        self, func, runner
-    ) -> None:
-        options = {"inline": 0, "limiter": 1, "abandon_on_cancel": 2, "mode": "fast"}
-        value, received, _ = await runner(func, 1, **options)
-        assert (value, received) == (1, options)
-
-    @pytest.mark.parametrize(("runner", "on_loop"), RUNNER_THREADS)
-    @async_test
-    async def test_runner_runs_a_blocking_call_inline_or_on_a_worker(
-        self, runner, on_loop
-    ) -> None:
-        _, _, ident = await runner(_echo, 1)
-        assert (ident == threading.get_ident()) is on_loop
-
-    @async_test
-    async def test_using_keeps_the_settings_it_does_not_change(self) -> None:
-        limiter = CapacityLimiter(1)
-        limited = asyncify.using(abandon_on_cancel=True).using(limiter=limiter)
-        cleared = limited.using(limiter=None)
-        expected = [(False, limiter, True), (False, None, True), (False, None, False)]
-        runners = [limited, cleared, asyncify]
-        settings = [(r.inline, r.limiter, r.abandon_on_cancel) for r in runners]
-        assert settings == expected
-        assert await limited(_echo, 1, limiter=2) == (1, {"limiter": 2}, ANY)
-
-    @pytest.mark.parametrize("build", RUNNER_PARTIALS)
-    @async_test
-    async def test_partial_binds_arguments_for_repeated_calls(self, build) -> None:
-        call = build(_echo, mode="fast")
-        assert is_async_callable(call)
-        assert iscoroutinefunction(call)
-        results = [(await call(value))[:2] for value in (1, 2)]
-        assert results == [(1, {"mode": "fast"}), (2, {"mode": "fast"})]
-
-    @async_test
-    async def test_partial_awaits_an_async_instance_without_a_worker(self) -> None:
-        call: AsyncFunc[tuple[int, dict[str, object], int]] = asyncify.partial(
-            _AsyncEcho(), mode="fast"
-        )
-
-        with patch("riko.bado._util._asyncify", wraps=backend_asyncify) as worker:
-            value, received, _ = await call(1)
-
-        assert (value, received, worker.call_count) == (1, {"mode": "fast"}, 0)
-
-    @pytest.mark.parametrize("func", ASYNC_CALLABLES)
-    def test_is_async_callable_sees_through_runners_and_partials(self, func) -> None:
-        assert is_async_callable(func)
 
 
 class TestCapabilityFlags:
@@ -1701,6 +1073,17 @@ class TestCsv:
         with pytest.raises(ValueError, match="not in the CSV header"):
             list(write_through(rows, build_write(path), terminating=_never))
 
+    @CSV_HEADER_ORDER_PENDING
+    def test_append_follows_the_existing_header_order(self, tmp_path):
+        path = tmp_path / "out.csv"
+        path.write_bytes(b"a,b\r\n1,2\r\n")
+        _sink([{"b": 20, "a": 10}], path, "append")
+
+        with path.open(newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        assert rows[-1] == {"a": "10", "b": "20"}
+
 
 JSONL_APPEND_CASES = [
     pytest.param(_JSON0, _X1, _JSON01, id="jsonl-append-terminated"),
@@ -1709,7 +1092,7 @@ JSONL_APPEND_CASES = [
 ]
 
 
-class TestJsonl:
+class TestWriteJsonl:
     def test_singleton_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
         list(write_through(ITEMS, build_write(path), terminating=_never))
@@ -1723,7 +1106,7 @@ class TestJsonl:
         assert path.read_bytes() == expected
 
 
-class TestFramed:
+class TestWriteFramed:
     def test_passthrough_buffers_until_finalize(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_never)
@@ -1988,29 +1371,38 @@ class TestAsyncWriteExecution:
     @async_test
     async def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
-        await stream.aclose()
-        assert path.read_bytes() == b'[{"x": 0}]'
+        write = build_write(path)
+
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_never)
+            await anext(stream)
+            await stream.aclose()
+            assert path.read_bytes() == b'[{"x": 0}]'
 
     @async_test
     async def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_always)
-        await anext(stream)
-        await stream.aclose()
-        assert not path.exists()
+        write = build_write(path)
+
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_always)
+            await anext(stream)
+            await stream.aclose()
+            assert not path.exists()
 
     @async_test
     async def test_exception_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
+        write = build_write(path)
 
-        with pytest.raises(RuntimeError, match="boom"):
-            await stream.athrow(RuntimeError("boom"))
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_never)
+            await anext(stream)
 
-        assert not path.exists()
+            with pytest.raises(RuntimeError, match="boom"):
+                await stream.athrow(RuntimeError("boom"))
+
+            assert not path.exists()
 
     @async_test
     async def test_whole_stream_writes_one_document(self, tmp_path):
@@ -2020,7 +1412,7 @@ class TestAsyncWriteExecution:
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
 
-class TestSink:
+class TestWriteSink:
     def test_non_file_target_execution_unsupported(self):
         prepared = build_write(RecordStore(), "replace")
 

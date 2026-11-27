@@ -322,6 +322,39 @@ def cast_location(
     return result
 
 
+def _resolve_date_text(value: str, *, try_local_tz: bool) -> date | None:
+    """Resolves a date string or shorthand against the current time."""
+    words = value.split(" ")
+    count = words[0].lstrip("+-")
+    unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
+    textish = set(words).intersection(TEXT_WORDS)
+
+    if unit in MATH_WORDS and count.isdigit():
+        op = sub if value.startswith("-") else add
+        _date = get_relative_date(unit, int(count), op, dt.now(UTC))
+    elif len(textish) == 2:
+        op = sub if words[0] == "last" else add
+        _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
+    elif value in NAMED_DAYS:
+        now = dt.now(load_local_tz(try_local_tz=try_local_tz))
+        today = now.date()
+        _date = None
+
+        match value:
+            case "today":
+                _date = today
+            case "now":
+                _date = now
+            case "tomorrow":
+                _date = today + timedelta(days=1)
+            case "yesterday":
+                _date = today - timedelta(days=1)
+    else:
+        _date = parse_date_string(value)
+
+    return _date
+
+
 def cast_datetime(value: DateLike, *, try_local_tz: bool = False) -> dt | None:
     """
     Normalizes a date-like value to a timezone-aware ``datetime``.
@@ -371,33 +404,7 @@ def cast_datetime(value: DateLike, *, try_local_tz: bool = False) -> dt | None:
         elif isinstance(value, struct_time):
             _date = tt_to_datetime(value)
         elif isinstance(value, str):
-            words = value.split(" ")
-            count = words[0].lstrip("+-")
-            unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
-            textish = set(words).intersection(TEXT_WORDS)
-
-            if unit in MATH_WORDS and count.isdigit():
-                op = sub if value.startswith("-") else add
-                _date = get_relative_date(unit, int(count), op, dt.now(UTC))
-            elif len(textish) == 2:
-                op = sub if words[0] == "last" else add
-                _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
-            elif value in NAMED_DAYS:
-                now = dt.now(load_local_tz(try_local_tz=try_local_tz))
-                today = now.date()
-                _date = None
-
-                match value:
-                    case "today":
-                        _date = today
-                    case "now":
-                        _date = now
-                    case "tomorrow":
-                        _date = today + timedelta(days=1)
-                    case "yesterday":
-                        _date = today - timedelta(days=1)
-            else:
-                _date = parse_date_string(value)
+            _date = _resolve_date_text(value, try_local_tz=try_local_tz)
         elif is_datedict(value):
             _date = datedict_to_datetime(value)
         else:
@@ -592,12 +599,6 @@ def cast_value[T](
         '12.25'
         >>> cast_value(content, 'bool')
         True
-        >>> cast_value('foo', 'float')
-        nan
-        >>> cast_value('foo', 'decimal')
-        Decimal('NaN')
-        >>> cast_value('foo', 'int')
-        0
         >>> cast_value(12.25, 'text')
         '12.25'
         >>> cast_value(Decimal('12.25'), 'text')

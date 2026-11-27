@@ -19,6 +19,7 @@ import pytest
 from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys
 from riko.base._paths import PYPROJECT
 from riko.cli import (
     _codegen,
@@ -31,6 +32,7 @@ from riko.cli import (
 )
 from riko.cli._docs import (
     gen_stale_path_citations,
+    gen_stale_private_names,
     gen_stale_source_symbol_citations,
     gen_stale_test_citations,
     gen_stale_test_symbol_citations,
@@ -49,6 +51,7 @@ from riko.cli._lint_deps import (
     get_locked_version,
 )
 from riko.cli._lint_escapes import get_escape_counts
+from riko.cli._lint_helpers import ChainReport
 from riko.cli._lint_import_architecture import (
     _validate_graph,
     lint_architecture,
@@ -56,6 +59,7 @@ from riko.cli._lint_import_architecture import (
     render_architecture,
 )
 from riko.cli._lint_literals import gen_literal_issues
+from riko.cli._lint_ownership import ADD_MESSAGE, gen_ownership_lines
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 from riko.cli._lint_rst import gen_plain_block_lines, gen_unrendered_literal_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
@@ -96,29 +100,89 @@ _CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
 _MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
 _PRIVATE_MODULE = ["private module without a public API carries a module example"]
 _NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+
 _TYPE_ONLY_EXAMPLE = (
     "private module with a type-only public API carries a module example"
 )
+
 _TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
 _TYPED_DOC = f"{_MODULE_EXAMPLE}{_TYPE_ONLY}"
-
-
 _SHARED = "basename is shared; rename one or allowlist the pair"
 _STALE_BASENAME = "allowlisted basename is no longer duplicated; remove it"
 _ANY = "from typing import Any\n"
 _ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
 _UPWARD = "from riko.runtime.b import thing\n"
 _GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+
 _NEGATED = (
     "from typing import TYPE_CHECKING\nif not TYPE_CHECKING:\n    pass\nelse:\n    "
 )
+
 _LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+
 _RUN_BINDING = (
     "binds a run( result that is skipped without async support "
     "(move it to an async example)"
 )
-_RUN_DOC = ">>> from riko import run\n>>> g = list\n>>> x = run(g())"
 
+_RUN_DOC = ">>> from riko import run\n>>> g = list\n>>> x = run(g())"
+_CHAIN = "def run():\n    _a()\ndef _a():\n    _b()\ndef _b(): ...\n"
+_TWO = "def two():\n    _c()\ndef _c():\n    _b()\n"
+
+_STEPS = (
+    "class A:\n"
+    "    def run(self):\n        self._step()\n"
+    "    def _step(self):\n        self._go()\n"
+    "    def _go(self): ...\n"
+    "class B:\n"
+    "    def other(self):\n        self._step()\n"
+    "    def _step(self): ...\n"
+)
+
+_STRAY_ADD = "def f(run, s):\n    run.add(s)\n"
+_UPGRADE_ALL = ["uv", "lock", "--upgrade"]
+_ALL_LINTS = [
+    "ruff",
+    "rumdl",
+    "rst",
+    "docs",
+    "docstrings",
+    "terms",
+    "literals",
+    "deps",
+    "bindings",
+    "tests",
+    "basenames",
+    "escapes",
+    "helpers",
+    "ownership",
+    "actions",
+    "yaml",
+    "imports",
+]
+_PATCHED_LINTS = (
+    ("_lint_python", "ruff"),
+    ("_lint_markdown", "rumdl"),
+    ("lint_rst", "rst"),
+    ("lint_docs", "docs"),
+    ("_lint_docstrings", "docstrings"),
+    ("_lint_terms", "terms"),
+    ("_lint_literals", "literals"),
+    ("_lint_deps", "deps"),
+    ("_lint_bindings", "bindings"),
+    ("_lint_tests", "tests"),
+    ("_lint_actions", "actions"),
+    ("_lint_yaml", "yaml"),
+    ("run_import_checks", "imports"),
+    ("_lint_basenames", "basenames"),
+    ("_lint_escapes", "escapes"),
+    ("_lint_helpers", "helpers"),
+    ("_lint_ownership", "ownership"),
+    ("_lint_types", "types"),
+    ("_verify_types", "verify-types"),
+    ("twine_check", "dist"),
+    ("_lint_python_strict", "strict"),
+)
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
@@ -144,7 +208,6 @@ DATA_ONLY_TOML = f"""{PYPROJECT_TOML}
 [tool.deptry.per_rule_ignores]
 DEP002 = ["Python.Dateutil"]
 """
-
 
 ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
 TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
@@ -198,26 +261,28 @@ def write(root: Path, path: str, text: str) -> None:
 
 
 def _record(calls: list[str], name: str, code: int = 0) -> Func[int]:
-    def runner() -> int:
+    def runner(*_: object, **_kw: object) -> int:
         calls.append(name)
         return code
 
     return runner
 
 
+CODEGEN_SELECTORS = [
+    pytest.param([], ["config"], id="default"),
+    pytest.param(["--names", "--api"], ["names", "api"], id="names-api"),
+    pytest.param(["--tests", "--verbs"], ["tests", "verbs"], id="tests-verbs"),
+    pytest.param(["--user-agents"], ["user-agents"], id="user-agents"),
+    pytest.param(
+        ["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"], id="all"
+    ),
+]
+
+
 class TestCodegenCommand:
     """The ``manage codegen`` selectors."""
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], ["config"]),
-            (["--names", "--api"], ["names", "api"]),
-            (["--tests", "--verbs"], ["tests", "verbs"]),
-            (["--user-agents"], ["user-agents"]),
-            (["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), CODEGEN_SELECTORS)
     def test_codegen_selectors(
         self, monkeypatch: pytest.MonkeyPatch, args: list[str], expected: list[str]
     ) -> None:
@@ -235,10 +300,6 @@ class TestCodegenCommand:
         assert result.exit_code == 0
         assert calls == expected
 
-    def test_codegen_mode_is_removed(self) -> None:
-        result = CliRunner().invoke(_codegen.CODEGEN_COMMAND, ["--mode", "config"])
-        assert result.exit_code == 2
-
 
 def _record_upgrade(
     monkeypatch: pytest.MonkeyPatch, stamp: Path, lock_code: int = 0
@@ -255,28 +316,21 @@ def _record_upgrade(
     return calls
 
 
+UPGRADE_RUNS = [
+    pytest.param([], [_UPGRADE_ALL, SYNC], id="default"),
+    pytest.param(
+        ["-p", "ruff", "--package", "pyright"],
+        [["uv", "lock", "--upgrade-package=ruff", "--upgrade-package=pyright"], SYNC],
+        id="packages",
+    ),
+    pytest.param(["--no-sync"], [_UPGRADE_ALL], id="no-sync"),
+]
+
+
 class TestUpgradeCommand:
     """The ``manage upgrade`` lock, sync, and daily stamp."""
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], [["uv", "lock", "--upgrade"], SYNC]),
-            (
-                ["-p", "ruff", "--package", "pyright"],
-                [
-                    [
-                        "uv",
-                        "lock",
-                        "--upgrade-package=ruff",
-                        "--upgrade-package=pyright",
-                    ],
-                    SYNC,
-                ],
-            ),
-            (["--no-sync"], [["uv", "lock", "--upgrade"]]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), UPGRADE_RUNS)
     def test_upgrade_locks_then_syncs(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -333,28 +387,30 @@ def _record_path(calls: list[str], name: str, code: int = 0) -> Callable[[Path],
     return runner
 
 
+IMPORT_SELECTORS = [
+    pytest.param([], (), ["canonical"], 0, id="default"),
+    pytest.param(
+        ["--relative", "--architecture"],
+        (),
+        ["relative", "architecture"],
+        0,
+        id="additive",
+    ),
+    pytest.param(
+        ["--all"],
+        ("canonical",),
+        ["canonical", "relative", "architecture"],
+        1,
+        id="all-continues-past-a-failure",
+    ),
+]
+
+
 class TestImportsCommand:
     """The ``manage lint imports`` selectors."""
 
     @pytest.mark.parametrize(
-        ("args", "failing", "expected", "exit_code"),
-        [
-            pytest.param([], (), ["canonical"], 0, id="default"),
-            pytest.param(
-                ["--relative", "--architecture"],
-                (),
-                ["relative", "architecture"],
-                0,
-                id="additive",
-            ),
-            pytest.param(
-                ["--all"],
-                ("canonical",),
-                ["canonical", "relative", "architecture"],
-                1,
-                id="all-continues-past-a-failure",
-            ),
-        ],
+        ("args", "failing", "expected", "exit_code"), IMPORT_SELECTORS
     )
     def test_import_selectors(
         self,
@@ -386,53 +442,33 @@ class TestImportsCommand:
 
 
 def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
-    monkeypatch.setattr(
-        _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_markdown", lambda *_: calls.append("rumdl") or 0)
-    monkeypatch.setattr(_lint, "lint_rst", lambda *_: calls.append("rst") or 0)
-    monkeypatch.setattr(_lint, "lint_docs", lambda: calls.append("docs") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_docstrings", lambda *_: calls.append("docstrings") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_terms", lambda *_: calls.append("terms") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_literals", lambda *_: calls.append("literals") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_deps", lambda: calls.append("deps") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_bindings", lambda *_: calls.append("bindings") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_tests", lambda: calls.append("tests") or 0)
-    monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
-    monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
-    monkeypatch.setattr(
-        _lint, "run_import_checks", lambda *_: calls.append("imports") or 0
-    )
-    monkeypatch.setattr(
-        _lint, "_lint_basenames", lambda: calls.append("basenames") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_escapes", lambda: calls.append("escapes") or 0)
-    monkeypatch.setattr(_lint, "_lint_types", lambda *_: calls.append("types") or 0)
-    monkeypatch.setattr(
-        _lint, "_verify_types", lambda *_: calls.append("verify-types") or 0
-    )
-    monkeypatch.setattr(_lint, "twine_check", lambda: calls.append("dist") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_python_strict", lambda *_: calls.append("strict") or 0
-    )
+    for name, tag in _PATCHED_LINTS:
+        monkeypatch.setattr(_lint, name, _record(calls, tag))
+
+
+TEXT_CHECKS = [
+    pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
+    pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
+]
+LINT_SELECTORS = [
+    pytest.param([], ["ruff", "rumdl"], id="default"),
+    pytest.param(["--rst", "--yaml"], ["rst", "yaml"], id="rst-yaml"),
+    pytest.param(["--all"], _ALL_LINTS, id="all"),
+    pytest.param(
+        ["--terms", "--literals", "--deps", "--bindings", "--tests"],
+        ["terms", "literals", "deps", "bindings", "tests"],
+        id="text-and-code-checks",
+    ),
+    pytest.param(["--check-types", "--strict"], ["types", "strict"], id="types-strict"),
+    pytest.param(["--helpers"], ["helpers"], id="helpers"),
+    pytest.param(["--ownership"], ["ownership"], id="ownership"),
+]
 
 
 class TestLintCommand:
     """The ``manage lint`` selectors."""
 
-    @pytest.mark.parametrize(
-        ("check", "text"),
-        [
-            pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
-            pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
-        ],
-    )
+    @pytest.mark.parametrize(("check", "text"), TEXT_CHECKS)
     def test_text_checks_exit_by_whether_issues_were_found(
         self, tmp_path: Path, capsys, check, text: str
     ) -> None:
@@ -479,38 +515,7 @@ class TestLintCommand:
             ["rumdl", "check", "README.md"],
         ]
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], ["ruff", "rumdl"]),
-            (["--rst", "--yaml"], ["rst", "yaml"]),
-            (
-                ["--all"],
-                [
-                    "ruff",
-                    "rumdl",
-                    "rst",
-                    "docs",
-                    "docstrings",
-                    "terms",
-                    "literals",
-                    "deps",
-                    "bindings",
-                    "tests",
-                    "basenames",
-                    "escapes",
-                    "actions",
-                    "yaml",
-                    "imports",
-                ],
-            ),
-            (
-                ["--terms", "--literals", "--deps", "--bindings", "--tests"],
-                ["terms", "literals", "deps", "bindings", "tests"],
-            ),
-            (["--check-types", "--strict"], ["types", "strict"]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), LINT_SELECTORS)
     def test_lint_selectors(
         self, monkeypatch: pytest.MonkeyPatch, args: list[str], expected: list[str]
     ) -> None:
@@ -529,6 +534,17 @@ def _coverage_report(root: Path, uncovered: int) -> Path:
     return report
 
 
+COVERAGE_RATCHETS = [
+    pytest.param(1249, 1240, 0, "uncovered = 1240", id="gain-lowers"),
+    pytest.param(1249, 1249, 0, "uncovered = 1249", id="equal-holds"),
+    pytest.param(1249, 1250, 1, "uncovered = 1249", id="loss-fails"),
+    pytest.param(None, 1250, 0, "uncovered = 1250", id="first-run-records"),
+]
+COVERAGE_OPTIONS = [
+    pytest.param(["-q"], "--cov=riko", "--cov-report", id="default"),
+    pytest.param(["-q", "--no-cov"], "--no-cov", "--cov-report", id="no-cov"),
+    pytest.param(["-q", "--ratchet"], "--cov-report=json:", "", id="ratchet"),
+]
 PARTIAL_RATCHET_CASES = [
     pytest.param(["tests/public"], id="paths"),
     pytest.param(["--tox"], id="tox"),
@@ -540,13 +556,7 @@ class TestCoverageRatchet:
     """The ``manage test --ratchet`` uncovered-line ceiling."""
 
     @pytest.mark.parametrize(
-        ("recorded", "uncovered", "code", "ceiling"),
-        [
-            pytest.param(1249, 1240, 0, "uncovered = 1240", id="gain-lowers"),
-            pytest.param(1249, 1249, 0, "uncovered = 1249", id="equal-holds"),
-            pytest.param(1249, 1250, 1, "uncovered = 1249", id="loss-fails"),
-            pytest.param(None, 1250, 0, "uncovered = 1250", id="first-run-records"),
-        ],
+        ("recorded", "uncovered", "code", "ceiling"), COVERAGE_RATCHETS
     )
     def test_ratchet_holds_or_lowers_the_ceiling(
         self,
@@ -558,25 +568,19 @@ class TestCoverageRatchet:
         ceiling: str,
     ) -> None:
         pyproject = tmp_path / "pyproject.toml"
-        table = (
-            ""
-            if recorded is None
-            else f"[tool.riko.coverage]\nuncovered = {recorded}\n"
-        )
+
+        if recorded is None:
+            table = ""
+        else:
+            table = f"[tool.riko.coverage]\nuncovered = {recorded}\n"
+
         pyproject.write_text(f"[project]\nname = 'x'\n{table}")
         monkeypatch.setattr(_test, "PYPROJECT", pyproject)
 
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
 
-    @pytest.mark.parametrize(
-        ("args", "present", "absent"),
-        [
-            pytest.param(["-q"], "--cov=riko", "--cov-report", id="default"),
-            pytest.param(["-q", "--no-cov"], "--no-cov", "--cov-report", id="no-cov"),
-            pytest.param(["-q", "--ratchet"], "--cov-report=json:", "", id="ratchet"),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "present", "absent"), COVERAGE_OPTIONS)
     def test_command_passes_coverage_options_to_pytest(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -878,30 +882,43 @@ CITATION_SCANS = [
         id="tests",
     ),
     pytest.param(gen_stale_path_citations, "riko/{}.py", "riko/kept.py", id="paths"),
+    pytest.param(gen_stale_private_names, "_{}", "_kept", id="private"),
     pytest.param(
         gen_stale_test_symbol_citations,
         "TestKept::test_{}",
         "TestKept::test_kept",
         id="symbols",
     ),
+    pytest.param(gen_stale_test_symbol_citations, "test_{}", "test_kept", id="bare"),
+    pytest.param(
+        gen_stale_test_symbol_citations,
+        "test_{}[sync]",
+        "test_kept",
+        id="bare-param-id",
+    ),
 ]
 
 
-class TestCitationLint:
+@pytest.fixture
+def docs_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+    return tmp_path
+
+
+class TestDocsCitations:
     """The stale test-file and source-file citation checks."""
 
     @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
     def test_every_document_is_checked_against_the_known_files(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
+        docs_root: Path,
         scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
         template: str,
         kept: str,
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
         gone = template.format("gone")
-        paths = (tmp_path / "a.md", tmp_path / "b.md")
+        reported = gone.partition("[")[0]
+        paths = (docs_root / "a.md", docs_root / "b.md")
 
         for path in paths:
             text = f"See `{template.format('kept')}` and `{gone}`.\n"
@@ -909,7 +926,7 @@ class TestCitationLint:
 
         known = (name for name in (kept,))
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
-        assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
+        assert list(offenders) == [f"a.md:1: {reported}", f"b.md:1: {reported}"]
 
     @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
     def test_history_words_exempt_their_wrapped_sentence_only(
@@ -919,22 +936,26 @@ class TestCitationLint:
         kept: str,
     ) -> None:
         gone = template.format("gone")
+        reported = gone.partition("[")[0]
         text = (
             f"`{gone}` and its\nneighbors were deleted. See\n`{gone}`.\n\n"
             f"- `{gone}` stays.\n- Another was removed.\n"
         )
-        assert list(scan(text, (kept,))) == [(3, gone), (5, gone)]
+        assert list(scan(text, (kept,))) == [(3, reported), (5, reported)]
 
-    def test_test_symbols_cover_files_classes_and_tests(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        path = tmp_path / "tests" / "public" / "test_alpha.py"
+    def test_test_symbols_cover_files_classes_and_tests(self, docs_root: Path) -> None:
+        path = docs_root / "tests" / "public" / "test_alpha.py"
         path.parent.mkdir(parents=True)
         path.write_text("class TestAlpha:\n    def test_one(self): ...\n")
         rel = "tests/public/test_alpha.py"
-        expected = [rel, f"{rel}::TestAlpha", f"{rel}::TestAlpha::test_one"]
-        assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
+        expected = [
+            rel,
+            "test_alpha",
+            f"{rel}::TestAlpha",
+            f"{rel}::TestAlpha::test_one",
+        ]
+        bare = ["TestAlpha::test_one", "test_one"]
+        assert list(_docs.gen_test_symbols(path)) == [*expected, *bare]
 
     def test_source_symbol_pairs_check_both_names_with_the_class_prefix(self) -> None:
         path = "riko/x.py"
@@ -946,10 +967,9 @@ class TestCitationLint:
         ] == stale
 
     def test_source_symbols_cover_bindings_in_every_scope_shape(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, docs_root: Path
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        path = tmp_path / "riko" / "alpha.py"
+        path = docs_root / "riko" / "alpha.py"
         path.parent.mkdir()
         source = (
             "import os.path as osp\n"
@@ -965,18 +985,31 @@ class TestCitationLint:
         expected = {"riko/alpha.py", *(f"riko/alpha.py::{n}" for n in names + members)}
         assert set(_docs.gen_source_symbols(path)) == expected
 
+    def test_private_names_cover_every_binding_shape(self, docs_root: Path) -> None:
+        path = docs_root / "riko" / "_pkg" / "_mod.py"
+        path.parent.mkdir(parents=True)
+        source = (
+            "from . import _sib as _alias\nimport os.path\n"
+            "class _C:\n    def __init__(self, _arg):\n        self._attr = _arg\n"
+            "async def _f(pool):\n    _local = '_TOKEN'\n    plain = pool._read\n"
+        )
+        path.write_text(source)
+        names = {"riko", "_pkg", "_mod", "_alias", "os", "path", "_C", "__init__"}
+        names |= {"self", "_arg", "_attr", "_f", "pool", "_local", "_TOKEN", "plain"}
+        names |= {"_read"}
+        assert set(_docs.gen_private_names(path)) == names
 
-class TestUserDocsLint:
+
+class TestDocsTodos:
     """The internal-docs lint checks over the shipped user docs."""
 
     def test_todo_lines_are_named_by_path_and_line(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch, docs_root: Path
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        monkeypatch.setattr(_docs, "DOCS_DIR", tmp_path / "docs")
-        (tmp_path / "docs").mkdir()
-        (tmp_path / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
-        (tmp_path / "docs" / "FAQ.rst").write_text(
+        monkeypatch.setattr(_docs, "DOCS_DIR", docs_root / "docs")
+        (docs_root / "docs").mkdir()
+        (docs_root / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
+        (docs_root / "docs" / "FAQ.rst").write_text(
             "Intro.\n\nTODO: add seeding\n", encoding="utf-8"
         )
         offenders = list(_docs._gen_todo_offenders())
@@ -1018,6 +1051,12 @@ TERM_PATTERNS = [
         "class InputResolver: ...\n",
         [(3, "InputResolver")],
         id="resolver-class",
+    ),
+    pytest.param(
+        "# leaving early tears the run down\n"
+        "# it enters the value and tears it down afterward\n",
+        [(1, "tears the run down"), (2, "tears it down")],
+        id="split-phrasal-verb",
     ),
 ]
 
@@ -1407,6 +1446,170 @@ class TestEscapeLint:
         assert recorded == tomllib.loads(ceilings)
 
 
+HELPER_CASES = [
+    pytest.param({"a.py": _CHAIN + _TWO}, (), 0, id="shared-callee"),
+    pytest.param({"a.py": _STEPS}, (), 1, id="same-named-methods"),
+    pytest.param({"a.py": _CHAIN, "b.py": "a._b()\n"}, (), 1, id="foreign-attribute"),
+    pytest.param({"a.py": _CHAIN, "b.py": "X = '_b'\n"}, (), 1, id="foreign-string"),
+    pytest.param({"a.py": _CHAIN}, (("a.py", "_a"),), 0, id="kept"),
+    pytest.param(
+        {"a.py": _STEPS, "b.py": "import a\nclass C(a.A):\n    def _go(self): ...\n"},
+        (),
+        0,
+        id="foreign-override",
+    ),
+    pytest.param(
+        {"a.py": _STEPS, "b.py": "class C:\n    def _go(self): ...\n"},
+        (),
+        1,
+        id="foreign-unrelated-method",
+    ),
+]
+
+HELPER_CHECK_CASES = [
+    pytest.param(0, (), 1, True, id="above-ceiling"),
+    pytest.param(1, (), 0, False, id="at-ceiling"),
+    pytest.param(1, (("pkg/mod.py", "_b"),), 1, False, id="stale-keep"),
+]
+
+
+class TestHelperLint:
+    """The single-use helper ceiling lint check."""
+
+    @pytest.mark.parametrize(("sources", "keep", "count"), HELPER_CASES)
+    def test_single_use_helpers_are_counted_per_function(
+        self, sources: dict[str, str], keep: tuple[tuple[str, str], ...], count: int
+    ) -> None:
+        paths = map_keys(Path, sources)
+        kept = frozenset((Path(path), name) for path, name in keep)
+        assert ChainReport.from_sources(paths, keep=kept).helper_count == count
+
+    @pytest.mark.parametrize(("ceiling", "keep", "code", "printed"), HELPER_CHECK_CASES)
+    def test_check_prints_chains_only_above_the_ceiling(
+        self,
+        ceiling: int,
+        keep: tuple[tuple[str, str], ...],
+        code: int,
+        printed: bool,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "mod.py").write_text(_CHAIN, encoding="utf-8")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(f"[tool.riko.helpers]\nchains = {ceiling}\n")
+        monkeypatch.setattr(_lint, "PYPROJECT", pyproject)
+        monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
+        monkeypatch.setattr(_lint, "KEPT_HELPERS", keep)
+        chain = f"{package / 'mod.py'}:5: run -> _a -> _b"
+        stale = [f"{tmp_path / path}: {name}" for path, name in keep]
+
+        assert _lint._lint_helpers() == code
+        out = capsys.readouterr().out
+        assert (chain in out) is printed
+        assert all(line in out for line in stale)
+
+
+OWNERSHIP_CASES = [
+    pytest.param("def f(s):\n    amap(str, s)\n", [2], id="dropped"),
+    pytest.param("def f(s):\n    return amap(str, s)\n", [], id="returned"),
+    pytest.param("def f(s):\n    yield from gen_values(s)\n", [], id="delegated"),
+    pytest.param("def f(s):\n    return list(gen_values(s))\n", [2], id="listed"),
+    pytest.param(
+        "def f(s):\n    with closing(gen_values(s)) as v:\n        return list(v)\n",
+        [],
+        id="drained",
+    ),
+    pytest.param(
+        "def f(self, run, s):\n    x = self._to_async(run, gen_values(s))\n"
+        "    return self._resolve_node_inputs(x, e.map_inputs(b, amap(g, s)))\n",
+        [],
+        id="execution-adapters",
+    ),
+    pytest.param(
+        "def f(s):\n    return aauto_close(amap(g, async_iter(s)))\n",
+        [],
+        id="nested-owners",
+    ),
+    pytest.param(
+        "def f(self, s):\n    v = as_async(s)\n    args = (1, v)\n"
+        "    return self._abuild_envelope_stream(*args)\n",
+        [],
+        id="splatted-to-builder",
+    ),
+    pytest.param(
+        "def f(s):\n    v = as_async(s)\n    args = (1, v)\n    return g(*args)\n",
+        [2],
+        id="splatted-elsewhere",
+    ),
+    pytest.param(
+        "def f(s):\n    x = to_async(w, s)\n    return x\n", [], id="bound-returned"
+    ),
+    pytest.param(
+        "def f(s):\n    x = to_async(w, s)\n    print(x)\n", [2], id="bound-dropped"
+    ),
+    pytest.param(
+        "async def f(s):\n    async for v in agen_result_envelopes(s):\n        pass\n",
+        [2],
+        id="bare-async-for",
+    ),
+    pytest.param(
+        "async def f(s):\n"
+        "    async with aclosing(agen_result_envelopes(s)) as e:\n"
+        "        pass\n",
+        [],
+        id="aclosing",
+    ),
+    pytest.param(
+        "def _register_port(run, s):\n    xs = [to_async(w, t) for t in s]\n"
+        "    run.add(*xs)\n",
+        [],
+        id="registrar-add",
+    ),
+    pytest.param(
+        "def _build_splitter_ports(run, t):\n    run.add(t)\n", [], id="splitter-add"
+    ),
+    pytest.param(_STRAY_ADD, [2], id="stray-add"),
+    pytest.param(
+        "class _RunStream:\n    def m(self, s):\n        self.add(s)\n",
+        [],
+        id="run-stream-add",
+    ),
+    pytest.param("def f(self, s):\n    self.seen.add(s)\n", [], id="set-add"),
+    pytest.param(
+        "from x import _Owned as Owned\ndef f(c):\n    return map(Owned, c)\n",
+        [1, 3],
+        id="owned-wrapper",
+    ),
+]
+
+
+class TestOwnershipLint:
+    """The execution-stream ownership lint check."""
+
+    @pytest.mark.parametrize(("source", "expected"), OWNERSHIP_CASES)
+    def test_streams_outside_the_ownership_rules_are_flagged(
+        self, source: str, expected: list[int]
+    ) -> None:
+        assert [line for line, _ in gen_ownership_lines(source)] == expected
+
+    def test_a_stray_add_names_the_registrar_rule(self) -> None:
+        assert list(gen_ownership_lines(_STRAY_ADD)) == [(2, ADD_MESSAGE)]
+
+    def test_check_exits_by_whether_issues_were_found(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        clean, flagged = tmp_path / "clean.py", tmp_path / "flagged.py"
+        clean.write_text("def f(s):\n    return amap(g, s)\n", encoding="utf-8")
+        flagged.write_text("def f(s):\n    amap(g, s)\n", encoding="utf-8")
+
+        assert _lint._lint_ownership(str(clean)) == 0
+        assert _lint._lint_ownership(str(flagged)) == 1
+        assert "flagged.py:2 `amap`" in capsys.readouterr().out
+
+
 def _issues(
     tmp_path: Path, source: str, toml: str = PYPROJECT_TOML
 ) -> tuple[list[str], list[int]]:
@@ -1459,7 +1662,7 @@ OPTIONAL_CASES = [
 ]
 
 
-class TestDependencyLint:
+class TestDepsLint:
     """The run-time requirement lint check."""
 
     @pytest.mark.parametrize(("source", "expected"), RUNTIME_NAME_CASES)
@@ -1493,7 +1696,7 @@ def _pin_issues(tmp_path: Path, hooks: str) -> list[tuple[str, str]]:
     return [(issue.where.rsplit(":", 1)[-1], issue.message) for issue in issues]
 
 
-class TestHookPinLint:
+class TestUpgradeHookPins:
     """Pre-commit hook pins checked against uv.lock."""
 
     def test_hook_pin_must_match_the_lock(self, tmp_path: Path) -> None:
@@ -1566,6 +1769,16 @@ ARCHITECTURE_IMPORTS = [
     pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
 ]
 
+LAYER_GRAPH_REJECTIONS = [
+    pytest.param(
+        {"a": {"b", "c"}, "b": {"c"}, "c": set()},
+        "redundant dependency: a -> c",
+        id="redundant",
+    ),
+    pytest.param({"a": {"b"}, "b": {"a"}}, "cyclic layer graph", id="cyclic"),
+    pytest.param({"a": {"b"}}, "undeclared layers: b", id="undeclared"),
+]
+
 
 class TestImportArchitectureLint:
     """The import-architecture lint check."""
@@ -1594,21 +1807,7 @@ class TestImportArchitectureLint:
         assert report.unclassified[0].module == "riko.mystery"
         assert lint_architecture(report) == 1
 
-    def test_layer_graph_validation_accepts_a_reduced_dag(self):
-        _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
-
-    @pytest.mark.parametrize(
-        ("graph", "match"),
-        [
-            pytest.param(
-                {"a": {"b", "c"}, "b": {"c"}, "c": set()},
-                "redundant dependency: a -> c",
-                id="redundant",
-            ),
-            pytest.param({"a": {"b"}, "b": {"a"}}, "cyclic layer graph", id="cyclic"),
-            pytest.param({"a": {"b"}}, "undeclared layers: b", id="undeclared"),
-        ],
-    )
+    @pytest.mark.parametrize(("graph", "match"), LAYER_GRAPH_REJECTIONS)
     def test_layer_graph_validation_rejects(self, graph, match):
         with pytest.raises(InvalidArchitectureError, match=match):
             _validate_graph("test", graph)
@@ -1699,15 +1898,16 @@ MANAGER_LEVELS = [
 ]
 
 
-class TestLogLevel:
+class TestResolveLogLevel:
     """The manage flags select the level every riko logger inherits."""
 
     @pytest.mark.parametrize(("verbose", "quiet", "level"), LOG_LEVELS)
     def test_resolve_log_level(self, verbose, quiet, level):
         assert resolve_log_level(verbose, quiet) == level
 
+    @pytest.mark.usefixtures("riko_level")
     @pytest.mark.parametrize(("args", "level"), MANAGER_LEVELS)
-    def test_manager_sets_the_riko_level(self, riko_level, args, level):
+    def test_manager_sets_the_riko_level(self, args, level):
         result = CliRunner().invoke(manager, [*args, "hello"])
         assert result.exit_code == 0
         assert getLogger("riko").level == level
