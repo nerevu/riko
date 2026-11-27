@@ -118,6 +118,7 @@ _IN_FLIGHT = DEF_CONCURRENCY_LIMIT + 4
 _BLOCK_SECONDS = 8
 _STOP_BOUND = 5
 _BOOM = pytest.raises(ValueError, match="boom")
+_CLEANUP_FAILED = pytest.raises(RuntimeError, match="cleanup failed")
 _A, _BB, _CCC = {"content": "a"}, {"content": "bb"}, {"content": "ccc"}
 _ASSIGNED = [_A, _BB, {"content": "CCC"}]
 _Q_REF = Param(
@@ -1707,8 +1708,8 @@ class TestPipelineConditionalNodes:
         assert get_values(pipeline(items), "rate") == ["$1 / hr", "$1"]
 
 
-def _first_in_open(pipeline: Pipeline) -> object:
-    with pipeline.open() as stream:
+def _first_in_open(pipeline: Pipeline, seed: Items | None = None) -> object:
+    with pipeline.open(seed) as stream:
         item = next(stream)
 
     return item
@@ -1757,9 +1758,65 @@ def _start_and_drop(pipeline: Pipeline) -> None:
     next(stream)
 
 
+def _gen_failing_cleanup() -> Generator[Item]:
+    """Yields ``SRC``, then fails while closing."""
+    try:
+        yield from SRC
+    finally:
+        raise RuntimeError("cleanup failed")
+
+
+def _fail_cleanup(_value: object) -> None:
+    raise RuntimeError("cleanup failed")
+
+
+def _fail_in_open(pipeline: Pipeline, seed: Items) -> None:
+    with pipeline.open(seed) as stream:
+        assert next(stream)
+        raise ValueError("body")
+
+
+async def _afail_in_open(pipeline: Pipeline, seed: Items) -> None:
+    async with pipeline.open(seed) as stream:
+        assert await anext(stream)
+        raise ValueError("body")
+
+
+def _gen_contexts(error: BaseException | None) -> Generator[BaseException]:
+    while error is not None:
+        yield error
+        error = error.__context__
+
+
+FAILING_CLEANUPS = [
+    pytest.param(
+        Pipeline()
+        .map(_tag_db, resources=["db"])
+        .with_resource("db", Resource.from_factory(lambda: 7, cleanup=_fail_cleanup)),
+        lambda: SRC,
+        id="resource",
+    ),
+    pytest.param(Pipeline(), _gen_failing_cleanup, id="source"),
+]
+
 FINISHES = [
     pytest.param(list, id="finished"),
     pytest.param(methodcaller("close"), id="closed"),
+]
+
+
+ABANDONED_ASYNC_RUNS = [
+    pytest.param(_HASH, id="ordered"),
+    pytest.param(
+        _HASH.with_execution(concurrency=2, ordered=False),
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=RuntimeError,
+            reason="abandoning an unordered async run without cancelling the caller "
+            "is not yet implemented",
+        ),
+        id="unordered",
+    ),
 ]
 
 
@@ -1796,6 +1853,33 @@ class TestPipelineStream:
 
         assert not any(map(_is_unclosed_run_warning, caught))
 
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_a_failed_close_still_finishes_the_run(self, pipeline, seed):
+        stream = pipeline(seed())
+        assert next(stream)
+
+        with _CLEANUP_FAILED:
+            stream.close()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            del stream
+            gc.collect()
+
+        assert not any(map(_is_unclosed_run_warning, caught))
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_leaving_open_early_raises_a_failed_cleanup(self, pipeline, seed):
+        with _CLEANUP_FAILED:
+            _first_in_open(pipeline, seed())
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    def test_a_failed_cleanup_replaces_the_with_block_error(self, pipeline, seed):
+        with pytest.raises(RuntimeError, match="cleanup failed") as info:
+            _fail_in_open(pipeline, seed())
+
+        assert ValueError in map(type, _gen_contexts(info.value))
+
     def test_with_on_a_stream_points_at_open(self):
         stream = Pipeline()(SRC)
 
@@ -1811,15 +1895,32 @@ class TestAsyncPipelineStream:
         assert [item async for item in stream] == []
         assert await anext(stream, None) is None
 
-    @QUIET_LEAKS
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
     @async_test
-    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
+    async def test_a_failed_aclose_still_finishes_the_run(self, pipeline, seed):
+        stream = pipeline(seed())
+        assert await anext(stream)
+
+        with _CLEANUP_FAILED:
+            await stream.aclose()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            del stream
+            gc.collect()
+
+        assert not any(map(_is_unclosed_run_warning, caught))
+
+    @QUIET_LEAKS
+    @pytest.mark.parametrize("pipeline", ABANDONED_ASYNC_RUNS)
+    @async_test
+    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self, pipeline):
         source = [{"content": str(index)} for index in range(5)]
 
         with fail_after(1), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
-            async for _ in source | _HASH:
+            async for _ in source | pipeline:
                 break
 
             gc.collect()
@@ -1847,6 +1948,23 @@ class TestAsyncPipelineStream:
 
         await sync_stream.aclose()
         await async_stream.aclose()
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    @async_test
+    async def test_leaving_async_open_early_raises_a_failed_cleanup(
+        self, pipeline, seed
+    ):
+        with _CLEANUP_FAILED:
+            async with pipeline.open(seed()) as stream:
+                assert await anext(stream)
+
+    @pytest.mark.parametrize(("pipeline", "seed"), FAILING_CLEANUPS)
+    @async_test
+    async def test_a_failed_cleanup_replaces_the_async_with_block_error(
+        self, pipeline, seed
+    ):
+        with _CLEANUP_FAILED:
+            await _afail_in_open(pipeline, seed())
 
     @async_test
     async def test_async_with_on_a_stream_points_at_open(self):

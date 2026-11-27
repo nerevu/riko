@@ -293,7 +293,10 @@ class _PipelineStream[T]:
                 state, action = "asynchronous", "synchronously close"
                 raise PipelineStateError(state, action, subject=_SUBJECT)
         elif self._iteration is not None:
-            self._iteration.close()
+            try:
+                self._iteration.close()
+            finally:
+                self._finished = True
 
         self._finished = True
 
@@ -347,12 +350,13 @@ class _PipelineStream[T]:
 
     async def aclose(self) -> None:
         """Stops the run and releases its resources (closing again does nothing)."""
-        if isinstance(self._iteration, AsyncGenerator):
-            await self._iteration.aclose()
-        elif self._iteration is not None:
-            self._iteration.close()
-
-        self._finished = True
+        try:
+            if isinstance(self._iteration, AsyncGenerator):
+                await self._iteration.aclose()
+            elif self._iteration is not None:
+                self._iteration.close()
+        finally:
+            self._finished = True
 
     def __enter__(self) -> Never:
         """
