@@ -1193,7 +1193,7 @@ class AsyncTee[T]:
             self._read_done = None
             read_done.set()
 
-    async def _aclose_source(self, error: Exception | None = None) -> None:
+    async def _aclose_source(self, error: BaseException | None = None) -> None:
         try:
             with CancelScope(shield=True):
                 await self._source.aclose()
@@ -1228,7 +1228,8 @@ class AsyncTee[T]:
             self._publish(read)
 
         if read.error is not None:
-            await self._aclose_source(read.error)
+            error = read.error if interrupted is None else interrupted
+            await self._aclose_source(error)
 
         # A close requested during the read was left to this reader
         if self._state is _TeeState.CLOSED:

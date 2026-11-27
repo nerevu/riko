@@ -565,6 +565,30 @@ class TestTee:
 
             assert chained.value.__cause__ is interrupt
 
+    def test_interrupted_copy_notes_a_failed_close_on_the_interrupt(
+        self, riko_warnings
+    ):
+        """The interrupt carries the close failure; siblings reach it via the cause."""
+        interrupt, failure = KeyboardInterrupt(), OSError("close failed")
+        source = _Source([_Uncopyable(interrupt)], [], close_error=failure)
+        tee = Tee(source, isolate=True)
+        first, second, third = tee.branch(), tee.branch(), tee.branch()
+
+        with pytest.raises(KeyboardInterrupt) as raised:
+            next(first)
+
+        assert raised.value is interrupt
+
+        for branch in (second, third):
+            with pytest.raises(PipelineError, match="interrupted") as chained:
+                next(branch)
+
+            assert chained.value.__cause__ is interrupt
+            assert not hasattr(chained.value, "__notes__")
+
+        assert interrupt.__notes__ == [f"closing the source also failed: {failure!r}"]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
+
     def test_second_interrupt_while_handling_the_first_releases_the_read(
         self, monkeypatch
     ):
@@ -975,6 +999,31 @@ class TestAsyncTee:
                 await anext(branch)
 
             assert chained.value.__cause__ is interrupt
+
+    @async_test
+    async def test_interrupted_copy_notes_a_failed_close_on_the_interrupt(
+        self, riko_warnings
+    ):
+        """The interrupt carries the close failure; siblings reach it via the cause."""
+        interrupt, failure = KeyboardInterrupt(), OSError("close failed")
+        source = _ASource([_Uncopyable(interrupt)], [], close_error=failure)
+        tee = AsyncTee(source, isolate=True)
+        first, second, third = tee.branch(), tee.branch(), tee.branch()
+
+        with pytest.raises(KeyboardInterrupt) as raised:
+            await anext(first)
+
+        assert raised.value is interrupt
+
+        for branch in (second, third):
+            with pytest.raises(PipelineError, match="interrupted") as chained:
+                await anext(branch)
+
+            assert chained.value.__cause__ is interrupt
+            assert not hasattr(chained.value, "__notes__")
+
+        assert interrupt.__notes__ == [f"closing the source also failed: {failure!r}"]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
     @async_test
     async def test_second_interrupt_while_handling_the_first_releases_the_read(

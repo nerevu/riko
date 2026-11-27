@@ -448,7 +448,8 @@ CLASS_HISTORY = {
         (
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
             "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
-            "61aaa929 (11-21 failed close on a failed build)"
+            "61aaa929 (11-21 failed close on a failed build); uncommitted (11-26 tee "
+            "interrupted copy left the close failure off the interrupt)"
         ),
         (
             "make a worker, task, or cleanup step die or raise, once and twice, and "

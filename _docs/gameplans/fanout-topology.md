@@ -389,7 +389,11 @@ arrive in a later slice with the execution-scoped task group.
   `TestTee::test_second_interrupt_while_handling_the_first_releases_the_read`).
 - Cleanup failures beside a primary error keep the primary type, attach via
   `Exception.add_note`, and log the traceback; there is no tee-specific
-  `ExceptionGroup` (the general resource-unwind rule is unchanged).
+  `ExceptionGroup` (the general resource-unwind rule is unchanged). An interrupted
+  read's close failure is noted on the interrupt, which each sibling's latched error
+  carries as its `__cause__`, so the note is one hop away and prints in tracebacks; it
+  is not copied onto the sibling error (`tests/internal/test_tee.py`
+  `TestTee::test_interrupted_copy_notes_a_failed_close_on_the_interrupt`).
 - Lock shape (fewest locks, least deadlock surface; `AsyncTee` revised 2026-11-23
   (user), replacing its advancement `anyio.Lock`): `AsyncTee` takes no lock at all
   (single-loop deque reads/appends). Reader election is an `_advancer` task id claimed

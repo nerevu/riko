@@ -1142,7 +1142,7 @@ class Tee[T]:
             self._advancer = None
             self._ready.notify_all()
 
-    def _close_source(self, error: Exception | None = None) -> None:
+    def _close_source(self, error: BaseException | None = None) -> None:
         try:
             self._source.close()
         except BaseException as failure:
@@ -1176,7 +1176,7 @@ class Tee[T]:
             self._publish(read)
 
         if read.error is not None:
-            self._close_source(read.error)
+            self._close_source(read.error if interrupted is None else interrupted)
 
         # A close requested during the read was left to this reader
         if self._state is _TeeState.CLOSED:
