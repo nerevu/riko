@@ -148,6 +148,8 @@ Changes
     instead of yielding the coroutine object.
   - Ones that assign a stream of results (e.g., ``tokenizer`` with ``emit=False``) now
     always assign a list. Pass ``count="first"`` to assign only the first result.
+  - A processor result of ``None`` is now assigned as a null field. With
+    ``count="first"``, an empty result still leaves the item unchanged.
   - ``exchangerate`` raises on a response with no ``rates`` or a non-finite or
     non-positive rate instead of emitting ``0``, NaN, or a negative value.
   - URL fetchers like ``exchangerate`` time out after ``RIKO_FETCH_TIMEOUT`` seconds.

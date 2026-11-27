@@ -320,7 +320,8 @@ CLASS_HISTORY = {
             "is-None fallbacks); e937e766 (10-05 port null); 0705f0cd (10-29 falsy "
             "input iterables); 7ee178c7 (10-31 regex, falsy func, rename '', DotDict "
             "''); 2bdc13e6 (11-11 skip_if presence); da63a1a3 (11-14 filter missing "
-            "fields)"
+            "fields); uncommitted (11-25 gen_assignments yielded None read as empty; "
+            "next default, not a falsy test)"
         ),
         'feed `0`, `False`, and `""` to every optional field and check each is kept',
         (

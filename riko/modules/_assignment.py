@@ -9,6 +9,7 @@ from itertools import islice
 from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING, is_missing_type
 from riko.definitions._wrapping import build_call
 from riko.parsing._dotdict import DotDict
 from riko.types._wrappers import RunsItems
@@ -177,16 +178,16 @@ def gen_assignments(
     DotDict[RikoValue | list[ItemOrValue]] | ItemOrValue | DotDict[ItemOrValue]
 ]:
     if one and isinstance(assignment, Iterator):
-        value = next(assignment, None)
+        value = next(assignment, MISSING)
     else:
         value = assignment
 
     value_is_iterator = isinstance(value, Iterator)
 
-    if assign:
-        if value is None:
-            yield item
-        elif item and value_is_iterator:
+    if is_missing_type(value):
+        yield item
+    elif assign:
+        if item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
             for v in value:

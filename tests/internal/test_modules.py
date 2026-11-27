@@ -45,6 +45,7 @@ from riko.modules import exchangerate as exchangerate_module
 from riko.modules import filter as filter_module
 from riko.modules import truncate as truncate_module
 from riko.modules import uniq as uniq_module
+from riko.modules._assignment import gen_assignments
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._inference import (
     gen_operator_return_kinds,
@@ -1886,3 +1887,17 @@ class TestAsyncTimeoutIterator:
         [item async for item in it]
         run_time = monotonic() - start
         assert run_time < 0.25
+
+
+# A processor's one-result stream and the item it assigns into ``y``.
+FIRST_RESULTS = [
+    pytest.param((), {"x": 1}, id="empty"),
+    pytest.param((None,), {"x": 1, "y": None}, id="none"),
+]
+
+
+class TestGenAssignments:
+    @pytest.mark.parametrize(("results", "expected"), FIRST_RESULTS)
+    def test_first_result_is_assigned_unless_absent(self, results, expected) -> None:
+        item, stream = DotDict({"x": 1}), iter(results)
+        assert list(gen_assignments(item, stream, assign="y", one=True)) == [expected]

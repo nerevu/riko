@@ -36,7 +36,8 @@ Index (file, then the subjects it owns, in file order):
                               SyncPipeAsyncInput, ReturnInference, ModuleMetadata,
                               WrapperMeta, Loop, AsyncProcessor, AsyncOperator, Prepare,
                               Objectify, GetString, CsvParser, Filter, ExchangeRate,
-                              AsyncSend, AsyncReceive, AsyncTimeoutIterator
+                              AsyncSend, AsyncReceive, AsyncTimeoutIterator,
+                              GenAssignments
     test_plan_closes.py       PlanClose
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
