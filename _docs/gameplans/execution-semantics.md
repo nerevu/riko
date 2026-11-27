@@ -271,11 +271,12 @@ Open (backburner): an awaitable seed is also resolved on the portal, so its valu
 qualify for a bridged close; it stays rejected until decided.
 
 Delivery is staged over one close landscape (2026-10-31 triage). Stage 1 (landed):
-`get_sync_closer` (`riko/base/_guards.py`)/`get_async_closer` (`riko/types/_io.py`)
-classify how a value closes (replacing `_has_async_close`), and `require_value` in
-`riko/base/_guards.py` is the one awaitable-rejection helper. Stage 2 (landed): one
-`run_bridged`/`maybe_async`/`asyncify` pair plus a per-execution `register_owned`
-replace `close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
+`get_sync_closer`/`get_async_closer` (`riko/base/_guards.py`) classify how a value
+closes (replacing `_has_async_close`), and `require_value` in `riko/base/_guards.py` is
+the one awaitable-rejection helper. Stage 2 (landed): one
+`run_bridged`/`maybe_async`/`asyncify` pair plus the per-execution
+`queue_close`/`async_queue_close` replace
+`close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
 `_adapt._maybe_close`/`_close_returned`, and the inline
 `queue_callback(x.close)`/`x.aclose` sites; it carries the rule above and a regression
 table (seed, native return, node stream × sync/async) for values whose only close is
@@ -302,10 +303,10 @@ primitives close every stream an execution builds, and nothing else does:
    becomes a riko close-once value; `aauto_close(..., inline=)` says where a sync close
    runs under async, and its `aclose` abandons a sync close still running on a worker
    when the shutdown timeout cancels it. The boundaries are a pipe's raw return, a
-   splitter's cascade, and a seed: under `SyncExecution` `_auto_close` checks the
-   value has a sync close (`resolve_closer(..., is_async=False)`, so one whose only
-   close is async raises `InvalidPipelineError` before any item is read) and wraps it
-   in `auto_close`; under `AsyncExecution` a native return enters through
+   splitter's cascade and each stream taken from it, and a seed: under
+   `SyncExecution` each is wrapped in `auto_close`, which refuses a value whose only
+   close is async with `InvalidPipelineError` when built, before any item is read;
+   under `AsyncExecution` a native return enters through
    `agen_envelopes(require_async_stream(...))`.
 2. **Every adapter owns what it reads.** An adapter closes its source when it ends:
    exhaustion, early close, or a failed read. That covers `to_sync`/`to_async`
@@ -333,15 +334,21 @@ primitives close every stream an execution builds, and nothing else does:
    port's `Tee`/`AsyncTee` and its branches, a splitter's input tee and its readers) is
    owned by the run, while each reader closes only its own branch.
 
-Seeds close when the run is done reading them (the roots adapter over the seed owns
-it), with execution exit as the safety net; `register_owned` keeps that exit-time close
-on the same close-once wrapper, plus the seed itself when the iterator it hands out
-is a different object (`CLOSING_SEEDS` rows `cursor-handle`/`async-cursor-handle` in
-`tests/internal/test_plan_closes.py`). A splitter cascade closes once its streams are
-taken (`maybe_closing`/`maybe_aclosing` around the take); each read port then owns its
-split stream, and a port nothing reads is closed at once. The `_SyncNodeOutput`/
-`_AsyncNodeOutput` hand-throughs stay a borrow: an adjacent same-color holder reads the
-upstream results directly while the run still owns them.
+Seeds close when the run is done reading them (the roots adapter over the seed owns it),
+with execution exit as the safety net; `queue_close`/`async_queue_close` keep that
+exit-time close on the same close-once wrapper, plus the seed itself when the iterator
+it hands out is a different object (`CLOSING_SEEDS` rows
+`cursor-handle`/`async-cursor-handle` in `tests/internal/test_plan_closes.py`). A
+splitter cascade closes once its streams are taken (`maybe_closing`/`maybe_aclosing`
+around the take). Each taken stream is checked once in its own color as it is taken. A
+sync run wraps the cascade and each taken stream in `auto_close`, so a cascade or branch
+whose only close is async is refused there before anything is read; an async run awaits
+such a cascade's or branch's `aclose` instead, its `auto_close` given the event loop as
+`bridge` (tripwire
+`tests/internal/test_plan_closes.py::TestAsyncPlanClose::test_arun_awaits_a_sync_splitter_cascade_whose_only_close_is_async`).
+Each read port then owns its split stream, and a port nothing reads is closed at once.
+The `_SyncNodeOutput`/`_AsyncNodeOutput` hand-throughs stay a borrow: an adjacent
+same-color holder reads the upstream results directly while the run still owns them.
 
 So a sync node stream closes when the run's output closes
 (`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`),
@@ -678,11 +685,12 @@ may observe, replace, or suppress an execution exception according to normal Pyt
 semantics. Riko itself never suppresses an error on a resource's behalf. A simple
 `cleanup=` callback cannot suppress the primary execution error.
 
-All required cleanup is attempted. A single cleanup error is raised directly when no
-primary error exists; multiple independent cleanup failures use `ExceptionGroup`. When
-execution already failed or was cancelled, that primary outcome remains primary while
-cleanup failures are retained/reported alongside it according to the common
-error-grouping policy.
+All required cleanup is attempted. When execution already failed or was cancelled, that
+primary outcome remains primary: each cleanup failure is noted on it and logged, and the
+primary is raised. With no primary outcome, a single cleanup failure is raised as is and
+several are raised together as an `ExceptionGroup`. One helper, `raise_failures`
+(`riko/base/_iterutils.py`), owns this rule for the execution shutdown, `auto_close`,
+`aauto_close`, and the splitter stream closes (triage 2026-11-25).
 
 Cancellation does not make the cleanup guarantee vacuous. Required async cleanup runs
 inside a bounded cancellation-shielded unwind so ambient execution cancellation does not
@@ -1664,9 +1672,10 @@ regression trips.
   `shutdown_timeout`.
 
 Execution resource cleanup follows the resource rules above. If both execution and
-cleanup fail, cleanup is still attempted comprehensively; multiple independent failures
-use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup
-budget; no per-resource timeout exists initially.
+cleanup fail, cleanup is still attempted comprehensively; each cleanup failure is noted
+on the execution's error, which is raised. With no execution error, one cleanup failure
+is raised as is and several together as an `ExceptionGroup`. The resource unwind shares
+the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
 
 ### Execution-mode adaptation (`Pipeline` sync <-> async)
 

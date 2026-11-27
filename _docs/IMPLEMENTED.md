@@ -120,7 +120,7 @@ closes the source on any failed or cancelled read (shielded under `aauto_close`)
 tee's own close after a read that carries an error repeats it harmlessly there and is
 the real close only for an overflow or a failed copy; `AsyncTee._aclose_source`'s shield
 keeps a close owed by a cancelled reader running. `require_idle`, `is_lagging`, and
-`log_cleanup_failure` are plain helpers both tees call (no base class). Each tee ends a
+`log_failure` are plain helpers both tees call (no base class). Each tee ends a
 branch from `_require_buffer` (`StopIteration` / `StopAsyncIteration`) and claims the
 reading branch by setting `_advancer` (`Tee._pull` under its lock, `AsyncTee._apull`
 with no await between the check and the claim; `AsyncTee` keeps no lock), computing the
@@ -754,7 +754,7 @@ protocol member is refused before the runtime protocol check, as `getattr_static
 would. When a value's protocol methods come from its type alone (`is_type_bound`: no
 instance `__dict__`, no `__getattr__`, none of the names a slot), the verdict and the
 type-level half of that test are cached per type, so a per-item `maybe_closing` check
-costs about 1 µs. A `Resource` riko closes still refuses a
+costs about 2 µs. A `Resource` riko closes still refuses a
 generator object given without `cleanup`, with an error pointing to
 `Resource.from_lifecycle`. `require_from_form(form)` builds a guard for any type form:
 it flattens aliases, unions, and `Annotated` with `gen_union_members`
@@ -1188,11 +1188,12 @@ the worker-side upstream reader are the same function with a different `call`),
   every Riko-registered cleanup built on them) are wrapped so a failure is recorded
   rather than raised, which is what keeps a callback from replacing the primary error;
   an exhausted shutdown timeout (`TimeoutError`) is recorded the same way.
-  `_report_shutdown` then raises: a lone cleanup failure with no primary error bare;
-  several with no primary as an `ExceptionGroup`; and any cleanup failures beside an
-  unsuppressed primary (or beside the exception a native context manager replaced it
-  with) as a `BaseExceptionGroup` led by that primary. A native replacement with no
-  cleanup failures propagates bare.
+  `_unwind`/`_aunwind` then report them through `raise_failures`
+  (`riko/base/_iterutils.py`): with an unsuppressed primary error (or the exception a
+  native context manager replaced it with), each cleanup failure is noted on that
+  primary and logged, and the primary is raised; with no primary, a lone failure is
+  raised bare and several as an `ExceptionGroup`. A native replacement with no cleanup
+  failures propagates bare.
 
 **Resource acquisition.** `acquire` / `aacquire` resolve a `Resource` at most once
 (single-flight, keyed by resource identity); a repeat returns the first value or replays
@@ -1211,9 +1212,9 @@ partial, so the plan pickles. Cleanup rides the exit stack: value → `close`/`a
 value-factory → cleanup callback, lifecycle → context-manager entry. Explicit `cleanup`
 is authoritative. The two executions adapt work across sync/async as mirror images,
 classifying async-vs-sync with the same predicates (`is_async_callable`, and
-`get_sync_closer` in `riko/base/_guards.py`/`get_async_closer` in `riko/types/_io.py`,
-read through the plan records' `is_async`). Each execution registers every resource
-value's close, and a seed's exit-time close, in one place, `register_owned`, over
+`get_sync_closer`/`get_async_closer` in `riko/base/_guards.py`, read through the plan
+records' `is_async`). Each execution registers every resource value's close, and a
+seed's exit-time close, in one place, `queue_close`/`async_queue_close`, over
 `run_bridged`/`maybe_async`/`asyncify` (`riko/bado/_util.py`). Under `SyncExecution`,
 async value *production* bridges through the portal, and so does the async cleanup of a
 value produced there: an async factory's async or awaitable-returning cleanup, and an
@@ -1504,8 +1505,8 @@ run:
   (`riko/coercion/_sequences.py`: a mapping or primitive is one item, `None` is no item,
   any other iterable is the stream). A seed closes when the run is done reading it (the
   roots adapter over it closes it) or when the execution exits, whichever is first: sync
-  and async wrap it once (`auto_close` through `_auto_close`, which rejects a sync-read
-  seed whose only close is async before any item is read; `aauto_close`, or
+  and async wrap it once (`auto_close`, which rejects a sync-read seed whose only close
+  is async when it is built, before any item is read; `aauto_close`, or
   `to_async(..., inline=True)` for a sync-iterable seed under async) and register that
   close-once wrapper on the exit stack, plus the iterator the seed hands out when it is
   a different object (`call_if_distinct` in `riko/base/_funcutils.py` registers the seed

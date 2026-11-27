@@ -302,9 +302,9 @@ class TestSyncExecution:
         ):
             execution.enter_context(nullcontext(1))
 
-    def test_sync_cleanup_error_is_grouped_with_primary_error(self) -> None:
-        # A plain cleanup callback cannot replace the execution's own error: both
-        # survive, the primary first.
+    def test_sync_cleanup_error_is_noted_on_primary_error(self) -> None:
+        # A plain cleanup callback cannot replace the execution's own error: the
+        # primary is raised with the cleanup failure noted on it.
         def boom() -> None:
             raise RuntimeError("cleanup failed")
 
@@ -313,12 +313,10 @@ class TestSyncExecution:
                 execution.queue_callback(boom)
                 raise ValueError("primary")
 
-        with pytest.raises(ExceptionGroup) as info:
+        with pytest.raises(ValueError, match="primary") as info:
             run()
 
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(cleanup, RuntimeError)
+        assert "RuntimeError('cleanup failed')" in info.value.__notes__[0]
 
     def test_sync_native_context_manager_may_replace_primary_error(self) -> None:
         # A real __exit__ keeps its Python semantics: it may raise a different
@@ -452,7 +450,7 @@ class TestAsyncExecution:
 
         with pytest.raises(TimeoutError):
             async with AsyncExecution(settings=settings) as execution:
-                execution.register_owned(object(), fail_late, inline=False)
+                execution.async_queue_close(object(), fail_late, inline=False)
 
         assert perf_counter() - start < 1
         release.set()
@@ -512,7 +510,7 @@ class TestAsyncExecution:
         reservation.release()
 
     @async_test
-    async def test_async_cleanup_error_is_grouped_with_primary_error(self) -> None:
+    async def test_async_cleanup_error_is_noted_on_primary_error(self) -> None:
         async def boom() -> None:
             raise RuntimeError("cleanup failed")
 
@@ -521,12 +519,10 @@ class TestAsyncExecution:
                 execution.queue_async_callback(boom)
                 raise ValueError("primary")
 
-        with pytest.raises(ExceptionGroup) as info:
+        with pytest.raises(ValueError, match="primary") as info:
             await run()
 
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(cleanup, RuntimeError)
+        assert "RuntimeError('cleanup failed')" in info.value.__notes__[0]
 
     @async_test
     async def test_async_native_context_manager_may_replace_primary_error(self) -> None:
@@ -548,11 +544,11 @@ class TestAsyncExecution:
         assert isinstance(info.value.__cause__, ValueError)
 
     @async_test
-    async def test_async_shutdown_timeout_expiry_is_grouped_with_primary_error(
+    async def test_async_shutdown_timeout_expiry_is_noted_on_primary_error(
         self,
     ) -> None:
         # Exhausting the shutdown timeout during cleanup is a cleanup failure
-        # reported beside the execution's own error, not a replacement for it.
+        # noted on the execution's own error, not a replacement for it.
         async def slow() -> None:
             await async_sleep(1)
 
@@ -563,12 +559,10 @@ class TestAsyncExecution:
                 execution.queue_async_callback(slow)
                 raise ValueError("primary")
 
-        with pytest.raises(ExceptionGroup) as info:
+        with pytest.raises(ValueError, match="primary") as info:
             await run()
 
-        primary, expired = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(expired, TimeoutError)
+        assert "TimeoutError" in info.value.__notes__[0]
 
 
 def _chars(value: str) -> Iterator[str]:

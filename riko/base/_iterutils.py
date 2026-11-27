@@ -23,7 +23,8 @@ from contextlib import suppress
 from copy import deepcopy
 from enum import StrEnum
 from functools import partial
-from itertools import count, cycle, dropwhile, islice, takewhile
+from inspect import isawaitable
+from itertools import chain, count, cycle, dropwhile, islice, takewhile
 from math import ceil, inf
 from threading import Condition, Lock, get_ident
 from types import GeneratorType
@@ -32,9 +33,11 @@ from typing import TYPE_CHECKING, Literal, Self, overload
 import attrs
 
 from ._config import Limit, require_limit
-from ._exceptions import PipelineError, PipelineStateError
+from ._exceptions import InvalidPipelineError, PipelineError, PipelineStateError
 from ._guards import (
     ASYNC_CLEANUP_MSG,
+    ASYNC_CLOSE_MSG,
+    get_async_closer,
     get_sync_closer,
     is_known_sequence,
     is_mapping,
@@ -44,7 +47,14 @@ from ._guards import (
 from ._logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import (
+        Awaitable,
+        Callable,
+        Iterable,
+        Iterator,
+        Mapping,
+        Sequence,
+    )
     from logging import Logger
 
     from riko.types._frozendict import SortKey
@@ -625,22 +635,20 @@ def fan_out[T](func: Callable[[T], T], item: T, *keys: int) -> Iterator[tuple[in
             raise PipelineError(msg.format(name, key)) from error
 
 
-def log_cleanup_failure(
-    error: BaseException | None, failure: BaseException, msg: str
-) -> None:
+def log_failure(error: BaseException | None, failure: BaseException, msg: str) -> None:
     """
-    Logs a cleanup failure and notes it on the error it accompanies when there is one.
+    Logs a failure and notes it on the error it accompanies when there is one.
 
     Args:
 
-        error: The error being raised, if any.
-        failure: The error the cleanup raised.
-        msg: What the cleanup was doing.
+        error: The error initially raised, if any.
+        failure: The last error raised.
+        msg: What caused ``failure``.
 
     Examples:
 
         >>> error = ValueError("read failed")
-        >>> log_cleanup_failure(error, OSError("close failed"), "closing the source")
+        >>> log_failure(error, OSError("close failed"), "closing the source")
         >>> error.__notes__
         ["closing the source also failed: OSError('close failed')"]
 
@@ -650,6 +658,52 @@ def log_cleanup_failure(
     else:
         error.add_note(f"{msg} also failed: {failure!r}")
         logger.warning(" ".join(error.__notes__), exc_info=failure)
+
+
+def raise_failures(
+    msg: str, *failures: Exception, primary: BaseException | None = None
+) -> None:
+    """
+    Notes and logs failures on the primary error when there is one, else raises them.
+
+    A ``GeneratorExit`` primary counts as none, since closing a generator discards it
+    and every note with it.
+
+    Args:
+
+        msg: What caused ``failures``.
+        failures: The raised errors.
+
+    Kwargs:
+
+        primary: The main error, if any.
+
+    Raises:
+
+        Exception: Failure, when there is only one and no ``primary``.
+        ExceptionGroup: All failures, when there are multiple and no ``primary``.
+
+    Examples:
+
+        >>> failures = [OSError("a"), OSError("b")]
+        >>> error = ValueError("read failed")
+        >>> raise_failures("closing the stream", *failures, primary=error)
+        >>> len(error.__notes__)
+        2
+        >>> try:
+        ...     raise_failures("closing the stream", *failures)
+        ... except ExceptionGroup as group:
+        ...     print(group.message, group.exceptions)
+        multiple errors closing the stream (OSError('a'), OSError('b'))
+
+    """
+    if primary is not None and not isinstance(primary, GeneratorExit):
+        for failure in failures:
+            log_failure(primary, failure, msg)
+    elif len(failures) == 1:
+        raise failures[0]
+    elif failures:
+        raise ExceptionGroup(f"multiple errors {msg}", failures)
 
 
 def has_open_resource(values: Iterable[object], *ignored: type) -> bool:
@@ -728,6 +782,11 @@ class auto_close[T]:  # noqa: N801
         source: The items to yield.
         closables: The values closed once iteration finishes.
 
+    Kwargs:
+
+        bridge: Runs an awaitable to completion on an event loop. When given, a value
+            whose only close is async closes through it.
+
     Warns:
 
         ResourceWarning: If a wrapper holding a resource (not just generators or other
@@ -736,14 +795,13 @@ class auto_close[T]:  # noqa: N801
 
     Raises:
 
-        InvalidPipelineError: If a close returns an awaitable since there is no event
-            loop.
+        InvalidPipelineError: If ``source`` or a closable can only close asynchronously,
+            or their close returns an awaitable and ``bridge`` is not set.
 
-        Exception: Whatever a failing close raises, once every closable has been
-            closed.
+        Exception: If one close fails. If a read error precedes the failure, adds a note
+            about the failure to the error.
 
-        ExceptionGroup: If several fail. A close failure after a read error is noted
-            on that error instead.
+        ExceptionGroup: If several closes fail.
 
     Examples:
 
@@ -761,15 +819,50 @@ class auto_close[T]:  # noqa: N801
         >>> g.closed, h.closed
         (True, True)
 
+        # Closing an async-only value through an event loop
+        >>> from riko import run
+        >>>
+        >>> class Handle:
+        ...     async def aclose(self):
+        ...         print("closed")
+        >>>
+        >>> async def wait(close):
+        ...     await close
+        >>>
+        >>> list(auto_close([1], Handle(), bridge=lambda close: run(wait, close)))
+        closed
+        [1]
+
     """
 
-    __slots__ = ("_open", "_started", "closables", "source")
+    __slots__ = ("_closers", "_open", "_started", "bridge", "closables", "source")
 
-    def __init__(self, source: Iterable[T], *closables: object) -> None:
+    def _gen_closers(self) -> Iterator[Callable[[], object]]:
+        for value in chain([self.source], self.closables):
+            if (closer := get_sync_closer(value)) is None:
+                closer = get_async_closer(value)
+
+                if closer is not None and self.bridge is None:
+                    raise InvalidPipelineError(ASYNC_CLOSE_MSG)
+
+            if closer is not None:
+                yield closer
+
+    def __init__(
+        self,
+        source: Iterable[T],
+        *closables: object,
+        bridge: Callable[[Awaitable[object]], object] | None = None,
+    ) -> None:
         self.source: Iterator[T] = iter(source)
-        self.closables: tuple[object, ...] = closables
+        distinct = all(value is not source for value in (self.source, *closables))
+        self.closables: tuple[object, ...] = (
+            (source, *closables) if distinct else closables
+        )
+        self.bridge: Callable[[Awaitable[object]], object] | None = bridge
         self._open = [True]
         self._started = False
+        self._closers = tuple(self._gen_closers())
 
     def __iter__(self) -> Self:
         return self
@@ -786,7 +879,7 @@ class auto_close[T]:  # noqa: N801
             try:
                 self.close()
             except Exception as failure:  # noqa: BLE001 (noted on the primary)
-                log_cleanup_failure(primary, failure, "closing the source")
+                log_failure(primary, failure, "closing the stream")
 
             raise
 
@@ -798,8 +891,7 @@ class auto_close[T]:  # noqa: N801
             values = (getattr(self, "source", None), *getattr(self, "closables", ()))
 
             if has_open_resource(values, GeneratorType, auto_close):
-                msg = "unclosed auto_close stream. Exhaust or close it"
-                warn_unclosed(self, msg)
+                warn_unclosed(self, "unclosed auto_close stream. Exhaust or close it")
 
             with suppress(Exception):
                 self.close()
@@ -822,17 +914,18 @@ class auto_close[T]:  # noqa: N801
         except IndexError:
             pass
         else:
-            for value in (self.source, *self.closables):
-                if (closer := get_sync_closer(value)) is not None:
-                    try:
-                        require_value(closer(), ASYNC_CLEANUP_MSG)
-                    except Exception as error:  # noqa: BLE001 (raised after the loop)
-                        failures.append(error)
+            for closer in self._closers:
+                try:
+                    result = closer()
 
-        if len(failures) == 1:
-            raise failures[0]
-        elif failures:
-            raise ExceptionGroup("multiple errors during auto_close", failures)
+                    if self.bridge is None:
+                        require_value(result, ASYNC_CLEANUP_MSG)
+                    elif isawaitable(result):
+                        self.bridge(result)
+                except Exception as error:  # noqa: BLE001 (raised after the loop)
+                    failures.append(error)
+
+        raise_failures("closing the stream", *failures)
 
 
 @attrs.frozen(kw_only=True)
@@ -1146,7 +1239,7 @@ class Tee[T]:
         try:
             self._source.close()
         except BaseException as failure:
-            log_cleanup_failure(error, failure, "closing the source")
+            log_failure(error, failure, "closing the source")
 
             if not isinstance(failure, Exception):
                 raise

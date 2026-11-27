@@ -473,7 +473,7 @@ class TestTee:
             next(first)
 
         assert raised.value.__notes__ == [
-            f"closing the source also failed: {failure!r}"
+            f"closing the stream also failed: {failure!r}"
         ]
         assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
@@ -1075,7 +1075,7 @@ class TestAsyncTee:
             await anext(first)
 
         assert raised.value.__notes__ == [
-            f"closing the source also failed: {failure!r}"
+            f"closing the stream also failed: {failure!r}"
         ]
         assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 

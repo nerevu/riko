@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Protocol, Self
 from riko.bado._util import maybe_async
 from riko.bado.itertools import aauto_close, aiter_sentinel
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._iterutils import log_cleanup_failure
+from riko.base._iterutils import log_failure
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._io import resolve_closer
@@ -105,7 +105,7 @@ class to_sync[T]:  # noqa: N801
             try:
                 self.close()
             except Exception as failure:  # noqa: BLE001 (noted on the primary)
-                log_cleanup_failure(primary, failure, "closing the source")
+                log_failure(primary, failure, "closing the stream")
 
             raise
 

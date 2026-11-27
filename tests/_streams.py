@@ -42,6 +42,23 @@ class Closable:
         self.closes.append(self.name)
 
 
+class AcloseOnlyClosable(Closable):
+    """Stands in for a stream or file whose only close is ``aclose``."""
+
+    close = None  # pyright: ignore[reportAssignmentType] (drops the sync close)
+
+    async def aclose(self) -> None:
+        self.closes.append(self.name)
+
+
+class BrokenClosable(Closable):
+    """Stands in for a value whose close records itself, then fails."""
+
+    def close(self) -> None:
+        super().close()
+        raise OSError(f"{self.name} close failed")
+
+
 class _PullLog[T]:
     """The cursor and pull record that ``PullLog`` and ``AsyncPullLog`` share."""
 

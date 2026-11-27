@@ -438,11 +438,11 @@ arrive in a later slice with the execution-scoped task group.
   `_TeeState`. Each read of either tee publishes one `TeeRead` built by
   `from_lag`/`from_interrupt`/`from_item` and delivered by `deliver`; both tees re-read
   live siblings after the read, publish before closing, and share the plain helpers
-  `require_idle`/`is_lagging`/`log_cleanup_failure` in `riko/base/_iterutils.py` (no
-  base class). Branches are `TeeBranch`/`AsyncTeeBranch` classes (a generator branch
-  cannot drop its buffer when closed unstarted, or end a wait closed from another
-  thread). The advancing branch publishes its own value into its own buffer, so no
-  item/marker union is returned (enums need at least three members).
+  `require_idle`/`is_lagging`/`log_failure` in `riko/base/_iterutils.py` (no base
+  class). Branches are `TeeBranch`/`AsyncTeeBranch` classes (a generator branch cannot
+  drop its buffer when closed unstarted, or end a wait closed from another thread). The
+  advancing branch publishes its own value into its own buffer, so no item/marker union
+  is returned (enums need at least three members).
 
 ### 7.1 Branch isolation
 

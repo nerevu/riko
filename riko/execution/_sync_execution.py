@@ -14,24 +14,24 @@ from contextlib import ExitStack
 from functools import partial
 from inspect import isawaitable
 from itertools import islice
-from operator import attrgetter
+from operator import attrgetter, itemgetter
 from typing import TYPE_CHECKING, ClassVar, Literal, Self, cast, overload
 
 from attrs import define, field
 
-from riko.bado._backend import fail_after, start_blocking_portal
+from riko.bado._backend import fail_after, move_on_after, start_blocking_portal
 from riko.bado._util import as_awaitable, maybe_async, maybe_closing, run_bridged
 from riko.bado.itertools import aauto_close
 from riko.base._config import DEFAULT_OUTPUT, settings
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
-from riko.base._funcutils import call_if_distinct, compose, map_values
+from riko.base._funcutils import call_if_distinct, compose, compose_inner, map_values
 from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
     SyncClosable,
     is_async_callable,
     is_awaitable,
 )
-from riko.base._iterutils import Tee, auto_close
+from riko.base._iterutils import Tee, auto_close, partition, raise_failures
 from riko.base._require_guards import require_non_null
 from riko.coercion._sequences import listize
 from riko.types._enums import Executor
@@ -50,13 +50,14 @@ from riko.types._resource import (
     ValueFactoryPlan,
     ValuePlan,
 )
-from riko.types._streams import Item, require_async_stream, require_stream
+from riko.types._streams import require_async_stream, require_stream
 from riko.types._workflow import OUT
 
 from ._adapt import Bridge, to_async, to_sync
 from ._concurrency import build_item_call, build_tracked_call, require_process_safe
 from ._execution import (
     DEFAULT_ENVELOPES,
+    SHUTDOWN_MSG,
     Acquisition,
     SyncExecSteps,
     _Acquired,
@@ -102,20 +103,6 @@ def _unwrap[T](stream: EnvelopeStream[T]) -> auto_close[T]:
     return auto_close(map(attrgetter("value"), stream), stream)
 
 
-def _auto_close[T](stream: Iterator[T]) -> auto_close[T]:
-    """
-    Builds a self-closing wrapper over an iterator that has a synchronous close.
-
-    Raises:
-
-        InvalidPipelineError: Before any item is read, if the stream's only close is
-            async.
-
-    """
-    resolve_closer(stream, is_async=False)
-    return auto_close(stream)
-
-
 def _gen_envelopes[T](
     call: ItemCall[T],
     node_id: NodeId,
@@ -152,10 +139,41 @@ def _wrap(
         yield envelope.with_value(value)
 
 
-def _maybe_close(value: object) -> None:
-    """Closes a value now if it has a close."""
-    if (closer := resolve_closer(value, is_async=False)) is not None:
-        run_bridged(closer)
+def _close_streams(primary: BaseException | None, *streams: StreamOf[object]) -> None:
+    """
+    Closes every stream and notes a failed close on ``primary`` when there is one.
+
+    Raises:
+
+        Exception: Whatever the one failing close raises, when there is no ``primary``.
+        ExceptionGroup: If several closes fail and there is no ``primary``.
+
+    """
+    try:
+        auto_close(iter(()), *streams).close()
+    except Exception as failure:  # noqa: BLE001 (noted on the primary or re-raised)
+        raise_failures("closing the splitter's streams", failure, primary=primary)
+
+
+def take_streams(
+    limit: int, streams: Iterable[StreamOf[object]]
+) -> list[StreamOf[object]]:
+    """
+    Takes up to ``limit`` of a splitter's streams.
+
+    Closes ``streams`` after taking. When taking one fails, closes each stream it took.
+    """
+    _streams: list[StreamOf[object]] = []
+
+    with maybe_closing(streams):
+        try:
+            for stream in islice(streams, limit):
+                _streams.append(stream)  # noqa: PERF402 (kept on a failed take)
+        except BaseException as primary:
+            _close_streams(primary, *_streams)
+            raise
+
+    return _streams
 
 
 def _queue_close[T](
@@ -198,21 +216,14 @@ class _PortalLifecycle[T]:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        raised: BaseException | None = None
         suppressed = False
 
-        try:
-            with fail_after(self._timeout):
-                try:
-                    _suppressed = await self._cm.__aexit__(exc_type, exc, traceback)
-                    suppressed = bool(_suppressed)
-                except Exception as error:  # noqa: BLE001
-                    raised = error
-        except TimeoutError as error:
-            self._errors.append(error)
+        with move_on_after(self._timeout) as scope:
+            suppressed = bool(await self._cm.__aexit__(exc_type, exc, traceback))
 
-        if raised is not None:
-            raise raised
+        if scope.cancelled_caught:
+            msg = f"closing the lifecycle took longer than {self._timeout} seconds"
+            self._errors.append(TimeoutError(msg))
 
         return suppressed
 
@@ -398,28 +409,39 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         traceback: TracebackType | None,
-    ) -> tuple[BaseException | None, bool]:
+    ) -> bool:
         """
-        Unwinds the exit stack, starting with the worker pool.
+        Unwinds the exit stack starting with the worker pool.
 
-        Each portal close on the stack is bounded by the global shutdown timeout.
+        Bounds each portal close on the stack by the global shutdown timeout. Logs and
+        notes cleanup failures on the remaining error. If a context manager on the stack
+        raises, its error replaces ``exc``. Else if one returns true, the stack
+        suppresses ``exc``.
 
         Returns:
 
-            The exception a context manager replaced the primary error with, if any,
-            and whether the primary error was suppressed.
+            Whether the ``exc`` was suppressed.
+
+        Raises:
+
+            Exception: The cleanup failure, when there is only one and ``exc`` was
+                suppressed, is ``None``, or is a ``GeneratorExit``.
+
+            ExceptionGroup: All cleanup failures, when there are several and ``exc``
+                was suppressed, is ``None``, or is a ``GeneratorExit``.
 
         """
-        raised: BaseException | None = None
-        suppressed = False
         self._stack.push(self._pools)
 
         try:
             suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
-        except Exception as error:  # noqa: BLE001 (re-raised by _report_shutdown)
-            raised = error
-
-        return raised, suppressed
+        except Exception as raised:
+            raise_failures(SHUTDOWN_MSG, *self._cleanup_errors, primary=raised)
+            raise
+        else:
+            primary = None if suppressed else exc
+            raise_failures(SHUTDOWN_MSG, *self._cleanup_errors, primary=primary)
+            return suppressed
 
     def close(
         self,
@@ -437,8 +459,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if not self._closing:
             self._closing = True
-            raised, suppressed = self._unwind(exc_type, exc, traceback)
-            self._report_shutdown(exc, raised, suppressed)
+            suppressed = self._unwind(exc_type, exc, traceback)
 
         return suppressed
 
@@ -521,7 +542,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """
         return self.run_async(value, bounded=self._closing)
 
-    def register_owned[R](
+    def queue_close[R](
         self,
         value: R,
         cleanup: Cleanup[R] | Literal[False] | None = None,
@@ -559,14 +580,14 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 value = plan.value
             case ValuePlan():
                 value = plan.value
-                self.register_owned(value, plan.cleanup)
+                self.queue_close(value, plan.cleanup)
             case ValueFactoryPlan():
                 if not plan.is_async and is_async_callable(plan.cleanup):
                     raise InvalidPipelineError(ASYNC_CLEANUP_MSG)
 
                 raw = call_factory(plan)
                 value = self.run_async(raw) if is_awaitable(raw) else raw
-                self.register_owned(value, plan.cleanup, is_async=plan.is_async)
+                self.queue_close(value, plan.cleanup, is_async=plan.is_async)
             case SyncLifecyclePlan():
                 portal_cm = build_context_manager(plan)
                 value = self.enter_context(portal_cm)
@@ -645,13 +666,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if isinstance(_input, Iterable) or not isinstance(_input, AsyncIterable):
             iterator, is_async = iter(cast("Iterable[T]", listize(_input))), False
-            stream: StreamOf[T] = _auto_close(iterator)
+            stream: StreamOf[T] = auto_close(iterator)
         else:
             iterator, is_async = self.run_async(aiter, _input), True
             stream = self._to_sync(iterator)
 
-        call_if_distinct(self.register_owned, _input, iterator, is_async=is_async)
-        self.register_owned(stream)
+        call_if_distinct(self.queue_close, _input, iterator, is_async=is_async)
+        self.queue_close(stream)
         return stream
 
     def _to_async[R](
@@ -817,6 +838,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             InvalidPipelineError: If the splitter yields a different number of streams
                 than it declares.
 
+            TypeError: If a value the splitter yields is not a stream.
+
         """
         node_id = node.node.id
         active = (port for port in node.output_ports if demand[node_id, port])
@@ -828,45 +851,51 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         named_values = extras.map_inputs(_unwrap, named)
         limit = node.splits + 1
 
-        if (interface := node.sync_interface) is None:
-            name = node.module.name
-            _interface = require_non_null(node.async_interface, NO_PIPE_MSG, name)
+        name = node.module.name
 
+        if (interface := node.sync_interface) is None:
+            _interface = require_non_null(node.async_interface, NO_PIPE_MSG, name)
             _to_async = partial(self._to_async, run)
             adapters = named_values.map(_to_async)
             values = _to_async(_values)
             adapted = (*adapters.streams, values)
             run.add(_values, *named_values.streams, *map(self._to_sync, adapted))
             extra = extras.build_kwargs(adapters)
-
             raw = self.run_async(_interface.call, values, run.context, **extra)
-            pulled = self._to_sync(raw)
-            _cascade: StreamOf[StreamOf[Item]] = map(self._to_sync, pulled)
-            cascade = auto_close(_cascade, pulled)
+
+            _streams = self._to_sync(raw)
+            to_sync = compose_inner(self._to_sync, require_async_stream, name)
+            require = compose(auto_close, to_sync)
+            cascade = map(require, _streams)
         else:
             run.add(_values, *named_values.streams)
             extra = extras.build_kwargs(named_values)
-            cascade = _auto_close(interface.call(_values, run.context, **extra))
 
-        with maybe_closing(cascade):
-            streams = list(islice(cascade, limit))
+            _streams = interface.call(_values, run.context, **extra)
+            require = compose_inner(auto_close, require_stream, name)
+            cascade = map(require, _streams)
+
+        streams = take_streams(limit, auto_close(cascade, _streams))
 
         try:
             node.validate_streams(*streams)
-        except InvalidPipelineError:
-            for _stream in streams:
-                _maybe_close(_stream)
-
+        except InvalidPipelineError as primary:
+            _close_streams(primary, *streams)
             raise
 
-        ports: OutputPorts[object] = {}
+        pairs = zip(node.output_ports, streams, strict=True)
+        read, unread = partition(compose(parents.__contains__, itemgetter(0)), pairs)
 
-        for port, _stream in zip(node.output_ports, streams, strict=True):
-            if (parent := parents.get(port)) is None:
-                _maybe_close(_stream)
-            else:
-                envelopes = _wrap(_stream, parent)
-                ports[port] = auto_close(envelopes, _stream, parent)
+        ports: OutputPorts[object] = {
+            port: auto_close(_wrap(_stream, parents[port]), _stream, parents[port])
+            for port, _stream in read
+        }
+
+        try:
+            _close_streams(None, *(_stream for _, _stream in unread))
+        except Exception as primary:
+            _close_streams(primary, *ports.values())
+            raise
 
         return ports
 
@@ -983,7 +1012,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                     values = provenance.gen_values(_envelopes, normalizer)
                     raw = interface.call(values, run.context, **extra)
 
-                    results = _auto_close(require_stream(raw, node.module.name))
+                    results = auto_close(require_stream(raw, node.module.name))
                     envelope_gen = provenance.gen_envelopes(results)
                     closables = (results, values, *named_values.streams)
                     envelopes = auto_close(envelope_gen, *closables)

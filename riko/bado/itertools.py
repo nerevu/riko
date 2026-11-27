@@ -36,7 +36,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import AsyncIterable
 from contextlib import aclosing
-from itertools import count
+from itertools import chain, count
 from math import inf, isinf
 from types import AsyncGeneratorType, GeneratorType
 from typing import TYPE_CHECKING, Self, cast, overload
@@ -47,9 +47,11 @@ from riko.base._iterutils import (
     TeeRead,
     _TeeState,
     auto_close,
+    gen_non_null,
     has_open_resource,
     is_lagging,
-    log_cleanup_failure,
+    log_failure,
+    raise_failures,
     require_idle,
     warn_unclosed,
 )
@@ -393,8 +395,8 @@ class aauto_close[T]:  # noqa: N801
 
     The async twin of ``auto_close``. Closes each closable on exhaustion, an early
     close, or an exception. Also closes the source when it is closable. An ``aclose``
-    before the first read releases everything. A value with no close (including
-    ``None``) is skipped.
+    before the first read releases everything. Skips values with no close (including
+    ``None``).
 
     Use ``maybe_aclosing`` instead when the handle is consumed inside one ``async with``
     block. This wrapper is for a handle whose consumption is deferred.
@@ -454,16 +456,23 @@ class aauto_close[T]:  # noqa: N801
 
     """
 
-    __slots__ = ("_open", "_started", "closables", "inline", "source")
+    __slots__ = ("_closers", "_open", "_started", "closables", "inline", "source")
 
     def __init__(
         self, source: AsyncIterable[T], *closables: object, inline: bool = True
     ) -> None:
         self.source: AsyncIterator[T] = aiter(source)
-        self.closables: tuple[object, ...] = closables
+        owned = (self.source, *closables)
+        distinct = all(value is not source for value in owned)
+        self.closables: tuple[object, ...] = (
+            (source, *closables) if distinct else closables
+        )
         self.inline: bool = inline
         self._open = [True]
         self._started: bool = False
+        values = chain([self.source], self.closables)
+        closers = (resolve_closer(value, is_async=True) for value in values)
+        self._closers = tuple(gen_non_null(closers))
 
     def __aiter__(self) -> Self:
         return self
@@ -481,7 +490,7 @@ class aauto_close[T]:  # noqa: N801
                 with CancelScope(shield=True):
                     await self.aclose()
             except Exception as failure:  # noqa: BLE001 (noted on the primary)
-                log_cleanup_failure(primary, failure, "closing the source")
+                log_failure(primary, failure, "closing the stream")
 
             raise
 
@@ -501,13 +510,23 @@ class aauto_close[T]:  # noqa: N801
         """
         Closes the source and each closable (closing again does nothing).
 
+        A cancelled close still calls every remaining close before the cancellation
+        propagates. Those closes run cancelled too, so one that awaits before releasing
+        is interrupted; a caller that needs a graceful close shields and bounds the
+        call itself (``with CancelScope(shield=True), move_on_after(timeout):``). If
+        ``inline`` isn't set, a cancelled scope skips a sync close.
+
         Raises:
+
+            BaseException: The cancellation that interrupted a close plus any failed
+                close noted on it.
 
             Exception: Whatever the one failing close raises.
             ExceptionGroup: If several closes fail.
 
         """
         failures: list[Exception] = []
+        interrupted: BaseException | None = None
 
         try:
             # A single atomic pop, so concurrent callers close only once.
@@ -517,17 +536,18 @@ class aauto_close[T]:  # noqa: N801
         else:
             runner = maybe_async.using(inline=self.inline, abandon_on_cancel=True)
 
-            for value in (self.source, *self.closables):
-                if (closer := resolve_closer(value, is_async=True)) is not None:
-                    try:
-                        await runner(closer)
-                    except Exception as error:  # noqa: BLE001 (raised after the loop)
-                        failures.append(error)
+            for closer in self._closers:
+                try:
+                    await runner(closer)
+                except Exception as error:  # noqa: BLE001 (raised after the loop)
+                    failures.append(error)
+                except BaseException as error:  # noqa: BLE001 (raised after the loop)
+                    interrupted = error if interrupted is None else interrupted
 
-        if len(failures) == 1:
-            raise failures[0]
-        elif failures:
-            raise ExceptionGroup("multiple errors during aauto_close", failures)
+        raise_failures("closing the stream", *failures, primary=interrupted)
+
+        if interrupted is not None:
+            raise interrupted
 
 
 @overload
@@ -1198,7 +1218,7 @@ class AsyncTee[T]:
             with CancelScope(shield=True):
                 await self._source.aclose()
         except BaseException as failure:
-            log_cleanup_failure(error, failure, "closing the source")
+            log_failure(error, failure, "closing the source")
 
             if not isinstance(failure, Exception):
                 raise

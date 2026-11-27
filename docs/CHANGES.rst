@@ -48,8 +48,7 @@ New
   - the ``workflow`` decorator and ``CompiledInputSchemas``
   - the ``Dispatcher``, ``SupportsRead``, ``SupportsWrite``, and ``SupportsActions``
     protocols, ``WriteCapabilities``, and ``TargetRegistry``
-  - ``auto_close``/``aauto_close``, which close a stream's backing values when iteration
-    ends, for modules that return a lazy iterator over an open handle
+  - ``auto_close``/``aauto_close`` for closing a stream's sources when iteration ends
 
 - ``riko.types``: ``RawWorkflow``, ``PipelineStream``, ``CallOptions``, ``InputSchema``,
   ``InputSchemaLike``, ``RawInputSchema``, ``Limit``, ``CustomUserAgent``, ``Embed``,
@@ -182,7 +181,8 @@ Changes
   - ``ModuleMetadata.subtypes`` and a pipe's ``subtypes`` are immutable ``frozenset``\s
   - ``@processor``, ``@operator``, and ``@splitter`` work without parentheses
   - All ``pipe``\s must return an iterator (``iter(…)``) and ``async_pipe``\s an async
-    iterator (``async def`` generator). A run raises ``TypeError`` otherwise.
+    iterator (``async def`` generator), as must each branch a splitter returns. A run
+    raises ``TypeError`` otherwise.
   - Pipes now parse ``conf`` on every call. Use ``pipe.prepare(conf=…)`` to parse once.
 
 Removed

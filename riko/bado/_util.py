@@ -23,8 +23,11 @@ from typing import TYPE_CHECKING, Literal, Self, TypedDict, Unpack, cast, overlo
 from attrs import define, evolve, field
 
 from riko.base._config import settings
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
+    ASYNC_CLOSE_MSG,
+    get_async_closer,
     get_sync_closer,
     is_async_callable,
     is_awaitable,
@@ -494,8 +497,8 @@ class maybe_closing[T]:  # noqa: N801
 
     Raises:
 
-        InvalidPipelineError: If ``value``'s ``close`` returns an awaitable since there
-            is no event loop to await it on.
+        InvalidPipelineError: If ``value`` can only close asynchronously, or its
+            ``close`` returns an awaitable, since there is no event loop to await it on.
 
     Examples:
 
@@ -519,6 +522,9 @@ class maybe_closing[T]:  # noqa: N801
 
     def __init__(self, value: T) -> None:
         self.value = value
+
+        if get_sync_closer(value) is None and get_async_closer(value) is not None:
+            raise InvalidPipelineError(ASYNC_CLOSE_MSG)
 
     def __enter__(self) -> T:
         return self.value

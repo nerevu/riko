@@ -1064,9 +1064,10 @@ from `riko/coercion/_sequences.py`); `Pipeline.__call__`, `__ror__`, and the gen
 module template hand the raw seed through, and the async `processor` wrapper maps an
 `AsyncIterable` input lazily (`_aprocess_stream`) instead of treating it as one item.
 Shutdown reporting now meets the cleanup-error contract: plain callbacks and task/budget
-failures are recorded and grouped beside the unsuppressed primary error, while a native
-`__exit__` keeps its replace/suppress semantics (`_report_shutdown`; regressions in
-`tests/internal/test_execution.py`). Splitter nodes are likewise refused at plan build —
+failures are recorded and noted on the unsuppressed primary error, while a native
+`__exit__` keeps its replace/suppress semantics (`_unwind`/`_aunwind` through
+`raise_failures`; regressions in `tests/internal/test_execution.py`).
+Splitter nodes are likewise refused at plan build —
 `ResolvedModule` (formerly `PreparedNode`) validates both pipe fields with
 `require_single_output` (`riko/types/_wrappers.py`, keyed on the resolved pipe's
 declared `type`), so the invariant holds for every construction path — rather than by
@@ -1538,7 +1539,7 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   `isasync`/`issync` (the STABLE `riko.isasync`/`riko.issync` pair, the
   `processor`/`operator`/`splitter`/ `workflow` decorator option, the `WRAPPER_META`
   member, `host_isasync`, `skipif_issync`) and `is_async` (the
-  resolver/`get_pipe`/`compile_workflow`/ `resolve_closer`/`register_owned` parameters,
+  resolver/`get_pipe`/`compile_workflow`/ `resolve_closer`/`queue_close` parameters,
   `ValueFactoryPlan.is_async`, `Execution.is_async`) name the same boolean with no rule
   splitting them. Merge to `is_async`/`is_sync` in this slice, which already rewrites
   the decorator and resolver overloads carrying the flag; the public rename

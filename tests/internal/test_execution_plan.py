@@ -1108,7 +1108,7 @@ class TestStreamAdapters:
             run(main)
 
         failure = "OSError('close failed')"
-        assert raised.value.__notes__ == [f"closing the source also failed: {failure}"]
+        assert raised.value.__notes__ == [f"closing the stream also failed: {failure}"]
         assert closes == ["source"]
 
 

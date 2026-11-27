@@ -21,13 +21,14 @@ the wrapper or adapter that closes a stream once it ends. Three rules hold:
   ``yield from`` hands the stream to the delegating generator, which closes it. Besides
   the factories and close-once wrappers, the executions' own adapters own what they
   are given: ``_to_async``/``_to_sync`` re-expose a sync stream as async or the
-  reverse, ``_resolve_node_inputs`` hands its roots to the node's readers, and
-  ``map_inputs`` hands each stream to the reader it builds. The node builders
-  (``_build_envelope_stream``, ``_build_splitter_ports``, ``_run_async_node``, and their
-  async twins) own the input stream they are given. A name packed into a tuple or list
-  that is later splatted into one of those counts as handed on. ``list`` and ``tuple``
-  are not owners: one that fails or is interrupted mid-read leaves the stream open, so
-  drain inside ``closing``.
+  reverse, ``_resolve_node_inputs`` hands its roots to the node's readers,
+  ``map_inputs`` hands each stream to the reader it builds, and
+  ``take_streams``/``_atake_streams`` close a splitter's streams after taking them.
+  The node builders (``_build_envelope_stream``, ``_build_splitter_ports``,
+  ``_run_async_node``, and their async twins) own the input stream they are given. A
+  name packed into a tuple or list that is later splatted into one of those counts as
+  handed on. ``list`` and ``tuple`` are not owners: one that fails or is interrupted
+  mid-read leaves the stream open, so drain inside ``closing``.
 
 Known limits: only direct arguments, and containers, conditionals, and comprehensions
 around them, are followed, so a stream stored in another record or passed to a
@@ -92,11 +93,14 @@ _OWNERS = _FACTORIES | {
     "aclosing",
     "closing",
     "_register_port",
-    "register_owned",
+    "queue_close",
+    "async_queue_close",
     "_to_async",
     "_to_sync",
     "_resolve_node_inputs",
     "map_inputs",
+    "take_streams",
+    "_atake_streams",
 }
 
 _BUILDERS = frozenset(

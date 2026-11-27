@@ -298,9 +298,13 @@ CLASS_HISTORY = {
             "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
             "stream, splitter cascade at node start; cancellation window, failed "
-            "iter); fcfedc85 (11-22 async-only hand-through); fcfedc85 (11-23 native "
-            "async inputs, seed and root wrappers run-owned); fcfedc85 (11-23 callable "
-            "stream wrappers own their input)"
+            "iter); 02aff835 (11-22 async-only hand-through); 02aff835 (11-23 native "
+            "async inputs, seed and root wrappers run-owned); 02aff835 (11-23 callable "
+            "stream wrappers own their input); uncommitted (11-25 cancelled "
+            "aauto_close aclose stops before later closers; cancellation mid-close); "
+            "uncommitted (11-25 auto_close source whose iterator is a separate object; "
+            "no close call); uncommitted (11-25 auto_close skipped an async-only close "
+            "silently); uncommitted (11-26 maybe_closing async-only)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -340,7 +344,8 @@ CLASS_HISTORY = {
             "async HTTP status; status handling); 6dba2fe3 (11-17 split branches in "
             "both colors; branch behavior, no keyword drift); none RM801-shaped "
             "(source shape, status handling, not keyword drift); 6ad28467 (11-21 twin "
-            "type/subtype/identity; attributes, not keywords)"
+            "type/subtype/identity; attributes, not keywords); uncommitted (11-25 "
+            "native splitter list branches; branch type, not keywords)"
         ),
         (
             "run each sync/async twin on the same input, an error status and a bad "

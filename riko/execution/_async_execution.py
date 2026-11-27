@@ -12,27 +12,32 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable
 from contextlib import AsyncExitStack, aclosing
 from functools import cached_property, partial
-from itertools import islice
-from operator import attrgetter
+from itertools import repeat
+from operator import attrgetter, itemgetter
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, Self, cast
 
 from attrs import define, field
 
-from riko.bado._backend import CancelScope, Event, Semaphore, fail_after, lowlevel
+from riko.bado._backend import (
+    CancelScope,
+    Event,
+    Semaphore,
+    fail_after,
+    lowlevel,
+    move_on_after,
+)
 from riko.bado._util import (
     amap_values,
     as_awaitable,
     asyncify,
     maybe_aclosing,
     maybe_async,
-    maybe_closing,
     syncify,
 )
 from riko.bado.itertools import (
     AsyncTee,
     aauto_close,
     aislice,
-    alist,
     amap,
     as_async,
     async_flat_map,
@@ -40,7 +45,9 @@ from riko.bado.itertools import (
 from riko.base._config import DEFAULT_OUTPUT
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._funcutils import call_if_distinct, compose
+from riko.base._funcutils import call_if_distinct, compose, compose_inner
+from riko.base._guards import AsyncClosable
+from riko.base._iterutils import auto_close, partition, raise_failures
 from riko.base._require_guards import require_non_null
 from riko.coercion._sequences import listize
 from riko.types._feed import (
@@ -53,7 +60,7 @@ from riko.types._feed import (
     ItemCall,
     _ItemEnvelope,
 )
-from riko.types._io import AsyncClosable, resolve_closer
+from riko.types._io import resolve_closer
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -70,6 +77,7 @@ from ._adapt import to_async, to_sync
 from ._concurrency import build_item_call
 from ._execution import (
     DEFAULT_ENVELOPES,
+    SHUTDOWN_MSG,
     Acquisition,
     AsyncExecSteps,
     _Acquired,
@@ -85,10 +93,11 @@ from ._provenance import (
 )
 from ._resource_acquisition import build_context_manager, call_factory
 from ._resource_view import ResourceView
+from ._sync_execution import take_streams
 
 if TYPE_CHECKING:
     from collections import Counter
-    from collections.abc import Awaitable
+    from collections.abc import Awaitable, Iterator
     from contextlib import AbstractAsyncContextManager, AbstractContextManager
     from types import TracebackType
 
@@ -98,7 +107,7 @@ if TYPE_CHECKING:
     from riko.types._enums import IdentityMode
     from riko.types._feed import EnvelopeGenerator
     from riko.types._resource import Cleanup
-    from riko.types._streams import AnyIterable, AsyncStreamOf, StreamOf
+    from riko.types._streams import AnyIterable, AsyncStreamOf, Cascade, StreamOf
     from riko.types._workflow import NodeId, OutputName, PortKey
     from riko.types._wrappers import AsyncFunc
 
@@ -151,15 +160,41 @@ async def _awrap[T](
         yield envelope.with_value(value)
 
 
-async def _amaybe_close[T](
-    value: T, cleanup: Cleanup[T] | Literal[False] | None = None, inline: bool = False
-) -> None:
-    """Closes a value now if it has a close."""
-    closer = resolve_closer(value, cleanup=cleanup, is_async=True)
+async def _aclose_streams(primary: BaseException | None, *streams: object) -> None:
+    """
+    Closes every stream and notes a failed close on ``primary`` when there is one.
 
-    if closer is not None:
-        runner = maybe_async.using(inline=inline, abandon_on_cancel=True)
-        await runner(closer)
+    Raises:
+
+        Exception: Whatever the one failing close raises, when there is no ``primary``.
+        ExceptionGroup: If several closes fail and there is no ``primary``.
+
+    """
+    try:
+        await aauto_close(as_async(()), *streams, inline=False).aclose()
+    except Exception as failure:  # noqa: BLE001 (noted on the primary or re-raised)
+        raise_failures("closing the splitter's streams", failure, primary=primary)
+
+
+async def _atake_streams(
+    limit: int, streams: AsyncIterable[AsyncStreamOf[object]]
+) -> list[AsyncStreamOf[object]]:
+    """
+    Takes up to ``limit`` of a splitter's async streams.
+
+    Closes ``streams`` after taking. When taking one fails, closes each stream it took.
+    """
+    _streams: list[AsyncStreamOf[object]] = []
+
+    async with aclosing(aislice(streams, limit)) as taken:
+        try:
+            async for stream in taken:
+                _streams.append(stream)
+        except BaseException as primary:
+            await _aclose_streams(primary, *_streams)
+            raise
+
+    return _streams
 
 
 def _async_queue_close[T](
@@ -290,25 +325,6 @@ class _RunStream[T]:
                 self._reservation.release()
 
 
-def _require_streams(name: str, *values: Iterable[object]) -> list[StreamOf[object]]:
-    """Requires each ``values`` value to be a sync stream."""
-    return [require_stream(value, name) for value in values]
-
-
-def _take_streams(
-    name: str, limit: int, streams: Iterable[Iterable[object]]
-) -> list[StreamOf[object]]:
-    """
-    Takes up to ``limit`` of ``streams``.
-
-    Closes ``streams`` after taking, or when taking one fails.
-    """
-    with maybe_closing(streams):
-        _streams = _require_streams(name, *islice(streams, limit))
-
-    return _streams
-
-
 class _Taken[T](NamedTuple):
     """A stream plus the async stream that pulls and closes it."""
 
@@ -368,35 +384,45 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         traceback: TracebackType | None,
-    ) -> tuple[BaseException | None, bool]:
+    ) -> bool:
         """
         Unwinds the exit stack under a shutdown timeout window.
 
-        If unwinding outlasts the settings' ``shutdown_timeout``, the timeout is
-        reported as a cleanup failure and does not replace the error or clean exit that
-        ended the ``async with`` block. A sync close still running on a worker when time
-        runs out is abandoned.
+        Bounds the whole unwind by the settings' ``shutdown_timeout``. Logs and notes a
+        timeout as a cleanup failure on the remaining error. Abandons a sync close
+        running on a worker after timeout. If a context manager on the stack raises, its
+        error replaces ``exc``. Else if one returns true, the stack suppresses ``exc``.
 
         Returns:
 
-            The exception a native context manager replaced the primary error with, if
-            any, and whether the primary error was suppressed.
+            Whether the ``exc`` was suppressed.
+
+        Raises:
+
+            Exception: The cleanup failure, when there is only one and ``exc`` was
+                suppressed, is ``None``, or is a ``GeneratorExit``.
+
+            ExceptionGroup: All cleanup failures, when there are several and ``exc``
+                was suppressed, is ``None``, or is a ``GeneratorExit``.
 
         """
-        raised: BaseException | None = None
         suppressed = False
+        timeout = self.settings.shutdown_timeout
 
-        try:
-            with CancelScope(shield=True), fail_after(self.settings.shutdown_timeout):
-                try:
-                    unwound = await self._stack.__aexit__(exc_type, exc, traceback)
-                    suppressed = bool(unwound)
-                except Exception as error:  # noqa: BLE001 (re-raised by _report_shutdown)
-                    raised = error
-        except TimeoutError as error:
-            self._cleanup_errors.append(error)
+        with CancelScope(shield=True), move_on_after(timeout) as scope:
+            try:
+                suppressed = bool(await self._stack.__aexit__(exc_type, exc, traceback))
+            except Exception as raised:
+                raise_failures(SHUTDOWN_MSG, *self._cleanup_errors, primary=raised)
+                raise
 
-        return raised, suppressed
+        if scope.cancelled_caught:
+            msg = f"{SHUTDOWN_MSG} took longer than {timeout} seconds"
+            self._cleanup_errors.append(TimeoutError(msg))
+
+        primary = None if suppressed else exc
+        raise_failures(SHUTDOWN_MSG, *self._cleanup_errors, primary=primary)
+        return suppressed
 
     async def _shutdown(
         self,
@@ -408,8 +434,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         if not self._closing:
             self._closing = True
-            raised, suppressed = await self._aunwind(exc_type, exc, traceback)
-            self._report_shutdown(exc, raised, suppressed)
+            suppressed = await self._aunwind(exc_type, exc, traceback)
 
         return suppressed
 
@@ -472,7 +497,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         callback = self._arecord_cleanup_error
         self._stack.push_async_callback(callback, func, *args, **kwargs)
 
-    def register_owned[R](
+    def async_queue_close[R](
         self,
         value: R,
         cleanup: Cleanup[R] | Literal[False] | None = None,
@@ -503,7 +528,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 value = plan.value
             case ValuePlan():
                 value = plan.value
-                self.register_owned(value, plan.cleanup, inline=False)
+                self.async_queue_close(value, plan.cleanup, inline=False)
             case ValueFactoryPlan():
                 if plan.is_async:
                     raw = call_factory(plan)
@@ -511,7 +536,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                     raw = await asyncify(call_factory, plan)
 
                 value = await as_awaitable(raw)
-                self.register_owned(value, plan.cleanup, inline=False)
+                self.async_queue_close(value, plan.cleanup, inline=False)
             case SyncLifecyclePlan():
                 cm = _WorkerLifecycle(build_context_manager(plan))
                 value = await self.enter_async_context(cm)
@@ -593,8 +618,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             iterator = iter(cast("Iterable[T]", listize(_input)))
             stream = to_async(maybe_async, iterator, inline=True)
 
-        call_if_distinct(self.register_owned, _input, iterator)
-        self.register_owned(stream)
+        call_if_distinct(self.async_queue_close, _input, iterator)
+        self.async_queue_close(stream)
         return stream
 
     def _build_async_item_call(
@@ -785,7 +810,10 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             values = self._to_sync(provenance.agen_values(source, normalizer))
 
         worker = self._worker(limiter=run.limiter)
-        take = partial(_require_streams, name)
+
+        def take(value: Iterator[object]) -> list[StreamOf[object]]:
+            return [require_stream(value, name)]
+
         [(raw, taken)] = await self._acall_and_take(
             run, worker, take, interface.call, values, run.context, **extra
         )
@@ -833,6 +861,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             InvalidPipelineError: If the splitter yields a different number of streams
                 than it declares.
 
+            TypeError: If a value the splitter yields is not a stream.
+
         """
         node_id = node.node.id
         active = [port for port in node.output_ports if demand[node_id, port]]
@@ -844,14 +874,19 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         named_values = extras.map_inputs(_aunwrap, named)
         limit = node.splits + 1
 
-        if (interface := node.async_interface) is None:
-            name = node.module.name
-            _interface = require_non_null(node.sync_interface, NO_PIPE_MSG, name)
+        name = node.module.name
 
+        if (interface := node.async_interface) is None:
+
+            def take(streams: Cascade) -> list[StreamOf[object]]:
+                cascade = map(require_stream, streams, repeat(name))
+                _streams = auto_close(cascade, streams, bridge=syncify)
+                return take_streams(limit, _streams)
+
+            _interface = require_non_null(node.sync_interface, NO_PIPE_MSG, name)
             run.add(_values, *named_values.streams)
             extra = extras.build_kwargs(named_values.map(self._to_sync))
 
-            take = partial(_take_streams, name, limit)
             args = (self._to_sync(_values), run.context)
             call = _interface.call
             worker = self._worker(limiter=run.limiter)
@@ -861,26 +896,28 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             run.add(_values, *named_values.streams)
             extra = extras.build_kwargs(named_values)
             cascade = interface.call(_values, run.context, **extra)
-
-            async with aclosing(aislice(cascade, limit)) as _streams:
-                streams = await alist(_streams)
+            require = compose_inner(aauto_close, require_async_stream, name)
+            streams = await _atake_streams(limit, amap(require, cascade))
 
         try:
             node.validate_streams(*streams)
-        except InvalidPipelineError:
-            for _stream in streams:
-                await _amaybe_close(_stream)
-
+        except InvalidPipelineError as primary:
+            await _aclose_streams(primary, *streams)
             raise
 
-        ports: AsyncOutputPorts[object] = {}
+        pairs = zip(node.output_ports, streams, strict=True)
+        read, unread = partition(compose(parents.__contains__, itemgetter(0)), pairs)
 
-        for port, _stream in zip(node.output_ports, streams, strict=True):
-            if (parent := parents.get(port)) is None:
-                await _amaybe_close(_stream)
-            else:
-                envelopes = _awrap(_stream, parent)
-                ports[port] = aauto_close(envelopes, _stream, parent)
+        ports: AsyncOutputPorts[object] = {
+            port: aauto_close(_awrap(_stream, parents[port]), _stream, parents[port])
+            for port, _stream in read
+        }
+
+        try:
+            await _aclose_streams(None, *(_stream for _, _stream in unread))
+        except Exception as primary:
+            await _aclose_streams(primary, *ports.values())
+            raise
 
         return ports
 

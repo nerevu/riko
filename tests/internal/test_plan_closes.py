@@ -58,12 +58,14 @@ from tests._execution import (
     run_items,
     tag_source,
 )
+from tests._streams import AcloseOnlyClosable, BrokenClosable, Closable
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from riko.definitions._module_definition import ModuleDefinition
     from riko.types._streams import (
+        AsyncCascade,
         AsyncItemGenerator,
         AsyncStream,
         Cascade,
@@ -143,7 +145,9 @@ class _FailingCascade:
 
 
 def _bare_split_plan(
-    closed: list[str], make: Callable[[list[str]], Cascade] = _FailingCascade
+    closed: list[str],
+    make: Callable[[list[str]], Cascade] = _FailingCascade,
+    node: ModuleNode = SPLIT_NODE,
 ) -> ExecutionPlan:
     """Plans a source into a bare sync-only splitter that hands back its cascade."""
 
@@ -164,7 +168,7 @@ def _bare_split_plan(
     dispatcher = build_dispatcher(
         build_sync_definition(src), build_sync_definition(split, name="split")
     )
-    nodes = [SRC_NODE, SPLIT_NODE]
+    nodes = [SRC_NODE, node]
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
     flow = build_workflow(nodes, edges=(edge,))
     return ExecutionPlan.from_workflow(flow, dispatcher)
@@ -496,12 +500,16 @@ class _ClosingAsyncStream:
             await self.stream.aclose()
 
 
-def _async_cascade_plan(closed: list[str], _: pytest.MonkeyPatch) -> ExecutionPlan:
+def _async_cascade_plan(
+    closed: list[str],
+    _: pytest.MonkeyPatch | None = None,
+    make: Callable[[list[str]], AsyncCascade] = _ClosingAsyncCascade,
+) -> ExecutionPlan:
     """Plans a source into an async-only splitter that returns a closing cascade."""
 
     @splitter(objectify=False)
     async def asplit(_stream, _: object, __: object, **___: object):
-        return _ClosingAsyncCascade(closed)
+        return make(closed)
 
     dispatcher = build_dispatcher(
         SRC_ECHO_DEFINITION, build_async_definition(asplit, name="split")
@@ -583,6 +591,136 @@ def _async_split_input_plan(
     outputs = {"default": Endpoint("s", "out")}
     flow = build_workflow(nodes, edges=(edge,), outputs=outputs)
     return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
+class _ScriptedCascade:
+    """A sync and async cascade that hands out each branch, raising any error one."""
+
+    def __init__(self, branches: list[object]) -> None:
+        self.branches = iter(branches)
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> object:
+        if isinstance(branch := next(self.branches), Exception):
+            raise branch
+
+        return branch
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> object:
+        try:
+            branch = next(self)
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+        return branch
+
+
+class _AcloseScriptedCascade(_ScriptedCascade):
+    """A scripted cascade whose only close is ``aclose``, which records itself."""
+
+    def __init__(self, branches: list[object], closes: list[str]) -> None:
+        super().__init__(branches)
+        self.closes = closes
+
+    async def aclose(self) -> None:
+        self.closes.append("cascade")
+
+
+def _sync_scripted_plan(
+    branches: list[object],
+    splits: int = 2,
+    cascade: Callable[[list[object]], _ScriptedCascade] = _ScriptedCascade,
+) -> ExecutionPlan:
+    """Plans a source into a sync-only splitter that hands out ``branches``."""
+    node = ModuleNode(id="s", name="split", conf={"splits": splits})
+    make = lambda _: cast("Cascade", cascade(branches))
+    return _bare_split_plan([], make, node)
+
+
+def _async_scripted_plan(branches: list[object]) -> ExecutionPlan:
+    """Plans a source into an async-only splitter that hands out ``branches``."""
+    cascade = cast("AsyncCascade", _ScriptedCascade(branches))
+    return _async_cascade_plan([], make=lambda _: cascade)
+
+
+def _failed_take(closes: list[str]) -> list[object]:
+    return [Closable("first", closes), RuntimeError("take failed")]
+
+
+def _list_branch(closes: list[str]) -> list[object]:
+    return [Closable("first", closes), []]
+
+
+def _extra_branch(closes: list[str]) -> list[object]:
+    names = ("second", "third")
+    return [BrokenClosable("first", closes), *(Closable(n, closes) for n in names)]
+
+
+def _async_close_second_branch(closes: list[str]) -> list[object]:
+    branches = (AcloseOnlyClosable("second", closes), Closable("third", closes))
+    return [Closable("first", closes), *branches]
+
+
+def _broken_unread_branch(closes: list[str]) -> list[object]:
+    return [Closable("kept", closes), BrokenClosable("unread", closes)]
+
+
+def _broken_unread_branches(closes: list[str]) -> list[object]:
+    names = ("unread", "unread too")
+    return [Closable("kept", closes), *(BrokenClosable(n, closes) for n in names)]
+
+
+# A splitter, sync-only or async-only, with its run's seed.
+SCRIPTED_SPLITTERS = [
+    pytest.param(_sync_scripted_plan, None, id="sync-only"),
+    pytest.param(_async_scripted_plan, X_ROWS, id="async-only", marks=_SKIP),
+]
+# The branches a splitter hands out, the error the run raises, and the closes.
+FAILED_SPLITS = [
+    pytest.param(_failed_take, RuntimeError, "take failed", ["first"], id="take"),
+    pytest.param(_list_branch, TypeError, "returned a list", ["first"], id="list"),
+    pytest.param(
+        _extra_branch,
+        InvalidPipelineError,
+        "yielded more than 2",
+        ["first", "second", "third"],
+        id="count",
+    ),
+]
+
+
+# The branches a sync-only splitter hands out, the error a run raises, and the closes.
+UNREAD_BRANCH_CLOSES = [
+    pytest.param(
+        _broken_unread_branch,
+        OSError,
+        "unread close failed",
+        ["unread", "kept"],
+        id="unread-port-close",
+    ),
+    pytest.param(
+        _broken_unread_branches,
+        ExceptionGroup,
+        "multiple errors closing the stream",
+        ["unread", "unread too", "kept"],
+        id="unread-port-closes",
+    ),
+]
+SYNC_RUN_SPLIT_CLOSES = [
+    pytest.param(
+        _async_close_second_branch,
+        InvalidPipelineError,
+        "only close is async",
+        ["first"],
+        id="async-only-close",
+    ),
+    *UNREAD_BRANCH_CLOSES,
+]
 
 
 # Plans whose run closes an async value it reads through the portal.
@@ -777,12 +915,13 @@ class TestPlanClose:
         dispatcher = build_dispatcher(build_sync_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
-        with pytest.raises(ExceptionGroup) as info, SyncExecution() as execution:
+        with (
+            pytest.raises(InvalidPipelineError, match="not provided") as info,
+            SyncExecution() as execution,
+        ):
             execution.run(plan)
 
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, InvalidPipelineError)
-        assert isinstance(cleanup, RuntimeError)
+        assert "RuntimeError" in info.value.__notes__[0]
         assert closed == ["closed"]
 
     def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
@@ -813,6 +952,34 @@ class TestPlanClose:
             assert closed == ["closed"]
 
         assert closed == ["closed"]
+
+    @pytest.mark.parametrize(("script", "error", "match", "expected"), FAILED_SPLITS)
+    @pytest.mark.parametrize(("build", "seed"), SCRIPTED_SPLITTERS)
+    def test_run_closes_each_taken_branch_when_a_split_fails(
+        self, build, seed, script, error, match, expected
+    ) -> None:
+        closes: list[str] = []
+        plan = build(script(closes))
+
+        with SyncExecution() as execution, pytest.raises(error, match=match):
+            execution.run(plan, seed=seed)
+
+        assert closes == expected
+
+    @pytest.mark.parametrize(
+        ("script", "error", "match", "expected"), SYNC_RUN_SPLIT_CLOSES
+    )
+    def test_run_closes_every_other_branch_when_a_branch_close_fails(
+        self, script, error, match, expected
+    ) -> None:
+        closes: list[str] = []
+        branches = script(closes)
+        plan = _sync_scripted_plan(branches, len(branches))
+
+        with SyncExecution() as execution, pytest.raises(error, match=match):
+            execution.run(plan)
+
+        assert closes == expected
 
     @pytest.mark.parametrize(("build", "seed", "expected"), CLOSING_CASCADES)
     def test_run_closes_a_cascade_once_its_streams_are_taken(
@@ -990,6 +1157,83 @@ class TestAsyncPlanClose:
 
         assert closed == ["closed"]
 
+    @pytest.mark.parametrize(("script", "error", "match", "expected"), FAILED_SPLITS)
+    @pytest.mark.parametrize(("build", "seed"), SCRIPTED_SPLITTERS)
+    @async_test
+    async def test_arun_closes_each_taken_branch_when_a_split_fails(
+        self, build, seed, script, error, match, expected
+    ) -> None:
+        closes: list[str] = []
+        plan = build(script(closes))
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(error, match=match):
+                await execution.arun(plan, seed=seed)
+
+        assert closes == expected
+
+    @async_test
+    async def test_arun_awaits_a_sync_splitter_branch_whose_only_close_is_async(
+        self,
+    ) -> None:
+        closes: list[str] = []
+        branches = [AcloseOnlyClosable("first", closes), Closable("second", closes)]
+        plan = _sync_scripted_plan(branches)
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan)
+            assert [item async for item in stream] == []
+
+        assert closes == ["second", "first"]
+
+    @async_test
+    async def test_arun_awaits_a_sync_splitter_cascade_whose_only_close_is_async(
+        self,
+    ) -> None:
+        closes: list[str] = []
+        branches: list[object] = [Closable("first", closes), Closable("second", closes)]
+        cascade = partial(_AcloseScriptedCascade, closes=closes)
+        plan = _sync_scripted_plan(branches, cascade=cascade)
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan)
+            assert closes == ["cascade", "second"]
+            assert [item async for item in stream] == []
+
+        assert closes == ["cascade", "second", "first"]
+
+    @pytest.mark.parametrize(("script", "error", "match", "expected"), FAILED_SPLITS)
+    @async_test
+    async def test_arun_awaits_an_async_only_cascade_close_when_a_split_fails(
+        self, script, error, match, expected
+    ) -> None:
+        closes: list[str] = []
+        cascade = partial(_AcloseScriptedCascade, closes=closes)
+        plan = _sync_scripted_plan(script(closes), cascade=cascade)
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(error, match=match):
+                await execution.arun(plan)
+
+        assert closes == ["cascade", *expected]
+
+    @pytest.mark.parametrize(
+        ("script", "error", "match", "expected"), UNREAD_BRANCH_CLOSES
+    )
+    @async_test
+    async def test_arun_closes_every_other_branch_when_a_branch_close_fails(
+        self, script, error, match, expected
+    ) -> None:
+        closes: list[str] = []
+        branches = script(closes)
+        plan = _sync_scripted_plan(branches, len(branches))
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(error, match=match):
+                await execution.arun(plan)
+
+        assert closes == expected
+
     @pytest.mark.parametrize(("build", "seed", "expected"), CLOSING_CASCADES)
     @async_test
     async def test_arun_closes_a_cascade_once_its_streams_are_taken(
@@ -1065,13 +1309,11 @@ class TestAsyncPlanClose:
         dispatcher = build_dispatcher(build_async_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
-        with pytest.raises(ExceptionGroup) as info:
+        with pytest.raises(InvalidPipelineError, match="not provided") as info:
             async with AsyncExecution() as execution:
                 await execution.arun(plan)
 
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, InvalidPipelineError)
-        assert isinstance(cleanup, RuntimeError)
+        assert "RuntimeError" in info.value.__notes__[0]
         assert closed == ["closed"]
 
     @pytest.mark.parametrize("tag", SOURCE_TAGS)

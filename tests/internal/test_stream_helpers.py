@@ -15,6 +15,7 @@ import pytest
 
 from riko.bado import as_async, run
 from riko.bado._backend import (
+    CancelScope,
     CapacityLimiter,
     Semaphore,
     async_sleep,
@@ -23,11 +24,13 @@ from riko.bado._backend import (
 )
 from riko.bado._backend import asyncify as backend_asyncify
 from riko.bado._util import (
+    as_awaitable,
     async_partial,
     async_return,
     asyncify,
     gather_results,
     maybe_async,
+    maybe_closing,
 )
 from riko.bado.itertools import (
     aauto_close,
@@ -40,13 +43,14 @@ from riko.bado.itertools import (
     async_map_stream,
     async_merge,
 )
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable
 from riko.base._iterutils import auto_close
 from riko.base._sentinels import MISSING
 from riko.types._io import require_closer
 from tests import async_test, skipif_sync
 from tests._resources import AsyncConnection, Connection
-from tests._streams import Closable, gen_items
+from tests._streams import AcloseOnlyClosable, BrokenClosable, Closable, gen_items
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
@@ -207,12 +211,92 @@ AUTO_CLOSE_DRAINS = [
 ]
 
 
-class _BrokenClosable(Closable):
-    """Stands in for a value whose close records itself, then fails."""
+class _ClosableHandle(Closable):
+    """Stands in for a closable handle that hands out a distinct closable cursor."""
 
-    def close(self) -> None:
-        super().close()
-        raise OSError(f"{self.name} close failed")
+    def __iter__(self) -> Closable:
+        return Closable("cursor", self.closes)
+
+    def __aiter__(self) -> Closable:
+        return Closable("cursor", self.closes)
+
+
+def _handle(closes: list[str]) -> tuple[Closable, ...]:
+    return (_ClosableHandle("handle", closes),)
+
+
+def _handle_also_closable(closes: list[str]) -> tuple[Closable, ...]:
+    handle = _ClosableHandle("handle", closes)
+    return handle, handle
+
+
+def _self_iterating(closes: list[str]) -> tuple[Closable, ...]:
+    return (Closable("stream", closes),)
+
+
+# A wrapper's source and closables, and the closes one wrapper close makes.
+OWNED_SOURCES = [
+    pytest.param(_handle, ["cursor", "handle"], id="distinct-cursor"),
+    pytest.param(_handle_also_closable, ["cursor", "handle"], id="handle-closable"),
+    pytest.param(_self_iterating, ["stream"], id="self-iterating"),
+]
+
+
+def _async_only_source(closes: list[str]) -> tuple[Closable, ...]:
+    return (AcloseOnlyClosable("stream", closes),)
+
+
+def _async_only_closable(closes: list[str]) -> tuple[Closable, ...]:
+    return Closable("stream", closes), AcloseOnlyClosable("a", closes)
+
+
+# A wrapper's source and closables, one of which only closes asynchronously.
+ASYNC_ONLY_OWNED = [
+    pytest.param(_async_only_source, id="source"),
+    pytest.param(_async_only_closable, id="closable"),
+]
+
+
+class _CancellingClosable(Closable):
+    """Stands in for a value whose async close records itself, then is cancelled."""
+
+    def __init__(self, name: str, closes: list[str], scope: CancelScope) -> None:
+        super().__init__(name, closes)
+        self.scope = scope
+
+    async def aclose(self) -> None:
+        self.closes.append(self.name)
+        self.scope.cancel()
+        await lowlevel.checkpoint()
+
+
+class _FinallyClosable(AcloseOnlyClosable):
+    """Stands in for a value whose async close awaits, then records itself anyway."""
+
+    async def aclose(self) -> None:
+        try:
+            await lowlevel.checkpoint()
+        finally:
+            self.closes.append(self.name)
+
+
+# Whether sync closes run on the event loop, and the closes a cancelled aclose makes.
+CANCELLED_CLOSES = [
+    pytest.param(True, ["first", "later", "sync"], id="inline"),
+    pytest.param(
+        False,
+        ["first", "later", "sync"],
+        id="worker",
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=AssertionError,
+            reason=(
+                "handing a cancelled close's remaining worker closes to the execution "
+                "is not yet implemented"
+            ),
+        ),
+    ),
+]
 
 
 class _BlockingClosable:
@@ -236,6 +320,15 @@ class TestAutoClose:
         close(Closable("stream", closes), Closable("a", closes), Closable("b", closes))
         assert closes == ["stream", "a", "b"]
 
+    @pytest.mark.parametrize(("build", "expected"), OWNED_SOURCES)
+    @pytest.mark.parametrize("close", AUTO_CLOSERS)
+    def test_close_closes_the_source_and_its_iterator_once(
+        self, close, build, expected
+    ):
+        closes = []
+        close(*build(closes), times=2)
+        assert closes == expected
+
     @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
     def test_stream_error_closes_and_propagates(self, drain):
         closes = []
@@ -249,7 +342,7 @@ class TestAutoClose:
     @pytest.mark.parametrize("close", AUTO_CLOSERS)
     def test_several_failed_closes_raise_together(self, close):
         closes = []
-        broken = (_BrokenClosable("a", closes), _BrokenClosable("b", closes))
+        broken = (BrokenClosable("a", closes), BrokenClosable("b", closes))
 
         with pytest.raises(ExceptionGroup, match="multiple errors") as info:
             close(Closable("stream", closes), *broken)
@@ -260,7 +353,7 @@ class TestAutoClose:
     @pytest.mark.parametrize("close", AUTO_CLOSERS)
     def test_single_failed_close_raises_after_every_close(self, close):
         closes = []
-        values = (_BrokenClosable("a", closes), Closable("b", closes))
+        values = (BrokenClosable("a", closes), Closable("b", closes))
 
         with pytest.raises(OSError, match="a close failed"):
             close(Closable("stream", closes), *values)
@@ -273,10 +366,10 @@ class TestAutoClose:
         stream = Closable("stream", closes, ValueError("boom"))
 
         with pytest.raises(ValueError, match="boom") as info:
-            drain(stream, _BrokenClosable("a", closes))
+            drain(stream, BrokenClosable("a", closes))
 
         failure = OSError("a close failed")
-        assert info.value.__notes__ == [f"closing the source also failed: {failure!r}"]
+        assert info.value.__notes__ == [f"closing the stream also failed: {failure!r}"]
         assert closes == ["stream", "a"]
 
     @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
@@ -284,7 +377,7 @@ class TestAutoClose:
         closes = []
 
         with pytest.raises(OSError, match="a close failed"):
-            drain(Closable("stream", closes), _BrokenClosable("a", closes))
+            drain(Closable("stream", closes), BrokenClosable("a", closes))
 
         assert closes == ["stream", "a"]
 
@@ -293,6 +386,31 @@ class TestAutoClose:
         closes = []
         close(Closable("stream", closes), Closable("a", closes), times=2)
         assert closes == ["stream", "a"]
+
+    @pytest.mark.parametrize("build", ASYNC_ONLY_OWNED)
+    def test_a_value_it_can_only_close_asynchronously_is_refused(self, build):
+        closes: list[str] = []
+
+        with pytest.raises(InvalidPipelineError, match="only close is async"):
+            auto_close(*build(closes))
+
+        assert closes == []
+
+    @skipif_sync
+    @pytest.mark.parametrize("build", ASYNC_ONLY_OWNED)
+    def test_a_bridge_closes_a_value_it_can_only_close_asynchronously(self, build):
+        closes: list[str] = []
+        values = build(closes)
+        assert list(auto_close(*values, bridge=partial(run, as_awaitable))) == []
+        assert closes == [value.name for value in values]
+
+    def test_maybe_closing_refuses_a_value_it_can_only_close_asynchronously(self):
+        closes: list[str] = []
+
+        with pytest.raises(InvalidPipelineError, match="only close is async"):
+            maybe_closing(*_async_only_source(closes))
+
+        assert closes == []
 
     def test_none_closable_is_skipped(self):
         closes = []
@@ -354,6 +472,39 @@ class TestAutoClose:
             sleep(0.01)
 
         assert closes == ["closed"]
+
+    @pytest.mark.parametrize(("inline", "expected"), CANCELLED_CLOSES)
+    @async_test
+    async def test_a_cancelled_aclose_still_calls_every_later_close(
+        self, inline: bool, expected: list[str]
+    ) -> None:
+        closes: list[str] = []
+        scope = CancelScope()
+        first = _CancellingClosable("first", closes, scope)
+        later = _CancellingClosable("later", closes, scope)
+        wrapper = aauto_close(first, later, Closable("sync", closes), inline=inline)
+
+        with scope:
+            await wrapper.aclose()
+
+        with fail_after(1):
+            await wrapper.aclose()
+
+        assert scope.cancelled_caught
+        assert closes == expected
+
+    @async_test
+    async def test_a_cancelled_aclose_releases_a_close_that_awaits_first(self) -> None:
+        closes: list[str] = []
+        scope = CancelScope()
+        first = _CancellingClosable("first", closes, scope)
+        wrapper = aauto_close(first, _FinallyClosable("later", closes))
+
+        with scope, fail_after(1):
+            await wrapper.aclose()
+
+        assert scope.cancelled_caught
+        assert closes == ["first", "later"]
 
 
 ACLOSE_CASES = [

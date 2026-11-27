@@ -980,6 +980,11 @@ Each run closes its resources when it is exhausted or closed. Otherwise it issue
 stop early, use the context manager ``with pipeline.open(items) as stream:``
 (``async with`` for async iteration). Leaving the block closes the run.
 
+If a run fails and a cleanup also fails, you still get the run's error. Each cleanup
+failure is logged and added to it as a note (see its ``__notes__``). If the run
+succeeded, a single cleanup failure is raised as is, and several are raised together as
+an ``ExceptionGroup``.
+
 How do I change how much riko logs?
 -----------------------------------
 

@@ -51,6 +51,7 @@ except ImportError:
     gather_results: Func[object] = lambda *_, **_kw: None
     get_current_task: Func[object] | None = None
     lowlevel: object = None
+    move_on_after: Func[object] | None = None
     run_from_thread: Func[object] = lambda *_, **_kw: None
     start_blocking_portal: Func[object] = lambda *_, **_kw: None
 
@@ -77,6 +78,7 @@ else:
         fail_after,
         get_current_task,
         lowlevel,
+        move_on_after,
     )
     from anyio import open_file as async_open
     from anyio import sleep as async_sleep
@@ -122,6 +124,7 @@ __all__ = [
     "is_async",
     "is_sync",
     "lowlevel",
+    "move_on_after",
     "run",
     "run_from_thread",
     "start_blocking_portal",

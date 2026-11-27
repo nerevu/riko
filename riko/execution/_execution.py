@@ -77,6 +77,7 @@ class _NullEventSink:
 
 _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_ENVELOPES: tuple[_ItemEnvelope[object], ...] = (PLACEHOLDER,)
+SHUTDOWN_MSG = "shutting down the execution"
 
 
 @define(frozen=True, slots=True)
@@ -500,35 +501,3 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         ordered = sorted(indexed, key=lambda item: item[0])
         others = [_stream for _, _stream in ordered] if ordered else None
         return NodeInputs(stream, named, others)
-
-    def _report_shutdown(
-        self, exc: BaseException | None, raised: BaseException | None, suppressed: bool
-    ) -> None:
-        """
-        Raises the shutdown outcome once cleanup has been attempted in full.
-
-        ``raised`` is an exception that a native context manager replaced the primary
-        error with. That replacement, or the unsuppressed primary error, stays the
-        primary outcome. Cleanup callback and task failures group alongside it rather
-        than replace it. They are raised on their own only when no primary outcome
-        remains.
-        """
-        errors = self._cleanup_errors
-
-        if raised is not None:
-            primary: BaseException | None = raised
-        elif suppressed:
-            primary = None
-        else:
-            primary = exc
-
-        if not errors and raised is not None:
-            raise raised
-        elif not errors:
-            pass
-        elif primary is None and len(errors) == 1:
-            raise errors[0]
-        elif primary is None:
-            raise ExceptionGroup("Execution shutdown failed", errors)
-        else:
-            raise BaseExceptionGroup("Execution shutdown failed", [primary, *errors])
