@@ -172,7 +172,7 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   on it. Resource definitions, optional `state_store`, Context-local module definitions,
   and identity-encoder selection are resolved during execution preparation.
 - **Constructor stops being a union of every module's knobs.**
-  `assign`/`field`/`func`/`targets`/ `skip_if` belong to the declared node/step rather
+  `assign`/`field`/`func`/`targets`/`skip_if` belong to the declared node/step rather
   than global Pipeline execution config.
 - **Collapse the runtime-utility surface.** De-emphasize backend/bridge helpers from the
   stable API; users write normal Python iteration.

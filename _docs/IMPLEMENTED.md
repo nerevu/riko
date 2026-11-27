@@ -493,7 +493,7 @@ raise). Regenerate with `manage codegen --names` (drift guard
 module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider`
 / `get_module_provider` in `riko/types/modules.py`: the first dotted segment,
 `BUILTIN_PROVIDER` = `"riko"` when unqualified). `NameEntry` (`riko/ext/codegen.py`)
-derives `provider`/`class_name`/ `member`/`alias` from its name and category: built-ins
+derives `provider`/`class_name`/`member`/`alias` from its name and category: built-ins
 group by category into the bucket classes; a provider's modules form one class per
 provider whose members drop the prefix (`Example.LOOKUP`), and the flat `Modules` alias
 keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`). Provider classes come

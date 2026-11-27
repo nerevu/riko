@@ -158,9 +158,9 @@ Blocks step 4.
   `compile_pipe_def`). `run-pipe` gained document execution (`-p flow.json`, or an
   example id resolving to `examples/pipelines/{pipeid}.json`), sync or async, alongside
   its unchanged script path. `benchmark` is ported off `SyncPipe`/`AsyncPipe`: rows
-  `sync_pipe`/ `async_pipe` (one `Pipeline` run per feed) and
+  `sync_pipe`/`async_pipe` (one `Pipeline` run per feed) and
   `sync_workflow`/`async_workflow` (one fan-in graph of every feed into `union`) replace
-  `sync_collection`/`par_sync_collection`/`async_collection`/ `async_pipe2`, with the
+  `sync_collection`/`par_sync_collection`/`async_collection`/`async_pipe2`, with the
   parallel row dropped until the execution takes a concurrency option. `build_pipe_def`
   is **deleted** in favour of `Workflow.parse` (its interim STABLE alias `parse_dag` was
   removed 2026-10-12), which expands the same `PipeDag` straight to a validated
@@ -191,7 +191,7 @@ file).
   kazeeki/`pipe_58a5…`/`pipe_8NMk…` probes and `examples/*.py` run on `Pipeline`. The
   same commit settled the workflow vocabulary (two tiers: the
   `RawWorkflow`/`RawNode`/`RawEdge`/`RawEndpoint` TypedDicts beneath the bare
-  `Workflow`/`Node`/ `Edge`/`Endpoint` attrs classes, with `WorkflowLike` accepting
+  `Workflow`/`Node`/`Edge`/`Endpoint` attrs classes, with `WorkflowLike` accepting
   either and `WorkflowDocument` naming the serialized form; graph names on STABLE) and
   the eight-verb table now in `CLAUDE.md` (`Workflow.parse`, `build-workflow`, …).
   `subscribe`/`publish`/`split`/`parallel` have no replacement yet (recorded in

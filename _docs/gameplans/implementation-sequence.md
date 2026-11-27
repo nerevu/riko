@@ -146,7 +146,7 @@ Do not implement these pending-plan shapes:
 - execution knobs on `with_config()`;
 - RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
 - duck-typed lifecycle discovery on arbitrary resolved resource values
-  (`open`/`aopen`/`close`/ `aclose` introspection) as the conceptual resource model;
+  (`open`/`aopen`/`close`/`aclose` introspection) as the conceptual resource model;
 - a global batch backend preference ladder (`Arrow → Polars → Pandas → list`);
 - automatic callable fingerprinting treated as sufficient for durable semantic identity;
 - a Core-owned `OperationSpec`/`OperationPlan` or second operation runtime;
@@ -461,7 +461,7 @@ Establish the public types and use them in new code; migrate old call sites when
 touched.
 
 As built, the tree in `riko/base/_exceptions.py` has `RikoError`, the
-`ModuleError`/`TargetError`/ `PipelineError` (incl. `PipelineStateError`)/`PubSubError`
+`ModuleError`/`TargetError`/`PipelineError` (incl. `PipelineStateError`)/`PubSubError`
 families, and the `IdentityError` branch's
 `IdentityEncodingError`/`CyclicIdentityError`. The rest of the tree lands with its first
 consumer rather than as unused types:
@@ -859,7 +859,7 @@ R4A.5  deterministic serialization + acceptance
 - **R4A.2 — `normalize_workflow()`.** See `IMPLEMENTED.md`. Authoring sugar →
   strict canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity
   deferred to validate), omitted ids→`<name>-<occurrence>`, port aliases, family
-  dispatch + `backend`/`fmt`/ `mode` enum coercion, `src`/`tgt`/`from`/`to` rejection,
+  dispatch + `backend`/`fmt`/`mode` enum coercion, `src`/`tgt`/`from`/`to` rejection,
   string inputs→JSON Schema. The **structural, contract-free** pass: it reuses
   `require_binding` (so a bare-string `resources` self-binds, no contract needed),
   `normalize_strs`, `listize`, and the `is_mapping`/`is_listlike` guards; only
@@ -1715,15 +1715,15 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
 - ~~the spelling of the color flag~~ (settled by the 2026-11-17 triage, ahead of this
   slice; every tier now says `is_async`/`is_sync`) (2026-11-17 naming audit):
   `isasync`/`issync` (the STABLE `riko.isasync`/`riko.issync` pair, the
-  `processor`/`operator`/`splitter`/ `workflow` decorator option, the `WRAPPER_META`
+  `processor`/`operator`/`splitter`/`workflow` decorator option, the `WRAPPER_META`
   member, `host_isasync`, `skipif_issync`) and `is_async` (the
-  resolver/`get_pipe`/`compile_workflow`/ `resolve_closer`/`queue_close` parameters,
+  resolver/`get_pipe`/`compile_workflow`/`resolve_closer`/`queue_close` parameters,
   `ValueFactoryPlan.is_async`, `Execution.is_async`) name the same boolean with no rule
   splitting them. Merge to `is_async`/`is_sync` in this slice, which already rewrites
   the decorator and resolver overloads carrying the flag; the public rename
   (`riko.isasync`/`issync`, the decorator option, the wrapper metadata attribute
   extension authors read) is one entry in the `docs/CHANGES.rst` rename list, with
-  `docs/COOKBOOK.rst`/ `docs/FAQ.rst`, the ~40 built-in `isasync=True` decorations, and
+  `docs/COOKBOOK.rst`/`docs/FAQ.rst`, the ~40 built-in `isasync=True` decorations, and
   the `skipif_issync` marker following.
 
 Its decisions below are settled during R7, so R4E starts with them settled.

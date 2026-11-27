@@ -95,7 +95,7 @@ Riko registries                                            = exposure/discovery 
 **MVP:** one client, one reporting period; live-API ingestion wherever available;
 provider device normalization; deterministic identity reconciliation/dedupe;
 distinct-union license calculation from Microsoft data; Airtable writes using explicit
-operation modes such as `append`/`merge`/`replace`/ `delete` where supported; QA record;
+operation modes such as `append`/`merge`/`replace`/`delete` where supported; QA record;
 dry-run/plan/apply for destructive provider changes; structured source/write/domain
 results.
 

@@ -164,7 +164,7 @@ Enforcement:
   history-named file (`test_regressions.py`), a helper module inside a tier, or a stray
   folder; it prints size advice without failing. It also fails on a test bound off the
   ladder in `tests/__init__.py` (a `timeout` marker, a `fail_after`/`move_on_after`
-  bound, a `wait`/`join`/`result` timeout, and the `timeout`/ `faulthandler_timeout`
+  bound, a `wait`/`join`/`result` timeout, and the `timeout`/`faulthandler_timeout`
   globals, `faulthandler_timeout` below `timeout`), an inner bound not below the test's
   outer one (its smallest `timeout` marker, else the `pyproject.toml` backstop), a
   `sleep` on the test's own path that lasts as long as that outer bound, and a test that

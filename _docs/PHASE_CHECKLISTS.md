@@ -202,7 +202,7 @@ deleted at v1-cutover step 4; one-shot lifetime is now owned by
 ## P6: ExecutionMode
 
 **Delivered.** `Context.mode: ExecutionMode`
-(`RUN`/`DESCRIBE_INPUTS`/`DESCRIBE_DEPENDENCIES`/ `DESCRIBE`), part of the stable
+(`RUN`/`DESCRIBE_INPUTS`/`DESCRIBE_DEPENDENCIES`/`DESCRIBE`), part of the stable
 surface. `describe_input`/`describe_dependencies` are read-only properties derived from
 `mode`; generated workflow modules dispatch on `mode` through `build_workflow_pipes`
 (`riko/runtime/_workflow_pipes.py`), where `DESCRIBE` returns
