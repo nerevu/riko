@@ -13,7 +13,7 @@ import pytest
 from attrs import fields_dict
 
 from riko.base._exceptions import ResourceInterpretationWarning
-from riko.base._guards import get_sync_closer
+from riko.base._guards import get_async_closer, get_sync_closer
 from riko.base._require_guards import typed_dict_keys
 from riko.coercion._canonical import canonical_bytes
 from riko.definitions._context import Context
@@ -51,7 +51,6 @@ from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.types._enums import Formats
 from riko.types._frozendict import FrozenDict, FrozenJSONDict, freeze, json_freeze
-from riko.types._io import get_async_closer
 from riko.types._options import CallOptions, RawCallOptions
 from riko.types._resource import (
     AsyncLifecyclePlan,

@@ -55,6 +55,10 @@ ASYNC_CLEANUP_MSG = (
     "an async resource cleanup runs under `for` only for a value an async factory "
     "produced. Make the factory async, or iterate with `async for`"
 )
+ASYNC_CLOSE_MSG = (
+    "a value whose only close is async cannot be closed under `for`; produce it "
+    "with an async resource factory or lifecycle, or iterate with `async for`"
+)
 
 
 def _protocol_signature(method: Func[object]) -> Signature:
@@ -559,16 +563,21 @@ class SyncClosable(Protocol):
     def close(self) -> object | None: ...
 
 
+@runtime_checkable
+class AsyncClosable(Protocol):
+    async def aclose(self) -> object | None: ...
+
+
 @lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _has_async_close(cls: type) -> bool:
     """Whether instances of ``cls`` close asynchronously through their type."""
     return is_async_callable(getattr(cls, "close", None))
 
 
-def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
-    """Whether ``owner``'s ``close`` is async."""
-    if is_type_bound(owner, "close"):
-        result = _has_async_close(type(owner))
+def _is_async_close(close: object, source: object) -> TypeGuard[AsyncFunc[object]]:
+    """Whether ``source``'s ``close`` is async."""
+    if is_type_bound(source, "close"):
+        result = _has_async_close(type(source))
     else:
         result = is_async_callable(close)
 
@@ -603,6 +612,40 @@ def get_sync_closer(value: object) -> Func[object] | None:
     is_sync_closable = isinstance_strict(value, SyncClosable)
 
     if is_sync_closable and not _is_async_close(value.close, value):
+        closer = value.close
+
+    return closer
+
+
+def get_async_closer(value: object) -> AsyncFunc[object] | None:
+    """
+    Gets the method that closes ``value`` on an event loop.
+
+    ``aclose`` is preferred over an async def ``close``.
+
+    Args:
+
+        value: The value to inspect.
+
+    Returns:
+
+        The value's ``aclose`` or async ``close``, or ``None`` when it has neither.
+
+    Examples:
+
+        >>> class Client:
+        ...     async def close(self):
+        ...         pass
+        >>>
+        >>> get_async_closer(Client()).__name__, get_async_closer(1)
+        ('close', None)
+
+    """
+    closer = None
+
+    if isinstance_strict(value, AsyncClosable):
+        closer = value.aclose
+    elif isinstance_strict(value, SyncClosable) and _is_async_close(value.close, value):
         closer = value.close
 
     return closer

@@ -56,8 +56,10 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import (
+    AsyncClosable,
     SyncClosable,
     _check_strict_protocol,
+    get_async_closer,
     get_sync_closer,
     isinstance_strict,
     require_listlike,
@@ -120,7 +122,6 @@ from riko.types._feed import (
     _ItemEnvelope,
 )
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import AsyncClosable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex

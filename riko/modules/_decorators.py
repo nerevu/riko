@@ -47,6 +47,7 @@ from riko.bado.itertools import (
     materialize,
 )
 from riko.base._guards import (
+    get_async_closer,
     is_async_callable,
     is_known_sequence,
     is_listlike,
@@ -62,7 +63,6 @@ from riko.execution._prepared import ExecutionExtras
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType, IdentityMode
-from riko.types._io import get_async_closer
 from riko.types._options import (
     Casted,
     ContextOverrides,
