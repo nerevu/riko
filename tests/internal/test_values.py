@@ -250,6 +250,8 @@ EQUIVALENT_PAIRS = [
     pytest.param({1, 2, 3}, {3, 2, 1}, id="set-order"),
     pytest.param(-0.0, 0.0, id="negative-zero"),
     pytest.param(Decimal("1.0"), Decimal("1.000"), id="decimal-exponent"),
+    pytest.param(Decimal("-0"), Decimal(0), id="decimal-negative-zero"),
+    pytest.param(Decimal("-0.00"), Decimal(0), id="decimal-negative-zero-exponent"),
     pytest.param(datetime(2020, 6, 15, 12), NOON_UTC, id="naive-datetime-utc"),
     pytest.param(NOON_EST, NOON_UTC, id="aware-datetime-utc"),
     pytest.param(

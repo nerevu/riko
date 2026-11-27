@@ -679,7 +679,8 @@ sets, and both dataclasses and attrs classes (a shared representation-independen
 `attrs @define` leaves its digest unchanged). Mappings and sets are order-independent
 and sort by canonical encoded key (heterogeneous keys included); naive datetimes take a
 UTC fallback and aware ones normalize to UTC via the existing `resolve_aware_datetime`;
-`struct_time` stays distinct from `datetime`; `-0.0` canonicalizes with `+0.0`, and
+`struct_time` stays distinct from `datetime`; `-0.0` canonicalizes with `+0.0` (and any
+Decimal zero with `Decimal(0)`), and
 infinities/NaN carry stable tags. Cyclic structures raise `CyclicIdentityError`;
 unsupported values raise `IdentityEncodingError` (both under the new `IdentityError`
 branch of the `RikoError` tree).

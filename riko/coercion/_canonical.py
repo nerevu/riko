@@ -82,6 +82,8 @@ def _canon_decimal(value: Decimal) -> str:
         result = "nan"
     elif value.is_infinite():
         result = "inf" if value > 0 else "-inf"
+    elif value.is_zero():
+        result = "0"
     else:
         digits = len(value.as_tuple().digits)
 
