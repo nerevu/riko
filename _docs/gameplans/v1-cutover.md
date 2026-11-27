@@ -37,19 +37,21 @@ recorded here so the cutover session does not rediscover them:
   `SyncPipe.split`/`AsyncPipe.split`, `tests/public/test_collections.py::test_split`
   (since removed), and the two split fixtures (`pipe_QMrlL_FS3BGlpwryODY80A`,
   `pipe_zKJifuNS3BGLRQK_GsevXg`) are the only executable split paths, and they go with
-  the v1 surface. The v2 execution refuses a splitter node when its plan is built (by
-  the module's declared type, before any upstream runs). Do not bridge the gap with an
+  the v1 surface. Until port-keyed dispatch landed (`R7.ports`, 2026-11-14), the v2
+  execution refused a splitter node when its plan was built (by the module's declared
+  type, before any upstream ran). Do not bridge the gap with an
   eager positional cascade delivery in the v2 execution: that reimplements the
   whole-source copy R7 replaces with execution-owned bounded branches
   ([fanout-topology.md §7](fanout-topology.md#7-split-is-streaming-fan-out)). Done at
   step 2: the two split fixtures survive as `WorkflowDocument`s (workflow documents),
   and their functional expectations (7 items / first title
   `[Weight] More parents think their overweight…`; 6 items / first title
-  `Open researcher open course`) are strict-xfail acceptance tests in
+  `Open researcher open course`) are acceptance tests in
   `tests/functional/test_basics.py` (`test_first_item_title_prefix[split]`,
-  `test_first_item_field[simplemath]`) plus the strict-xfail probe-equivalence case in
-  `tests/internal/test_codegen.py`; R7 un-xfails them. GitHub issue #61 (v1 split
-  routing by traversal order) is closed as superseded by this cutover plus R7.
+  `test_first_item_field[simplemath]`) plus the probe-equivalence case in
+  `tests/internal/test_codegen.py`; `R7.ports` un-xfailed them. GitHub issue #61
+  (v1 split routing by traversal order) is closed as superseded by this cutover plus
+  R7.
 
 ## Step 0 — Gate
 

@@ -285,7 +285,7 @@ relational engine the default substrate (`_docs/research/duckstring-evaluation.m
 ## 25. Conversion and dataframe integration
 
 > **Shipped:** see
-> [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters-shipped) for
+> [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters) for
 > current converters. **Remaining:** the Pipeline batch/dataframe path above.
 
 Meza owns conversion work where applicable. Riko may temporarily provide

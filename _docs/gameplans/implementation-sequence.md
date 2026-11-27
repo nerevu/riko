@@ -1240,7 +1240,7 @@ stores a frozen `ExecutionSettings` (`riko/definitions/_settings.py`; omitted ar
 are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` set
 the run's `Context`, and `ExecutionSettings.sync_policy`/`async_policy` derive the
 per-run mapping policy both executions honor (details in
-[IMPLEMENTED § Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)).
+[IMPLEMENTED §Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution)).
 Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 
 **Exit:**

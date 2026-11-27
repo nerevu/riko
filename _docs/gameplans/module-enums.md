@@ -8,7 +8,7 @@
 > The discovery tree is re-exported from the **stable `riko`** surface (not
 > `riko.modules`, whose `Module` already names the decorator base — the wrapper was
 > named **`Modules`** (plural) to sidestep that collision). As-built detail:
-> [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped); status:
+> [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery); status:
 > [PHASE_CHECKLISTS.md § P9A](../PHASE_CHECKLISTS.md).
 >
 > The `Sinks` bucket above is as-built history, not the end-state taxonomy. Workflow v2

@@ -1528,7 +1528,7 @@ heuristics.
 ## 6. Async execution and backpressure
 
 > **Shipped:** see
-> [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped) for
+> [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure) for
 > current bounded-concurrency primitives. **Target:** the reusable `Pipeline` execution
 > layer owns the sync/async adaptation and lifecycle described here.
 
@@ -1735,7 +1735,7 @@ calls in a picklable record instead (wrapup triage 2026-11-14).
 
 ## 7. Timeout
 
-> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped) for the
+> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout) for the
 > current total-timeout primitive. **Remaining:** complete idle/item semantics and
 > ensure a blocked `anext()` itself is bounded.
 
@@ -1784,7 +1784,7 @@ cancellation/deadline scope using the remaining timeout and map expiration to th
 
 ## 8. Union and merge
 
-> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped) for sequential
+> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union) for sequential
 > `union` and the current internal async merge primitive. **Remaining:** user-facing
 > concurrent merge policy.
 
@@ -1907,7 +1907,7 @@ never altering ordering, resource lifetimes, or write behavior.
 
 ## 13. Filter semantics
 
-> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)
+> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics)
 > for `permit` / `combine` / `stop`.
 
 A filtered-out item under the default completion-style drop policy is intentionally
