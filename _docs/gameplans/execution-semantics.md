@@ -690,7 +690,9 @@ primary outcome remains primary: each cleanup failure is noted on it and logged,
 primary is raised. With no primary outcome, a single cleanup failure is raised as is and
 several are raised together as an `ExceptionGroup`. One helper, `raise_failures`
 (`riko/base/_iterutils.py`), owns this rule for the execution shutdown, `auto_close`,
-`aauto_close`, and the splitter stream closes (triage 2026-11-25).
+`aauto_close`, and the splitter stream closes (triage 2026-11-25). At the
+`with pipeline.open(...)` boundary, a close that fails is raised in place of the block's
+own error, as plain Python context managers do.
 
 Cancellation does not make the cleanup guarantee vacuous. Required async cleanup runs
 inside a bounded cancellation-shielded unwind so ambient execution cancellation does not

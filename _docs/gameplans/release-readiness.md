@@ -245,6 +245,8 @@ Same principle for optional parser/frame/finance/connector dependencies.
   rewrites every `manage …` invocation (CONTRIBUTING, CI, pre-commit, the skills), so it
   is done once, there, not ahead of it. Until it lands, `publish.yml`'s wheel check
   lists the built wheel and fails on any `riko/cli/_lint` member (added 2026-11-21).
+  That check is a canary for the move, not a full list of dev-only modules: the wheel
+  ships `_lint*` until the move lands, so it blocks every publish until then.
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral
   `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides
