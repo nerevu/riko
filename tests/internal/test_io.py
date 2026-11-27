@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import socket
 import threading
@@ -92,6 +93,14 @@ ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason="atomic replace-write publication is not yet implemented",
+)
+
+# An appended CSV row follows the existing header, not the new item's key order.
+CSV_HEADER_ORDER_PENDING = pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="appending CSV rows in the existing header's column order is not yet "
+    "implemented",
 )
 
 FETCH_TIMEOUT_SCRIPT = """
@@ -1063,6 +1072,17 @@ class TestCsv:
 
         with pytest.raises(ValueError, match="not in the CSV header"):
             list(write_through(rows, build_write(path), terminating=_never))
+
+    @CSV_HEADER_ORDER_PENDING
+    def test_append_follows_the_existing_header_order(self, tmp_path):
+        path = tmp_path / "out.csv"
+        path.write_bytes(b"a,b\r\n1,2\r\n")
+        _sink([{"b": 20, "a": 10}], path, "append")
+
+        with path.open(newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        assert rows[-1] == {"a": "10", "b": "20"}
 
 
 JSONL_APPEND_CASES = [

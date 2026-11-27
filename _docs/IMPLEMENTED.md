@@ -1154,16 +1154,21 @@ deferred.
 
 `riko/execution/` (the `execution` layer) hosts the one-shot executions a pipeline run
 creates. Each keeps an exit stack and a sync/async bridge as sibling lifetime primitives
-rather than deriving one from another. `AsyncExecution` holds no task group: nothing on
-the run path spawns tasks, and a group entered in the consumer's task would sit open
-across every `yield` of `Pipeline.__aiter__`, so a bare `break` (finalized later from
-another task) would cancel the caller's scope. Task hosting for fan-out belongs to R7.
+rather than deriving one from another. `AsyncExecution` holds no task group of its own:
+a group entered in the consumer's task would sit open across every `yield` of
+`Pipeline.__aiter__`, so a bare `break` (finalized later from another task) would cancel
+the caller's scope. The ordered (default) run path holds no task group across a `yield`
+(an ordered concurrent map joins each batch's tasks before yielding), but an
+`ordered=False` concurrent map does, through `_pool_stream`'s task group
+(`riko/bado/itertools.py`), and a bare `break` out of it still cancels the caller
+(tripwire
+`tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact[asyncio-unordered]`).
+Task hosting for fan-out, this path included, belongs to R7.C.
 `riko/execution/_adapt.py` holds what the two executions share across the sync/async
-boundary: `to_sync(call, stream)` (an
-async stream re-exposed as a lazy sync iterator; the sync execution's portal drain and
-the worker-side upstream reader are the same function with a different `call`),
-`to_async(...)` (a sync iterator re-exposed as a lazy async stream), and the
-`adapt_embed`/`async_adapt_embed` sync/async loop-embed wrappers.
+boundary: `to_sync(call, stream)` (an async stream re-exposed as a lazy sync iterator;
+the sync execution's portal drain and the worker-side upstream reader are the same
+function with a different `call`), `to_async(...)` (a sync iterator re-exposed as a lazy
+async stream), and the `adapt_embed`/`async_adapt_embed` sync/async loop-embed wrappers.
 
 - **`SyncExecution`** runs synchronously behind an `ExitStack`; async-only components
   run through a lazily started `BlockingPortal` (memoized via
@@ -1466,11 +1471,13 @@ run:
   the run before returning (`with self.open(seed)` / `async with self.open(seed)`); with
   no item and no `default` they raise `EmptyPipelineError` (`PipelineError` +
   `LookupError`, exported from `riko`), so a bare `StopIteration` never leaks into an
-  enclosing iterator. A bare `break` out of `async for` over a `Pipeline` is safe but
-  releases the run only when the abandoned generator is garbage collected (regression
-  `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`)
-  and warns with a `ResourceWarning`; `async with pipeline.open()` is the prompt-release
-  form.
+  enclosing iterator. A bare `break` out of `async for` over an ordered (default)
+  `Pipeline` is safe but releases the run only when the abandoned generator is garbage
+  collected and warns with a `ResourceWarning`; `async with pipeline.open()` is the
+  prompt-release form. Under `ordered=False` a concurrent async run still cancels the
+  caller on a bare `break` until R7.C (both rows of
+  `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`;
+  the `unordered` row is the strict-xfail tripwire).
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
   normalize/runtime import: the canonical constructor takes `(workflow)` — it accepts a
   `Workflow` (or defaults to the empty `Workflow`), raising `TypeError` on any other

@@ -1642,10 +1642,15 @@ cancelled the consumer (the PEP 789 async-generator/structured-concurrency confl
 Nothing on the R4B run path spawned into that group, so it was removed rather than
 replaced by dedicated-task hosting: the abandoned generator now holds only the exit
 stack, and its finalizer unwinds resources without touching the consumer's scopes. A
-bare `break` is therefore safe but releases the run only at garbage collection;
-`async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the prompt-release
-spelling, and a started run collected unclosed warns with a `ResourceWarning`.
-Regression:
+bare `break` out of the ordered (default) path is therefore safe but releases the run
+only at garbage collection. An `ordered=False` concurrent map is the exception: it maps
+through `_pool_stream` (`riko/bado/itertools.py`), whose task group stays open in the
+consumer's task across each `yield`, so a bare `break` out of it still cancels the
+caller until R7.C hosts that group in a dedicated task (triage 2026-11-27; strict xfail
+`tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact[asyncio-unordered]`).
+For either path, `async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the
+prompt-release spelling, and a started run collected unclosed warns with a
+`ResourceWarning`. Regression:
 `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`.
 **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group
 must not be entered in the consumer's task across a `yield` — host it in a dedicated
@@ -2066,6 +2071,24 @@ execution time, to match whether the host pipe actually runs sync or async, into
 wrapper that preserves the embed's discovery metadata
 (`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and
 subpipe detection treat the adapter as a native embed rather than seeing through it.
+
+### Concurrent map and merge streams
+
+**Decided (user, 2026-11-27): `async_map_stream` and `async_merge` become async context
+managers.** Today both return an async generator over `_pool_stream`, whose worker task
+group is entered in the consumer's task and stays open across every `yield`, so a bare
+`break` cancels the caller and an `aclose()` from another task raises `RuntimeError`.
+The reshape (`async with async_map_stream(fn, source) as stream:`) hosts the worker task
+group in the `with` scope instead, which makes a bare `break` and a cross-task close
+safe, matching AnyIO/trio practice and `Pipeline.open()`. `async_map_ordered_stream`
+holds no task group across its yields (each batch is gathered and joined before it
+yields), so it keeps its generator shape. The reshape rides R7.C, which already reworks
+`_pool_stream` for dedicated-task hosting and the sliding-window ordered port. It
+changes the STABLE `riko` surface, so its `docs/CHANGES.rst` and `docs/MIGRATION.rst`
+entries land with it; until then the docstrings tell callers to close the stream in the
+task that iterates it. Tripwire (strict xfail):
+`tests/internal/test_stream_helpers.py::TestAsyncMapStream::test_aclose_from_another_task_stops_the_stream`
+(`[asyncio-map]` and `[asyncio-merge]` rows).
 
 ### Non-goals
 

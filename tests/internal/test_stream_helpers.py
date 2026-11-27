@@ -576,6 +576,12 @@ EARLY_CLOSE_FIRSTS = [
 ]
 
 
+CROSS_TASK_CLOSES = [
+    pytest.param(partial(async_map_stream, _double, limit=2), id="map"),
+    pytest.param(lambda items: async_merge([items], limit=2), id="merge"),
+]
+
+
 STREAM_OPTION_REJECTIONS = [
     pytest.param({"limit": 0}, "limit must be at least 1", id="limit"),
     pytest.param({"buffer": -1}, "buffer cannot be negative", id="buffer"),
@@ -711,6 +717,22 @@ class TestAsyncMapStream:
     def test_rejects_bad_limit_or_buffer(self, build, kwargs, match):
         with pytest.raises(ValueError, match=match):
             run(alist, build(**kwargs))
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=RuntimeError,
+        reason="closing a concurrent map stream from another task is not yet "
+        "implemented",
+    )
+    @pytest.mark.parametrize("build", CROSS_TASK_CLOSES)
+    @async_test
+    async def test_aclose_from_another_task_stops_the_stream(self, build):
+        closed: list[bool] = []
+        mapped = build(_forever(closed))
+        await anext(mapped)
+        await gather_results([mapped.aclose()])
+        assert closed == [True]
+        assert await anext(mapped, None) is None
 
     @pytest.mark.xfail(
         strict=True,

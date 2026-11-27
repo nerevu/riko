@@ -850,13 +850,16 @@ def async_map_stream[T, S](
 
     *limit* and *buffer* bound in-flight memory. This suits large or unbounded sources.
 
+    Close the stream in the task that iterates it. You can either exhaust it or use
+    ``contextlib.aclosing``. Never abandon it with a bare ``break`` or close it from
+    another task.
+
     Use ``async_map_ordered_stream`` instead when results must keep source order. Use
     ``async_map`` when you want the results in a list.
 
     Args:
 
         func: An async function applied to each input item.
-
         source: The items to map over.
 
     Kwargs:
@@ -1022,6 +1025,10 @@ def async_merge[S](
     Like :func:`async_map_stream`, but each input item is itself an async iterable.
     Items interleave across iterables as they are produced, rather than one iterable at
     a time. *limit* and *buffer* bound in-flight memory.
+
+    Close the stream in the task that iterates it. You can either exhaust it or use
+    ``contextlib.aclosing``. Never abandon it with a bare ``break`` or close it from
+    another task.
 
     Args:
 

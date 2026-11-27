@@ -229,8 +229,11 @@ Buffer full + `tasks_waiting_send` high ⇒ consumer-bound; buffer empty +
    "coroutine" is reserved in riko). No `a` prefix: it has no sync twin. `as_awaitable`
    (the value-taking form) keeps its name.
 6. **Mark `async_return`** a next-major deprecation candidate (stable public API).
-7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless
-   profiling shows a real problem.
+7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone for
+   AnyIO alignment unless profiling shows a real problem. The async-context-manager
+   reshape of `async_map_stream`/`async_merge` is a separate lifetime decision
+   ([execution-semantics.md Appendix A](execution-semantics.md#concurrent-map-and-merge-streams))
+   that rides R7.C.
 8. **Repair the benchmark harness** ([performance.md](performance.md) §2 — the missing
    latency fixture) before using it to justify any of the above.
 
