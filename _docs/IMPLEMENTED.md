@@ -1847,9 +1847,9 @@ Invariants worth stating:
   `(target, mode)` alone fixes whether keys mean record-match identity or
   idempotency/dedup identity. There is no separate `idempotency_key`.
 - **incremental is a `target × format` capability**, not a global format trait — `File`
-  owns private `_FILE_APPEND_FORMATS` / `_FILE_INCREMENTAL_FORMATS`; there are no global
-  `APPENDABLE_FORMATS` / `STREAMABLE_FORMATS`. `appendability` derives from
-  `WriteMode.APPEND in modes`.
+  owns `FILE_APPEND_FORMATS` (shared with `export`'s append guard) and the private
+  `_FILE_INCREMENTAL_FORMATS`; there are no global `APPENDABLE_FORMATS` /
+  `STREAMABLE_FORMATS`. `appendability` derives from `WriteMode.APPEND in modes`.
 - **converters own framing, the session owns the destination boundary** — CSV/JSONL
   converters keep their own row/record terminators (no bracket-stripping; JSONL uses
   riko's `records2json(newline=True)` + one final terminator), and the session only

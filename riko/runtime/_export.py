@@ -22,6 +22,7 @@ from meza import io
 
 from riko.base._config import ENCODING
 from riko.base._sentinels import MISSING, MissingType
+from riko.definitions._targets import FILE_APPEND_FORMATS
 from riko.io._serialization import (
     CONVERSION_FUNCS,
     ENCODING_FORMATS,
@@ -233,7 +234,8 @@ def export(
         f: The path or file the serialized output is written to.
 
         mode: The mode a destination path is opened in (default: "wb+"). Only valid with
-            ``f``, like the other writer options below.
+            ``f``, like the other writer options below. Only ``csv`` and ``jsonl`` can
+            be appended to.
 
         encoding: The encoding of the written text (default: "utf-8"). A format whose
             converter takes an encoding, e.g. ``csv``, gets it too.
@@ -256,7 +258,8 @@ def export(
 
     Raises:
 
-        ValueError: If ``type_`` is neither ``list``/``tuple`` nor a known format.
+        ValueError: If ``type_`` is neither ``list``/``tuple`` nor a known format, or
+            ``mode`` appends a format other than ``csv``/``jsonl``.
 
         TypeError: If a writer option is given without ``f``, or ``f`` (or any writer or
             converter option) is given with ``list``/``tuple``.
@@ -271,12 +274,6 @@ def export(
         ['x', '1', '2']
         >>> export(items, "csv", skip_header=True).getvalue().splitlines()
         ['1', '2']
-        >>> export(items, "csv", mode="w")
-        Traceback (most recent call last):
-        TypeError: Writer option(s) given without a destination: mode
-        >>> export(items, "list", "out.csv")
-        Traceback (most recent call last):
-        TypeError: Writer option(s) given with export type list: f
 
     """
     result: int | ConversionOutput | Items
@@ -292,6 +289,11 @@ def export(
     else:
         fmt = _require_export_format(type_)
         text_encoding = _resolve_option(encoding, ENCODING)
+        writer_mode = _resolve_option(mode, "wb+")
+
+        if "a" in writer_mode and fmt not in FILE_APPEND_FORMATS:
+            msg = f"The {fmt} format does not support append mode {writer_mode!r}"
+            raise ValueError(msg)
 
         if fmt in ENCODING_FORMATS:
             converter_options = {**options, "encoding": text_encoding}
@@ -301,7 +303,7 @@ def export(
         result = io.write(
             f,
             serialize_items(items, fmt, **converter_options),
-            _resolve_option(mode, "wb+"),
+            writer_mode,
             encoding=text_encoding,
             chunksize=_resolve_option(chunksize, None),
             length=_resolve_option(length, 0),

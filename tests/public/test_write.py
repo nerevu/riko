@@ -335,10 +335,21 @@ EXPORT_OPTIONS = [
 ]
 
 WRITER_OPTIONS = [
+    pytest.param("csv", {"mode": "w"}, id="mode"),
     pytest.param("csv", {"encoding": "utf8"}, id="encoding"),
     pytest.param("csv", {"chunksize": None}, id="chunksize"),
     pytest.param("csv", {"length": 0}, id="length"),
     pytest.param("csv", {"bar_len": 50}, id="bar_len"),
+]
+
+ITEM_EXPORT_OPTIONS = [
+    pytest.param("list", ("out.csv",), {}, "f", id="list-destination"),
+    pytest.param("tuple", (), {"skip_header": True}, "skip_header", id="tuple-option"),
+]
+
+WHOLE_DOCUMENT_APPENDS = [
+    pytest.param("json", "ab", id="json"),
+    pytest.param("geojson", "a", id="geojson"),
 ]
 
 
@@ -385,10 +396,26 @@ class TestExportFormats:
         export([{"x": 1}], "jsonl", str(path), mode="ab")
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
 
+    @pytest.mark.parametrize(("type_", "mode"), WHOLE_DOCUMENT_APPENDS)
+    def test_whole_document_append_raises(self, tmp_path, type_, mode):
+        path = tmp_path / f"out.{type_}"
+
+        with pytest.raises(ValueError, match="does not support append mode"):
+            export([{"x": 1}], type_, str(path), mode=mode)
+
+        assert not path.exists()
+
     @pytest.mark.parametrize(("type_", "kwargs"), WRITER_OPTIONS)
     def test_writer_option_without_a_destination_raises(self, type_, kwargs):
         with pytest.raises(TypeError, match=next(iter(kwargs))):
             export([{"x": 1}], type_, **kwargs)
+
+    @pytest.mark.parametrize(("type_", "args", "kwargs", "name"), ITEM_EXPORT_OPTIONS)
+    def test_item_export_with_a_writer_option_raises(self, type_, args, kwargs, name):
+        msg = f"Writer option(s) given with export type {type_}: {name}"
+
+        with pytest.raises(TypeError, match=re.escape(msg)):
+            export([{"x": 1}], type_, *args, **kwargs)
 
     def test_rejects_unknown_format(self):
         msg = "Invalid export type: 'xml'. Expected one of list, tuple, csv"
