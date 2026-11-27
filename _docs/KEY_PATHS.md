@@ -192,13 +192,18 @@ write/session contracts.
 | `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
 | `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |
 | `riko/cli/_import_commands.py` | selector-based `manage lint imports` command and shared import-check runner |
-| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api`/`--tests`/`--verbs`/`--user-agents` plus `--all` |
+| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api`/`--tests`/`--verbs`/`--user-agents`/`--planning` plus `--all` |
 | `riko/cli/_gen_config.py` | generates `riko/coercion/_configs.py` from `riko/types/modules.py` |
 | `riko/cli/_gen_names.py` | generates `riko/modules/_names.py` and `riko/types/_module_ids.py` |
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
 | `riko/cli/_gen_verbs.py` | `manage codegen --verbs`: regenerates the marked verb tables in `CLAUDE.md` and `CONTRIBUTING.rst` from `riko/base/_verbs.py` |
 | `riko/cli/_gen_user_agents.py` | `manage codegen --user-agents`: regenerates `riko/base/_user_agents.py` from fake-useragent's bundled browser data (the 20 highest-share agents per device type, desktop and mobile) |
 | `riko/cli/_gen_tier_index.py` | `manage codegen --tests`: generates each `tests/<tier>/__init__.py` index from its files' `Test<Subject>` classes |
+| `riko/cli/_gen_blocks.py` | the shared marked-block helper (`<!-- key -->` in Markdown, `.. begin key` in RST): builds block patterns, rewrites blocks, and reports drifted ones; used by the verb, API-surface, and planning generators |
+| `riko/cli/_planning.py` | loads and validates the planning data (`load_planning` → `PlanningData`): joins the TOML facts to the titles and prose in their Markdown homes by id, derives status, landing dates, order, next-up, and unlocks, and reports problems for `manage lint --docs` |
+| `riko/cli/_gen_planning.py` | `manage codegen --planning`: rewrites the `<!-- planning-* -->` blocks in `PLANNING_DOCS` (tracker tables, Mermaid graph, next-up, lanes, decisions, slice tables) and reports stale/missing ones; `python -m riko.cli._gen_planning --json` prints the model with commit-pinned links |
+| `riko/cli/_gen_forward_track.py` | adapts the planning model to the external forward-track page schema (`_docs/forward-track.schema.json`, page copy in `_docs/forward-track.toml`); run as a module to print and validate the view |
+| `_docs/gameplans/*.toml` | planning-data source beside each owning gameplan (`implementation-sequence.toml`, `feed-native-streaming.toml`): dates, `blocked_by`/`scheduled_after` edges, riders, areas, lanes, decisions; edit these, never the generated blocks |
 | `riko/cli/_document.py` | shared JSON document front door for the console scripts: `read_document` and the `WorkflowDocument`-only `require_workflow` (the run-it-through-`build-workflow`-first guard for `run-pipe`/`compile-workflow`); `build-workflow` reads any shape through `Workflow.parse` |
 | `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on `Workflow` v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a pipe script, a `WorkflowModule`, or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
 | `riko/cli/{_build,_docs,_docstyle,_lint_basenames,_lint_bindings,_lint_deps,_lint_escapes,_lint_helpers,_lint_literals,_lint_ownership,_lint_rst,_lint_terms,_logging,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |

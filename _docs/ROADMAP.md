@@ -32,7 +32,7 @@ RUNTIME_CONTRACT
     shipped behavioral guarantees
 
 IMPLEMENTED
-    as-built reality and build completeness
+    as-built reality: what ships and where it lives
 
 PHASE_CHECKLISTS
     live P-track status only
@@ -102,7 +102,8 @@ packaging is documented separately in
 |---|---|
 | What the engine **guarantees today** | [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) |
 | What **actually ships / where it lives** | [IMPLEMENTED.md](IMPLEMENTED.md) |
-| **Live phase status** | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) |
+| **Live phase status** | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) (generated tables) from [implementation-sequence.toml](gameplans/implementation-sequence.toml) |
+| **Planning data** (slice dates, edges, lanes, decisions) | `gameplans/*.toml` beside each owning gameplan; edit there, then `manage codegen --planning` |
 | **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
 | **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
 | **Target semantics for a planned concept** | its owning file under `gameplans/` |
@@ -122,7 +123,7 @@ Tie-breakers:
 
 - shipped behavior -> RUNTIME_CONTRACT;
 - as-built location -> IMPLEMENTED;
-- live status -> PHASE_CHECKLISTS;
+- live status -> PHASE_CHECKLISTS (generated; the planning TOML owns the facts);
 - P-track mechanics/history/file maps -> MILESTONES;
 - forward implementation dependency order -> implementation-sequence;
 - target/end-state API semantics -> one owning gameplan;

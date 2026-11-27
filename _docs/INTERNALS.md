@@ -60,6 +60,34 @@ at call sites.
   the installed `fake-useragent`'s bundled `browsers.jsonl` (a lint-group dependency,
   read without network). `UserAgent.RANDOM` draws from both. The drift guard in
   `tests/internal/test_codegen.py` skips when `fake-useragent` is not installed.
+- **Planning blocks** — `riko/cli/_gen_planning.py` (`manage codegen --planning`)
+  rewrites the `<!-- planning-* -->` blocks in `PLANNING_DOCS`: the R/P tracker tables
+  in `_docs/PHASE_CHECKLISTS.md`, the Mermaid graph, next-up, lanes, and decisions in
+  `_docs/gameplans/implementation-sequence.md`, and the slice table in
+  `_docs/gameplans/feed-native-streaming.md`. Its source is the planning model from
+  `riko/cli/_planning.py` (`load_planning`), which joins the facts in
+  `_docs/gameplans/*.toml` (dates, `blocked_by`/`scheduled_after` edges, riders, areas,
+  lanes, decisions) to the titles and prose in their Markdown homes (`### <id>: name`
+  headings, `**<id>: title.**` lead-ins, whose title is the bold text minus its final
+  period) by id, and derives status, landing dates, order, next-up, and unlocks. Edit
+  the TOML or the lead-in, never a block.
+  `manage lint --docs` reports planning-data problems (unknown refs, cycles, dead
+  ends, missing Markdown homes, landed before a predecessor) and stale, missing, or
+  unknown planning blocks. `python -m riko.cli._gen_planning --json` prints the whole
+  model with links pinned to the current commit instead of writing any document. Each
+  Markdown home records the line it starts on and its heading's text, exported as
+  `line`, `doc`, and `section`; a heading's `plan_url` is its rendered anchor, while a
+  lead-in or exit bullet, which has no anchor of its own, links to its line in the
+  source view (`?plain=1#L<line>`).
+- **Forward track** — `riko/cli/_gen_forward_track.py` adapts the planning model to
+  an external page's contract, `_docs/forward-track.schema.json`, with its page copy
+  in `_docs/forward-track.toml`. Run as a module it prints the view for the current
+  commit and exits 1 when the view breaks the schema or its cross-reference checks.
+- **Marked blocks** — `riko/cli/_gen_blocks.py` is the shared helper behind the
+  verb, API-surface, and planning generators: it builds the block patterns
+  (`<!-- key -->`/`<!-- /key -->` in Markdown, `.. begin key`/`.. end key` in RST),
+  rewrites the blocks with the do-not-edit note, and reports drifted ones for
+  `manage lint --docs`.
 
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.

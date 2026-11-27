@@ -34,12 +34,16 @@ Search for the phase that owns the behavior, in authority order:
    concept) for the target semantics.
 3. `_docs/ROADMAP.md` for routing when the owner isn't obvious;
    `_docs/PHASE_CHECKLISTS.md` for what's already done vs. pending.
+4. The planning TOMLs (`_docs/gameplans/*.toml`) to find an owning slice by id:
+   its edges, dates (`designing`/`started`/`landed`), and riders. The slice's
+   prose lives under its `**<id>: <title>.**` lead-in in the gameplan of the same
+   name.
 
 Grep the gameplans for the module, concept, and failure vocabulary — owners
 are often stated in a phase you wouldn't guess from the file that misbehaves.
-Batch, don't serialize: grep all four sources (`implementation-sequence.md`,
-the topical gameplans, `ROADMAP.md`, `PHASE_CHECKLISTS.md`) for every term in
-one Bash call with `grep -n`, and read only the matching sections with
+Batch, don't serialize: grep all five sources (`implementation-sequence.md`,
+the topical gameplans, `ROADMAP.md`, `PHASE_CHECKLISTS.md`, `gameplans/*.toml`)
+for every term in one Bash call with `grep -n`, and read only the matching sections with
 `sed -n 'A,Bp'` in a second call; one grep per turn is the costliest way to
 search.
 

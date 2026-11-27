@@ -47,9 +47,9 @@ Repo-shipped skills live in `.claude/skills/` and come with the clone:
 - [ ] /triage — decides who owns a defect *before* fixing it: local fix (regression
       test + CHANGES line) or a strict-xfail tripwire for the gameplan phase that owns
       it.
-- [ ] /wrapup — syncs `_docs/IMPLEMENTED.md`, `PHASE_CHECKLISTS.md`, the owning
-      gameplan, `docs/CHANGES.rst`, and Claude memory so you can `/clear` without losing
-      state.
+- [ ] /wrapup — syncs `_docs/IMPLEMENTED.md`, the planning TOML (regenerating
+      `PHASE_CHECKLISTS.md`), the owning gameplan, `docs/CHANGES.rst`, and Claude
+      memory so you can `/clear` without losing state.
 - [ ] /tidy — checks everything changed since the last tidy against the written rules,
       fixes the mechanical slips, and asks about judgment calls. /land and /wrapup run
       it for you.
@@ -101,12 +101,16 @@ Findings from `/audit` go through `/triage` before anyone fixes them.
 
 - `CLAUDE.md` is the router: package layers, API tiers, cross-cutting invariants, style,
   quirks. Read it before touching code.
-- `_docs/PHASE_CHECKLISTS.md` is the live status; `_docs/gameplans/` own the *target*
+- `_docs/PHASE_CHECKLISTS.md` is the live status, generated from the planning data in
+  `_docs/gameplans/*.toml`: to record progress, edit the TOML (a slice's
+  `designing`/`started`/`landed` date, a decision's `settled`) and run
+  `manage codegen --planning`, never the tables. `_docs/gameplans/` own the *target*
   behavior for each concept. If a defect's correct fix belongs to a planned phase, leave
   a tripwire rather than an interim fix (that is what `/triage` decides).
 - Generated files are never hand-edited: `riko/coercion/_configs.py`,
-  `riko/modules/_names.py`, `riko/types/_module_ids.py`, and the marked blocks in
-  `_docs/API_SURFACE.md`. Regenerate with `manage codegen`.
+  `riko/modules/_names.py`, `riko/types/_module_ids.py`, the marked blocks in
+  `_docs/API_SURFACE.md`, and the `<!-- planning-* -->` blocks. Regenerate with
+  `manage codegen`.
 - Claude's project memory lives in `~/.claude/projects/-…-riko/memory/`. `/wrapup`
   maintains it; `session-handoff.md` there is the pickup point for the next session.
 
