@@ -190,6 +190,14 @@ extension, and no core edit.
 Note the division of labor with R4B: R4B proves the **runtime architecture** can hold
 real external resources early. R12 proves the **external package API**.
 
+### P14: Extensions outside core
+
+**Goal:** ship provider integrations as separate packages, `riko-microsoft` and
+`riko-ai`, that plug into riko through its entry-point seam without landing in core.
+The [Autopilot provisioning](autopilot-provisioning.md) scenario is the first
+`riko-microsoft` proof; `riko-ai`'s inference contract is owned by
+[ai-inference.md](ai-inference.md).
+
 ## E3. Canonical Workflow v2 specification
 
 Workflow v2 is the single normalized graph/storage contract consumed by validation,

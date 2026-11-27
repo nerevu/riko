@@ -3,18 +3,25 @@
 
 from __future__ import annotations
 
-import re
-
 from riko.base import _api_surface
 from riko.base._paths import API_SURFACE_PATH
 from riko.base._strutils import get_codegen_note
 
+from ._gen_blocks import build_block_pattern, build_marker_pattern, generate_blocks
+
 _NOTE = get_codegen_note("--api")
-API_SURFACE_BLOCK = re.compile(
-    r"<!-- api-surface:(?P<key>[a-z-]+)(?:: [^>\n]*)? -->\n.*?"
-    r"(?P<end>\n<!-- /api-surface:(?P=key) -->)",
-    re.DOTALL,
+_PREFIX = "api-surface:"
+_UNIONS = frozenset(
+    {"stable-union", "extension-union", "stable-disjoint", "bado-namespace"}
 )
+_GROUPS = frozenset(
+    name.lower().replace("_", "-")
+    for name, value in vars(_api_surface).items()
+    if name.isupper() and isinstance(value, frozenset)
+)
+
+API_SURFACE_BLOCK = build_block_pattern(_UNIONS | _GROUPS, prefix=_PREFIX)
+API_SURFACE_MARKERS = build_marker_pattern(_PREFIX)
 
 
 def _render_block(key: str) -> str:
@@ -37,18 +44,14 @@ def _render_block(key: str) -> str:
         lines = [f">>> sorted({name})", repr(sorted(getattr(_api_surface, name)))]
 
     body = "\n".join(lines)
-    return f"```python\n{body}\n```"
-
-
-def _replace(match: re.Match[str]) -> str:
-    key = match["key"]
-    begin = f"<!-- api-surface:{key}: {_NOTE} -->\n"
-    return f"{begin}{_render_block(key)}{match['end']}"
+    return f"```python\n{body}\n```\n"
 
 
 def generate_api_surface(text: str) -> str:
     """Render the API-surface document from the contract declaration."""
-    return API_SURFACE_BLOCK.sub(_replace, text)
+    return generate_blocks(
+        text, API_SURFACE_BLOCK, _render_block, _NOTE, prefix=_PREFIX
+    )
 
 
 def main() -> int:

@@ -38,6 +38,9 @@ Related authoritative plans (this scenario **consumes**, it does not redefine th
   ids and generated discovery names;
 - [connectors.md](connectors.md) — credential references (never serialized secrets).
 
+This scenario is the first `riko-microsoft` proof of
+[P14: Extensions outside core](extensibility.md#p14-extensions-outside-core).
+
 ## 2. Ownership boundary
 
 **This plan owns:** the Autopilot input model + canonical tag derivation, multi-CSV

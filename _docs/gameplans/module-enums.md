@@ -17,9 +17,8 @@
 
 Design record for the "generated module enums" work, scoped to **core riko only**. The
 `riko-microsoft` / Autopilot half is a downstream *consumer* of this work, owned by
-[autopilot-provisioning.md](autopilot-provisioning.md) and planned separately (P14 —
-gated behind P8/P11/P12); it appears here only as the fake in-repo example extension
-that proves the seam.
+[autopilot-provisioning.md](autopilot-provisioning.md) and planned separately (P14); it
+appears here only as the fake in-repo example extension that proves the seam.
 
 ## Scope & resolved decisions
 
@@ -54,7 +53,7 @@ that proves the seam.
   stays on the pipe itself, **not** a forbidden `RikoRunnable` wrapper (that doc's key
   design rule).
 
-## Remaining work
+## Identifier sanitizing, fluent discoverability, and chain concatenation
 
 ### One identifier sanitizer (R5)
 
@@ -81,7 +80,13 @@ the `C6` "weaker duplicate" shape).
 This is additive and gates nothing; sequence it with whichever of the two generators is
 next touched.
 
-### Installed-environment aggregate + stubs
+### P9: Fluent discoverability
+
+**Goal:** make every module in the installed environment discoverable through generated
+names and fluent stubs.
+
+The built-in names are P9A's (§ Scope); this section holds the installed-environment
+aggregate and the stubs:
 
 - aggregate `riko.generated.Modules` covering the *installed* environment incl.
   entry-point extensions (the committed `riko/modules/_names.py` stays built-ins only,

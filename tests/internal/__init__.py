@@ -8,16 +8,17 @@ Index (file, then the subjects it owns, in file order):
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, CeilingRatchet,
                               ConsoleScripts, Docstyle, DocsCitations, DocsTodos,
-                              TermLint, LiteralLint, RstLint, BindingLint, BasenameLint,
-                              EscapeLint, HelperLint, OwnershipLint, DepsLint,
-                              UpgradeHookPins, CanonicalImportLint, RelativeImportLint,
-                              ImportArchitectureLint, RequireWorkflow, RunTarget,
-                              ReadDocument, ResolveLogLevel
+                              PhaseClosure, TermLint, LiteralLint, RstLint, BindingLint,
+                              BasenameLint, EscapeLint, HelperLint, OwnershipLint,
+                              DepsLint, UpgradeHookPins, CanonicalImportLint,
+                              RelativeImportLint, ImportArchitectureLint,
+                              RequireWorkflow, RunTarget, ReadDocument, ResolveLogLevel
     test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
                               ModuleCategory, GenerateModuleNames, GenerateModuleIds,
                               ConfigCodegen, GenerateUserAgents, WorkflowFixtures,
                               WorkflowProbes, ImportSurface, GenerateVerbTables,
-                              GenerateApiSurface
+                              GenerateApiSurface, PlanningData, GenSections, PlanFile,
+                              GeneratePlanningBlocks, BuildExport, BuildForwardTrack
     test_concurrency.py       BuildTrackedCall, SyncPolicy, PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
                               NormalizeInternals, ParsePort, RawWorkflowFields,

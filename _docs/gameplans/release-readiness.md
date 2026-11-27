@@ -306,7 +306,7 @@ landed with `Pipeline.with_execution(...)` on 2026-10-03 (`MISSING` keeps the cu
 setting, explicit `None` restores the default), so R2 is discharged in full.
 
 **Merge sequencing** is the M1 v1-parity milestone in
-[implementation-sequence.md § 4](implementation-sequence.md#m1--v1-parity-merge-next--features):
+[implementation-sequence.md § 4](implementation-sequence.md#m1-v1-parity-merge):
 close R4B → R4C callable nodes → R4D workflow inputs → R5A → R7 → merge `next` →
 `features`. R5B, R5C, and later phases follow the merge. This section owns the defect
 half of the gate; that milestone owns the capability half.

@@ -20,12 +20,16 @@ PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
 TESTS_DIR = ROOT_DIR / "tests"
 DOCS_DIR = ROOT_DIR / "docs"
+INTERNAL_DOCS_DIR = ROOT_DIR / "_docs"
 PYPROJECT = ROOT_DIR / "pyproject.toml"
-API_SURFACE_PATH = ROOT_DIR / "_docs" / "API_SURFACE.md"
-ARCHIVE_DIR = ROOT_DIR / "_docs" / "archive"
+API_SURFACE_PATH = INTERNAL_DOCS_DIR / "API_SURFACE.md"
+ARCHIVE_DIR = INTERNAL_DOCS_DIR / "archive"
 CONFIG_PATH = PACKAGE_DIR / "coercion" / "_configs.py"
+GAMEPLANS_DIR = INTERNAL_DOCS_DIR / "gameplans"
 MODULE_IDS_PATH = PACKAGE_DIR / "types" / "_module_ids.py"
 MODULE_NAMES_PATH = PACKAGE_DIR / "modules" / "_names.py"
+SEQUENCE_PATH = GAMEPLANS_DIR / "implementation-sequence.md"
+TRACKER_PATH = INTERNAL_DOCS_DIR / "PHASE_CHECKLISTS.md"
 USER_AGENTS_PATH = PACKAGE_DIR / "base" / "_user_agents.py"
 
 

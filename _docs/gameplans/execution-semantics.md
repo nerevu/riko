@@ -369,7 +369,7 @@ async-only embed's on the portal, or on the event loop when an async run hosts t
 Bare operator wrappers never close their caller's input (triage 2026-11-14): the wrapper
 closes only what it creates, the parser's result and its own normalized input stream, so
 closing a direct `truncate`, `uniq`, or `filter` call early leaves a source the caller
-still holds open; that module-level contract is S1's
+still holds open; that module-level contract is feed-native-streaming.lazy-operators's
 ([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)).
 
 Enforcement: `manage lint --ownership` (`riko/cli/_lint_ownership.py`, part of
@@ -1648,7 +1648,8 @@ bare `break` out of the ordered (default) path is therefore safe but releases th
 only at garbage collection. An `ordered=False` concurrent map is the exception: it maps
 through `_pool_stream` (`riko/bado/itertools.py`), whose task group stays open in the
 consumer's task across each `yield`, so a bare `break` out of it still cancels the
-caller until R7.C hosts that group in a dedicated task (triage 2026-11-27; strict xfail
+caller until R7.fan-in hosts that group in a dedicated task (triage 2026-11-27; strict
+xfail
 `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact[asyncio-unordered]`).
 For either path, `async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the
 prompt-release spelling, and a started run collected unclosed warns with a
@@ -1661,17 +1662,17 @@ regression trips.
 
 **Fan-out execution rules (decided 2026-11-16 (user), R7).**
 
-- Slice A: closing a run's last branch returns promptly even while an upstream advance
+- R7.tee: closing a run's last branch returns promptly even while an upstream advance
   is in flight (the advancer finishes the source close), and execution cancellation is
   prompt the same way (fanout-topology § 7).
-- Slice B: `Pipeline.with_execution` gains `strict: bool = False` and
+- R7.settings: `Pipeline.with_execution` gains `strict: bool = False` and
   `overrides: Mapping[str, object] | None`. Override keys are `Settings` attribute
   names (not env names) with native values, validated at definition time; unknown keys
   are rejected, and only `branch_buffer` is supported in R7. Successive calls merge,
   `overrides=None` clears them all, and `{"branch_buffer": None}` removes that one
   override (falling back to process settings). Right-hand composition operands keep
   the default-execution-settings rule. `strict` checks splitter cardinality only
-  (fanout-topology § 7); Slice B adds the settings, and Slice C's shared plan walk
+  (fanout-topology § 7); R7.settings adds the settings, and R7.fan-in's shared plan walk
   enforces them at each tee site (user, 2026-11-22).
 - Under `AsyncExecution`, a sync-only splitter branch runs each `next()` as its own
   worker call: no indefinitely held per-branch thread and no same-thread affinity.
@@ -2084,9 +2085,9 @@ The reshape (`async with async_map_stream(fn, source) as stream:`) hosts the wor
 group in the `with` scope instead, which makes a bare `break` and a cross-task close
 safe, matching AnyIO/trio practice and `Pipeline.open()`. `async_map_ordered_stream`
 holds no task group across its yields (each batch is gathered and joined before it
-yields), so it keeps its generator shape. The reshape rides R7.C, which already reworks
-`_pool_stream` for dedicated-task hosting and the sliding-window ordered port. It
-changes the STABLE `riko` surface, so its `docs/CHANGES.rst` and `docs/MIGRATION.rst`
+yields), so it keeps its generator shape. The reshape rides R7.fan-in, which already
+reworks `_pool_stream` for dedicated-task hosting and the sliding-window ordered port.
+It changes the STABLE `riko` surface, so its `docs/CHANGES.rst` and `docs/MIGRATION.rst`
 entries land with it; until then the docstrings tell callers to close the stream in the
 task that iterates it. Tripwire (strict xfail):
 `tests/internal/test_stream_helpers.py::TestAsyncMapStream::test_aclose_from_another_task_stops_the_stream`

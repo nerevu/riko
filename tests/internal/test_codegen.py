@@ -6,6 +6,8 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import json
+import re
+from datetime import date
 from importlib import import_module
 from importlib.resources import files
 from keyword import iskeyword
@@ -51,13 +53,27 @@ from riko.base._api_surface import (
 from riko.base._config import LINE_LENGTH
 from riko.base._paths import (
     CONFIG_PATH,
+    GAMEPLANS_DIR,
     MODULE_IDS_PATH,
     MODULE_NAMES_PATH,
+    ROOT_DIR,
     USER_AGENTS_PATH,
 )
 from riko.base._strutils import get_codegen_note, pythonise
-from riko.cli._gen_api_surface import generate_api_surface
+from riko.cli._gen_api_surface import (
+    API_SURFACE_BLOCK,
+    API_SURFACE_MARKERS,
+    generate_api_surface,
+)
+from riko.cli._gen_blocks import gen_block_offenders
 from riko.cli._gen_config import objconf_structure, render
+from riko.cli._gen_forward_track import (
+    Release,
+    build_forward_track,
+    gen_forward_track_problems,
+    load_validator,
+)
+from riko.cli._gen_planning import Snapshot, build_export, generate_planning_blocks
 from riko.cli._gen_user_agents import (
     USER_AGENT_COUNT,
     generate_user_agents,
@@ -65,6 +81,14 @@ from riko.cli._gen_user_agents import (
     load_user_agents,
 )
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
+from riko.cli._planning import (
+    PlanFile,
+    PlanningData,
+    PlanningError,
+    Problem,
+    Unlock,
+    gen_sections,
+)
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
@@ -116,6 +140,155 @@ _SOURCES = {
 }
 
 _SINKS = {"write"}
+_DAY1, _DAY2, _DAY3 = date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 3)
+_TODAY = date(2026, 6, 1)
+_HOMES_PLAN = {
+    "phases": {"X1": {"doc": "plan.md", "slices": [{"id": "a"}, {"id": "add"}]}}
+}
+_LOCAL_PLAN = {"slices": [{"id": "S1"}]}
+_LANE_PLAN = {"lanes": {"L1": {"owner": "user", "slices": [{"id": "D1"}]}}}
+_X1_HEADING = "## X1: First\n\n"
+_LANDED = {"landed": _DAY1}
+_Q_RIDER = {"id": "a", "lands_with": ["X1.q"]}
+_RENDER_PLANS = {
+    "plan": {
+        "phases": {
+            "R20": {
+                "area": "core",
+                "doc": "plan.md",
+                "slices": [{"id": "a", "landed": _DAY1}, {"id": "b"}],
+                "decisions": [{"id": "q"}],
+            },
+            "R21": {"area": "core", "doc": "plan.md", "blocked_by": ["R20"]},
+            "P20": {"doc": "../tracker.md", "scheduled_after": ["R21"]},
+        },
+        "milestones": {
+            "M20": {"doc": "plan.md", "blocked_by": ["R21"], "proposed": True}
+        },
+        "lanes": {
+            "tidy": {
+                "owner": "user",
+                "trigger": "weekly",
+                "slices": [{"id": "D1", "lands_with": ["R21"]}],
+            }
+        },
+    },
+    "stream": {"slices": [{"id": "S1", "lands_with": ["R21"]}, {"id": "S2"}]},
+}
+_RENDER_TEXT = """## Areas
+
+**core: Core work.** Context.
+
+## Lanes
+
+**tidy: Tidy lane.** Context.
+
+### R20: First phase
+
+**Goal:** Build it. Then more.
+
+**R20.a: Slice one.** Prose.
+
+**R20.q: A question.** Prose.
+
+### R21: Second phase
+
+**R20: needs the base.** Detail.
+
+### M20: Preview
+"""
+_RENDER_DOCS = {
+    "plan.md": _RENDER_TEXT,
+    "../tracker.md": "### P20: Track item\n",
+    "stream.md": "**S1: Local slice.** Prose.\n",
+}
+_SNAPSHOT = Snapshot("main", "abc123", _TODAY, "https://example.com/repo")
+_EXITS = [{"id": "add"}, {"id": "migrate"}, {"id": "delete"}]
+_TRACK_PHASES = {
+    "R90": {
+        "area": "core",
+        "slices": [{**item, **_LANDED} for item in _EXITS],
+        "decisions": [{"id": "p"}],
+    },
+    "R91": {
+        "area": "core",
+        "blocked_by": ["R90"],
+        "decisions": [{"id": "q"}],
+        "slices": [
+            {"id": "a"},
+            {"id": "b"},
+            *({**item, "lands_with": ["R91.b"]} for item in _EXITS),
+        ],
+    },
+    "R92": {"area": "edge", "blocked_by": ["R90"], "slices": _EXITS},
+    "R93": {"area": "edge", "scheduled_after": ["R92", "R94"], "slices": _EXITS},
+    "R94": {"area": "edge", "slices": [{"id": "add", "designing": _DAY1}, *_EXITS[1:]]},
+}
+_TRACK_PLANS = {
+    "plan": {
+        "phases": {
+            key: {**phase, "doc": "plan.md"} for key, phase in _TRACK_PHASES.items()
+        },
+        "milestones": {
+            "M90": {"doc": "plan.md", "blocked_by": ["R91.a"]},
+            "M91": {"doc": "plan.md", "blocked_by": ["M90", "R91.b", "R92"]},
+            "M93": {"doc": "plan.md", "blocked_by": ["R93"], "proposed": True},
+        },
+    },
+    "stream": {"slices": [{"id": "S90", "lands_with": ["R91.a"]}]},
+}
+_TRACK_TEXT = """## Areas
+
+**core: Core work.** Context.
+
+**edge: Edge work.** Context.
+
+### R90: Base
+
+**Goal:** Lay the base.
+
+**R90.p: Base question.** Prose.
+
+### R91: Split
+
+**Goal:** Split it.
+
+**R91.a: First slice.** Prose.
+
+**R91.b: Second slice.** Prose.
+
+**R91.q: Split question.** Why split.
+
+### R92: Side
+
+**R90: needs the base.** Detail.
+
+### R93: Later
+
+### R94: Early
+
+### M90: First release
+
+### M91: Final release
+
+### M93: Preview
+
+**Goal:** Maybe ship.
+"""
+_TRACK_DOCS = {"plan.md": _TRACK_TEXT, "stream.md": "**S90: Riding slice.** Prose.\n"}
+_TRACK_PAGE = {
+    "brand": "brand",
+    "documentTitle": "document",
+    "sectionLabel": "section",
+    "title": "title",
+    "subtitle": "subtitle",
+    "historyCaption": "caption",
+    "outlook": {"heading": "heading", "body": "body"},
+}
+_TRACK_SNAPSHOT = Snapshot(
+    "main", "abc1234", _TODAY, "https://example.com/org/repo", "v9.9.9"
+)
+_TRACK_RELEASES = [Release("v9.0.0", _DAY2, "Release")]
 
 RENAME_CONF = RenameRawConf(
     {
@@ -831,3 +1004,812 @@ class TestGenerateApiSurface:
         assert get_codegen_note("--api") in generated.splitlines()[0]
         assert "'export'" in generated
         assert generate_api_surface(generated) == generated
+
+    def test_unknown_block_keys_are_reported(self, tmp_path: Path) -> None:
+        path = tmp_path / "surface.md"
+        path.write_text("<!-- api-surface:exprot -->\n<!-- /api-surface:exprot -->\n")
+        offenders = gen_block_offenders(
+            path,
+            API_SURFACE_BLOCK,
+            frozenset(),
+            generate_api_surface,
+            "--api",
+            API_SURFACE_MARKERS,
+        )
+        assert next(offenders) == "surface.md: unknown or unclosed blocks ['exprot']"
+
+
+def _plan(phases: dict[str, object], **tables: object) -> PlanningData:
+    """Builds planning data from one plan file and no Markdown."""
+    return PlanningData.from_documents({"plan": {"phases": phases, **tables}}, {})
+
+
+PLANNING_STATUSES = [
+    pytest.param({"X1": _LANDED}, {}, "X1", "complete", id="dated-landing"),
+    pytest.param(
+        {"X1": _LANDED, "X2": {"lands_with": ["X1"]}},
+        {},
+        "X2",
+        "complete",
+        id="rider-one-host",
+    ),
+    pytest.param(
+        {"X1": _LANDED, "X2": {"lands_with": ["X1", "X3"]}, "X3": {}},
+        {},
+        "X2",
+        "planned",
+        id="rider-one-of-two-hosts",
+    ),
+    pytest.param(
+        {
+            "X1": {
+                "slices": [{"id": "a", "deferred": True}, {"id": "b", "deferred": True}]
+            }
+        },
+        {},
+        "X1",
+        "deferred",
+        id="all-deferred",
+    ),
+    pytest.param(
+        {
+            "X1": {
+                "slices": [{"id": "a", "landed": _DAY1}, {"id": "b", "deferred": True}]
+            }
+        },
+        {},
+        "X1",
+        "complete",
+        id="landed-and-deferred",
+    ),
+    pytest.param({"X1": {"designing": _DAY1}}, {}, "X1", "in_design", id="in-design"),
+    pytest.param(
+        {"X1": {"designing": _DAY1, "started": _DAY2}},
+        {},
+        "X1",
+        "in_progress",
+        id="in-progress",
+    ),
+    pytest.param(
+        {"X1": {"slices": [{"id": "a", "landed": _DAY1}, {"id": "b"}]}},
+        {},
+        "X1",
+        "in_progress",
+        id="partly-landed",
+    ),
+    pytest.param(
+        {"X1": _LANDED},
+        {"MX": {"blocked_by": ["X1"]}},
+        "MX",
+        "in_progress",
+        id="milestone-done-prerequisite",
+    ),
+    pytest.param(
+        {"X1": {"started": _DAY1}},
+        {"MX": {"blocked_by": ["X1"]}},
+        "MX",
+        "planned",
+        id="milestone-started-prerequisite",
+    ),
+    pytest.param(
+        {"X1": _LANDED, "X2": {"blocked_by": ["X1"]}},
+        {"MX": {"blocked_by": ["X2"]}},
+        "MX",
+        "planned",
+        id="milestone-transitive-prerequisite",
+    ),
+    pytest.param(
+        {"X1": {}},
+        {"MX": {"blocked_by": ["X1"]}},
+        "MX",
+        "planned",
+        id="milestone-planned",
+    ),
+    pytest.param(
+        {"X1": {"decisions": [{"id": "q", "settled": _DAY1}]}},
+        {},
+        "X1.q",
+        "settled",
+        id="settled-decision",
+    ),
+    pytest.param(
+        {"X1": {"decisions": [{"id": "q"}]}}, {}, "X1.q", "open", id="open-decision"
+    ),
+]
+
+PLANNING_HOMES = [
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n**X1.a: Slice title.** More.",
+        "X1.a",
+        "Slice title",
+        "x1-some-title",
+        "More.",
+        id="own-prefix-slice",
+    ),
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n- **ADD:** Add it.",
+        "X1.add",
+        None,
+        "x1-some-title",
+        "Add it.",
+        id="exit-bullet",
+    ),
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n**X1.a: Slice title.** More.\n1) Not more.",
+        "X1.a",
+        "Slice title",
+        "x1-some-title",
+        "More.",
+        id="paren-list-item-after-lead-in",
+    ),
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n**X1.a: Slice title.** More.\n| Not | more |",
+        "X1.a",
+        "Slice title",
+        "x1-some-title",
+        "More.",
+        id="table-row-after-lead-in",
+    ),
+    pytest.param(
+        _LOCAL_PLAN,
+        "**S1: Local title.** More.",
+        "plan.S1",
+        "Local title",
+        "",
+        "More.",
+        id="plan-local-slice",
+    ),
+    pytest.param(
+        _LANE_PLAN,
+        "**L1.D1: Ratchet.** More.",
+        "L1.D1",
+        "Ratchet",
+        "",
+        "More.",
+        id="lane-slice",
+    ),
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n**X1.a: Builds X2.b and e.g. 1.0 support.** More.",
+        "X1.a",
+        "Builds X2.b and e.g. 1.0 support",
+        "x1-some-title",
+        "More.",
+        id="dotted-title",
+    ),
+    pytest.param(
+        _HOMES_PLAN,
+        "### X1: Some title\n\n**X1.a: Slice title** More.",
+        "X1.a",
+        "Slice title",
+        "x1-some-title",
+        "More.",
+        id="unclosed-title",
+    ),
+]
+
+PLANNING_PROBLEMS = [
+    pytest.param(
+        {"phases": {"X1": {"blocked_by": ["S5"]}}},
+        "",
+        "X1 names unknown ref S5 in blocked_by",
+        id="unknown-ref",
+    ),
+    pytest.param(
+        {"phases": {"X1": {}}, "milestones": {"X1": {}}},
+        "",
+        "id X1 is declared 2 times",
+        id="duplicate-id",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"slices": [{"id": "a"}, {"id": "a"}]}}},
+        "",
+        "id X1.a is declared more than once",
+        id="duplicate-slice",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"blocked_by": ["X2"]}, "X2": {"blocked_by": ["X1"]}}},
+        "",
+        "refs X1, X2 form a cycle",
+        id="cycle",
+    ),
+    pytest.param(
+        {"phases": {"X1": {}, "X2": {"blocked_by": ["X1"], "landed": _DAY1}}},
+        "",
+        "X2 landed before X1 completed",
+        id="landed-before-prerequisite",
+    ),
+    pytest.param(
+        {
+            "phases": {
+                "X1": {"landed": _DAY2},
+                "X2": {"blocked_by": ["X1"], "landed": _DAY1},
+            }
+        },
+        "",
+        "X2 landed on 2026-01-01, before X1 landed",
+        id="landed-earlier",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"slices": [{"id": "a"}, {"id": "b", "landed": _DAY1}]}}},
+        "",
+        "X1.b landed before X1.a completed",
+        id="landed-before-chain",
+    ),
+    pytest.param(
+        {
+            "phases": {"X1": {}},
+            "milestones": {"MX": {"blocked_by": ["X1"], "landed": _DAY1}},
+        },
+        "",
+        "MX landed before X1 completed",
+        id="milestone-unmet",
+    ),
+    pytest.param(
+        {
+            "phases": {
+                "X1": {"decisions": [{"id": "q"}]},
+                "X2": {"blocked_by": ["X1.q"], "started": _DAY1},
+            }
+        },
+        "",
+        "X2 started while X1.q is open",
+        id="started-under-open-decision",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"landed": date(2027, 1, 1)}}},
+        "",
+        "X1 has a future landed date, 2027-01-01",
+        id="future-date",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md"}}},
+        "",
+        "planning phase X1 has no Markdown home",
+        id="node-without-home",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md", "slices": [{"id": "a"}]}}},
+        _X1_HEADING,
+        "slice X1.a has no Markdown home",
+        id="slice-without-home",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md", "decisions": [{"id": "q"}]}}},
+        _X1_HEADING,
+        "decision X1.q has no Markdown home",
+        id="decision-without-home",
+    ),
+    pytest.param(
+        {"lanes": {"L1": {"owner": "user"}}},
+        "",
+        "lane L1 has no Markdown home",
+        id="lane-without-home",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"area": "core"}}},
+        "",
+        "planning phase X1 names unknown area core",
+        id="unknown-area",
+    ),
+    pytest.param(
+        {},
+        "## X9: Stray\n",
+        "heading 'X9' in plan.md names no planning id",
+        id="stray-heading",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md"}}},
+        f"{_X1_HEADING}**X1.z: Nothing.** Text.",
+        "lead-in 'X1.z' in plan.md names no planning id",
+        id="stray-lead-in",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md", "slices": [{"id": "a"}]}}},
+        f"{_X1_HEADING}**X1.a: Slice title** Text.",
+        "lead-in 'X1.a' in plan.md needs a bold title ending with a period",
+        id="unclosed-lead-in",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md"}, "X2": {}}},
+        f"{_X1_HEADING}**X2: Needs it.** Text.",
+        "edge X1 does not have",
+        id="reason-without-edge",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"doc": "plan.md"}}},
+        "**X1: Stray.** Text.",
+        "lead-in 'X1' in plan.md names no planning id",
+        id="bare-id-lead-in",
+    ),
+    pytest.param(
+        {"phases": {"X1": {}}}, "", "planning phase X1 unlocks nothing", id="dead-end"
+    ),
+    pytest.param(
+        {"phases": {"X1": {}}},
+        None,
+        "plan.toml has no sibling Markdown file plan.md",
+        id="no-sibling-markdown",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"landed": _DAY1, "flips": ["tests/x.py"]}}},
+        "",
+        "X1 names malformed test id 'tests/x.py'",
+        id="malformed-flip",
+    ),
+    pytest.param(
+        {"phases": {"X1": {"decisions": [{"id": "q"}], "slices": [_Q_RIDER]}}},
+        "",
+        "X1.a names decision X1.q in lands_with, which never lands",
+        id="decision-host",
+    ),
+]
+
+LIVE_PHASES = [
+    pytest.param({"X1": _LANDED}, {}, id="complete"),
+    pytest.param(
+        {"X1": {}}, {"MX": {"blocked_by": ["X1"], "proposed": True}}, id="proposed"
+    ),
+]
+
+NEXT_SLICES = [
+    pytest.param(
+        {"X1": {}, "X2": {}},
+        {
+            "MA": {"blocked_by": ["X2"]},
+            "MB": {"blocked_by": ["X1"], "scheduled_after": ["MA"]},
+        },
+        ("X2", "X1"),
+        id="earlier-milestone-first",
+    ),
+    pytest.param(
+        {"X0": {}, "X1": {}},
+        {"MA": {"blocked_by": ["X1"]}},
+        ("X1", "X0"),
+        id="no-milestone-last",
+    ),
+]
+
+PLANNING_UNLOCKS = [
+    pytest.param(
+        {"X1": {"slices": [{"id": "a"}]}, "X2": {"blocked_by": ["X1.a"]}},
+        "X1",
+        (Unlock("X2", "X1.a", "blocked_by", None),),
+        id="slice-upstream",
+    ),
+    pytest.param(
+        {"X1": {}, "X2": {"scheduled_after": ["X1"]}},
+        "X1",
+        (Unlock("X2", "X1", "scheduled_after", None),),
+        id="scheduled-after",
+    ),
+    pytest.param(
+        {"X1": {}, "X2": {"blocked_by": ["X1"]}}, "X2", (), id="prerequisites-excluded"
+    ),
+]
+
+MISSING_HOMES = [
+    pytest.param(
+        {"X1": {"doc": "plan.md"}}, "planning phase X1 has no Markdown home", id="phase"
+    ),
+    pytest.param(
+        {"X1": {"area": "core"}}, "planning phase X1 names unknown area core", id="area"
+    ),
+]
+
+
+class TestPlanningData:
+    """Planning data joined from TOML facts and Markdown homes, and its views."""
+
+    @pytest.mark.parametrize(
+        ("phases", "milestones", "ref", "status"), PLANNING_STATUSES
+    )
+    def test_status_derives_from_its_slices_and_hosts(
+        self, phases, milestones, ref, status
+    ):
+        assert _plan(phases, milestones=milestones).get_status(ref) == status
+
+    def test_rider_lands_with_its_latest_host(self):
+        phases = {
+            "X1": _LANDED,
+            "X2": {"lands_with": ["X1", "X3"]},
+            "X3": {"landed": _DAY3},
+        }
+        assert _plan(phases).get_landed("X2") == _DAY3
+
+    def test_scheduled_after_reorders(self):
+        data = _plan({"X1": {"scheduled_after": ["X2"]}, "X2": {}})
+        assert data.order == ("X2", "X1")
+
+    def test_ties_use_natural_sort(self):
+        assert _plan({"X10": {}, "X4B": {}, "X4A": {}}).order == ("X4A", "X4B", "X10")
+
+    def test_open_decision_skips_a_next_slice(self):
+        phases = {
+            "X1": {"decisions": [{"id": "q"}]},
+            "X2": {"blocked_by": ["X1.q"]},
+            "X3": {},
+        }
+        assert _plan(phases).next_slices == ("X1", "X3")
+
+    @pytest.mark.parametrize(("phases", "milestones", "refs"), NEXT_SLICES)
+    def test_next_slices_rank_by_the_milestone_they_feed(
+        self, phases, milestones, refs
+    ):
+        assert _plan(phases, milestones=milestones).next_slices == refs
+
+    def test_unlocks_carry_the_short_reason_and_detail(self):
+        plan = {"phases": {"X1": {"doc": "plan.md", "blocked_by": ["X2"]}, "X2": {}}}
+        text = "## X1: First\n\n**X2: Needs it.** Badly. Detail.\n"
+        data = PlanningData.from_documents({"plan": plan}, {"plan.md": text})
+        reason = data.reasons["X1", "X2"]
+        assert data.get_unlocks("X2") == (Unlock("X1", "X2", "blocked_by", reason),)
+        assert (reason.title, reason.detail) == ("Needs it", "Badly. Detail.")
+
+    @pytest.mark.parametrize(("phases", "ref", "unlocks"), PLANNING_UNLOCKS)
+    def test_unlocks_point_downstream(self, phases, ref, unlocks):
+        assert _plan(phases).get_unlocks(ref) == unlocks
+
+    @pytest.mark.parametrize(
+        ("plan", "text", "key", "title", "anchor", "detail"), PLANNING_HOMES
+    )
+    def test_markdown_homes_classify_by_section(
+        self, plan, text, key, title, anchor, detail
+    ):
+        data = PlanningData.from_documents({"plan": plan}, {"plan.md": text})
+        section = data.sections[key]
+        assert (section.title, section.anchor, section.detail) == (
+            title,
+            anchor,
+            detail,
+        )
+
+    @pytest.mark.parametrize(("phases", "milestones"), LIVE_PHASES)
+    def test_live_phase_is_no_dead_end(self, phases, milestones):
+        problems = _plan(phases, milestones=milestones).gen_problems(_TODAY)
+        assert "unlocks nothing" not in "\n".join(map(str, problems))
+
+    def test_deferred_slice_leaves_the_chain(self):
+        slices = [{"id": "a", "deferred": True}, {"id": "b", **_LANDED}]
+        problems = _plan({"X1": {"slices": slices}}).gen_problems(_TODAY)
+        assert "landed before" not in "\n".join(map(str, problems))
+
+    @pytest.mark.parametrize(("plan", "text", "problem"), PLANNING_PROBLEMS)
+    def test_problems_name_the_offending_id(self, plan, text, problem):
+        docs = {} if text is None else {"plan.md": text}
+        problems = PlanningData.from_documents({"plan": plan}, docs).gen_problems(
+            _TODAY
+        )
+        assert problem in "\n".join(map(str, problems))
+
+    @pytest.mark.parametrize(("phases", "problem"), MISSING_HOMES)
+    def test_missing_homes_have_their_own_kind(self, phases, problem):
+        problems = _plan(phases).gen_problems(_TODAY)
+        assert Problem(problem, "missing_home") in problems
+
+
+class TestGenSections:
+    """Planning headings, lead-ins, and exit bullets parsed from Markdown."""
+
+    def test_fenced_headings_and_repeated_anchors(self):
+        text = "## X1: A\n\n```\n## X2: B\n```\n\n## X1: A\n"
+        anchors = [section.anchor for section in gen_sections("plan.md", text)]
+        assert anchors == ["x1-a", "x1-a-1"]
+
+
+PLAN_FILE_ERRORS = [
+    pytest.param(
+        {"X1": {"landed": _DAY1, "deferred": True}},
+        "exclude each other",
+        id="exclusive-landing",
+    ),
+    pytest.param(
+        {"X1": {"started": _DAY2, "landed": _DAY1}},
+        "dates must run",
+        id="misordered-dates",
+    ),
+    pytest.param(
+        {"X1": {"started": _DAY1, "elapsed_days": 2}},
+        "timing fields need",
+        id="timing-unlanded",
+    ),
+    pytest.param(
+        {"X1": {"landed": True}},
+        "'landed' must be a date, not bool",
+        id="undated-landing",
+    ),
+    pytest.param(
+        {"X1": {"slices": [], "landed": _DAY1}},
+        "['landed'] belong on them",
+        id="container-slice-keys",
+    ),
+    pytest.param(
+        {"X1": {"priority": 1}},
+        "unknown plan.toml phases.X1 key(s): ['priority']",
+        id="unknown-key",
+    ),
+    pytest.param(
+        {"X1": {"title": "First"}}, "plan.toml phases.X1 has ['title']", id="title-key"
+    ),
+]
+
+
+class TestPlanFile:
+    """Planning TOML files whose shape breaks the schema."""
+
+    @pytest.mark.parametrize(("phases", "message"), PLAN_FILE_ERRORS)
+    def test_malformed_shape_raises(self, phases, message):
+        with pytest.raises(PlanningError, match=re.escape(message)):
+            PlanFile.from_toml("plan", {"phases": phases})
+
+
+PLANNING_BLOCKS = [
+    pytest.param(
+        "track-r",
+        "plan.md",
+        "| [R20 · First phase](#r20-first-phase) | In progress |  | "
+        "R21 (needs the base) |",
+        id="track-row",
+    ),
+    pytest.param(
+        "track-r",
+        "plan.md",
+        "| [R21 · Second phase](#r21-second-phase) | Planned |  | M20, before P20 |",
+        id="track-scheduled-after",
+    ),
+    pytest.param(
+        "track-r",
+        "plan.md",
+        "| [M20 · Preview](#m20-preview) (proposed) | Planned |  |  |",
+        id="track-proposed-milestone",
+    ),
+    pytest.param(
+        "track-p",
+        "plan.md",
+        "| [P20 · Track item](../tracker.md#p20-track-item) | Planned |  |  |",
+        id="track-relative-link",
+    ),
+    pytest.param(
+        "graph", "plan.md", '    subgraph a_core["Core work"]', id="graph-area"
+    ),
+    pytest.param("graph", "plan.md", "    n_R20 --> n_R21", id="graph-blocked-by"),
+    pytest.param(
+        "graph", "plan.md", "    n_R21 -.-> n_P20", id="graph-scheduled-after"
+    ),
+    pytest.param(
+        "graph", "plan.md", "    class n_M20 proposed", id="graph-proposed-class"
+    ),
+    pytest.param(
+        "next",
+        "plan.md",
+        "| R20.b | [R20 · First phase](#r20-first-phase) | Planned |  |",
+        id="next",
+    ),
+    pytest.param(
+        "lanes",
+        "plan.md",
+        "| [tidy · Tidy lane](#lanes) | user | weekly | R21 | Planned |",
+        id="lanes",
+    ),
+    pytest.param(
+        "decisions",
+        "plan.md",
+        "| [R20.q · A question](#r20-first-phase) | "
+        "[R20 · First phase](#r20-first-phase) | Open |  |",
+        id="decisions",
+    ),
+    pytest.param(
+        "slices", "stream.md", "| S1 · Local slice | R21 | Planned |", id="slices"
+    ),
+]
+
+
+class TestGeneratePlanningBlocks:
+    """Planning tables and graph generated from the planning data."""
+
+    @pytest.mark.parametrize(("key", "doc", "row"), PLANNING_BLOCKS)
+    def test_block_renders_its_row_and_is_idempotent(self, key, doc, row):
+        data = PlanningData.from_documents(_RENDER_PLANS, _RENDER_DOCS)
+        text = f"<!-- planning-{key} -->\n<!-- /planning-{key} -->\n"
+        generated = generate_planning_blocks(text, data, doc)
+        assert row in generated.splitlines()
+        assert generate_planning_blocks(generated, data, doc) == generated
+
+
+class TestBuildExport:
+    """The JSON export of the planning model."""
+
+    def test_export_links_each_home_at_the_commit(self):
+        data = PlanningData.from_documents(_RENDER_PLANS, _RENDER_DOCS)
+        exported = json.loads(json.dumps(build_export(data, _SNAPSHOT)))
+        keys = ["snapshot", "order", "next", "areas", "nodes", "slices", "decisions"]
+        assert list(exported) == [*keys, "lanes"]
+        node = next(node for node in exported["nodes"] if node["ref"] == "P20")
+        docs = GAMEPLANS_DIR.parent.relative_to(ROOT_DIR).as_posix()
+        url = f"https://example.com/repo/blob/abc123/{docs}/tracker.md#p20-track-item"
+        assert node["plan_url"] == url
+        assert exported["snapshot"]["commit"] == "abc123"
+
+    def test_export_pins_a_lead_in_to_its_line(self):
+        data = PlanningData.from_documents(_TRACK_PLANS, _TRACK_DOCS)
+        exported = build_export(data, _SNAPSHOT)
+        found = exported["slices"]
+        assert isinstance(found, list)
+        item = next(item for item in found if item["ref"] == "R91.a")
+        docs = GAMEPLANS_DIR.relative_to(ROOT_DIR).as_posix()
+        url = f"https://example.com/repo/blob/abc123/{docs}/plan.md?plain=1#L17"
+        location = (item["doc"], item["section"], item["line"], item["plan_url"])
+        assert location == ("plan.md", "R91: Split", 17, url)
+
+
+FORWARD_TRACK_FIELDS = [
+    pytest.param(("focus", "phase"), "R91", id="focus-phase"),
+    pytest.param(("focus", "milestone"), "M90", id="focus-milestone"),
+    pytest.param(
+        ("focus", "decision"),
+        {"heading": "Split question", "body": "Why split."},
+        id="focus-own-decision",
+    ),
+    pytest.param(("phases", "R90", "status"), "landed", id="phase-landed"),
+    pytest.param(("phases", "R91", "status"), "next_up", id="phase-next-up"),
+    pytest.param(("phases", "R92", "status"), "pending", id="phase-pending"),
+    pytest.param(
+        ("phases", "R90", "work", "add", "status"), "complete", id="work-complete"
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "a", "status"), "next_up", id="work-next-up"
+    ),
+    pytest.param(
+        ("phases", "R94", "work", "add", "status"), "in_progress", id="work-in-design"
+    ),
+    pytest.param(
+        ("phases", "R93", "work", "add", "status"), "planned", id="work-planned"
+    ),
+    pytest.param(("phases", "R91", "workKind"), "slices", id="work-kind-slices"),
+    pytest.param(("phases", "R92", "workKind"), "implementation", id="work-kind-exits"),
+    pytest.param(("phases", "R92", "work", "add", "title"), "R92 · ADD", id="exit"),
+    pytest.param(
+        ("phases", "R91", "work", "a", "title"), "R91.a · First slice", id="work-label"
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "stream-s90", "title"),
+        "R91.a · Riding slice",
+        id="rider-label",
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "a", "location"),
+        "plan.md › R91 › R91.a",
+        id="work-location",
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "stream-s90", "location"),
+        "stream.md › S90",
+        id="rider-location",
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "ids"),
+        ["a", "stream-s90", "b"],
+        id="plan-slice-after-its-host",
+    ),
+    pytest.param(
+        ("phases", "R91", "work", "stream-s90", "tag"), "S90", id="plan-slice-tag"
+    ),
+    pytest.param(
+        ("phases", "R90", "dependency"),
+        {
+            "kind": "unlocks",
+            "badge": "Unlocks R91",
+            "detail": "needs the base",
+            "targets": ["R91", "R92"],
+        },
+        id="dependency-unlocks",
+    ),
+    pytest.param(
+        ("phases", "R94", "dependency"),
+        {
+            "kind": "scheduled_before",
+            "badge": "Before R93",
+            "detail": "Later",
+            "targets": ["R93"],
+        },
+        id="dependency-scheduled",
+    ),
+    pytest.param(
+        ("phases", "R93", "dependency"),
+        {
+            "kind": "proposed",
+            "badge": "Unlocks M93",
+            "detail": "Preview",
+            "targets": ["m93"],
+        },
+        id="dependency-proposed",
+    ),
+    pytest.param(
+        ("schedule", "stages", "m90", "lanes", 0, "steps", "ids"),
+        ["r90", "r91-a", "m90"],
+        id="split-first-leg",
+    ),
+    pytest.param(
+        ("schedule", "stages", "m91", "lanes", 0, "steps", "r91-b", "label"),
+        "Second slice",
+        id="split-later-leg",
+    ),
+    pytest.param(
+        ("schedule", "bridges"),
+        [
+            {
+                "afterStage": "m90",
+                "inputs": [{"step": "r90", "label": "needs the base"}],
+                "output": {"step": "r92", "label": "R92"},
+            }
+        ],
+        id="bridge-across-lanes",
+    ),
+    pytest.param(
+        ("schedule", "outcomes", "m93"),
+        {
+            "id": "m93",
+            "afterStep": "r93",
+            "title": "Preview",
+            "detail": "Maybe ship.",
+            "proposed": True,
+        },
+        id="proposed-outcome",
+    ),
+    pytest.param(
+        ("schedule", "outcomes", "m91", "proposed"), False, id="final-outcome"
+    ),
+    pytest.param(("history", 0, "when"), "1 Jan 2026", id="history-day"),
+]
+
+
+def _build_track() -> dict[str, object]:
+    """Builds the forward-track view of the synthetic plans."""
+    data = PlanningData.from_documents(_TRACK_PLANS, _TRACK_DOCS)
+    return build_forward_track(data, _TRACK_SNAPSHOT, _TRACK_PAGE, _TRACK_RELEASES)
+
+
+def _find(value: object, *path: str | int) -> object:
+    """Finds a view value by key, list index, or record id; ``ids`` lists the ids."""
+    for key in path:
+        if key == "ids" and isinstance(value, list):
+            value = [item["id"] for item in value]
+        elif isinstance(value, list) and isinstance(key, str):
+            value = next(item for item in value if item["id"] == key)
+        elif isinstance(value, list):
+            value = value[int(key)]
+        elif isinstance(value, dict):
+            value = value[key]
+
+    return value
+
+
+class TestBuildForwardTrack:
+    """The forward-track view of the planning data and its cross-reference checks."""
+
+    def test_track_validates_against_the_committed_schema(self):
+        track = _build_track()
+        assert load_validator()(track) == track
+        assert list(gen_forward_track_problems(track)) == []
+
+    @pytest.mark.parametrize(("path", "expected"), FORWARD_TRACK_FIELDS)
+    def test_field_maps_from_the_planning_data(self, path, expected):
+        track = _build_track()
+        assert _find(track, *path) == expected
+
+    def test_doubled_next_up_is_a_problem(self):
+        track = _build_track()
+        found = track["phases"]
+        assert isinstance(found, list)
+        phases = [
+            {**phase, "status": "next_up"} if phase["id"] == "R92" else phase
+            for phase in found
+        ]
+        problems = gen_forward_track_problems({**track, "phases": phases})
+        assert list(problems) == [
+            "next-up phases ['R91', 'R92'] are not the focus phase R91 alone"
+        ]

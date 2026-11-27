@@ -23,8 +23,23 @@ Feature owners define their own semantic payloads:
 - `fanout-topology.md` — publish/subscription lifecycle payloads.
 
 `extensibility.md` owns OpenTelemetry and other ecosystem observability integrations.
-Implementation ordering is owned by `implementation-sequence.md`; the minimal transport
-lands with R4B private execution.
+Implementation ordering is owned by `implementation-sequence.md`.
+
+### P12: Stable errors and events
+
+**Goal:** give every runtime failure a stable error type and every out-of-band
+observation one execution-owned event channel.
+
+**P12.transport: Error tree and event transport.** The `RikoError` tree
+(`riko/base/_exceptions.py`) and the `Event`/`EventSink` transport
+(`riko/types/_events.py`, exported) with its no-op default (§ 2–§ 4).
+
+**P12.payloads: Feature-owned event payloads.** Each feature owner defines its own
+payloads on that transport: cache diagnostics, write/action results, publish/subscribe
+lifecycle, and checkpoint/state outcomes (§ 1, § 7).
+
+**P12.consumers: Optional consumers.** OpenTelemetry, structured logging, and other
+observability consumers read the `EventSink` without becoming runtime owners (§ 8).
 
 ## 2. Public execution setting
 

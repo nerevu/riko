@@ -1,11 +1,10 @@
 # Test-suite layering gameplan
 
-> **Scope:** owns **P13** ("public/typing/internal test split",
-> [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P13 tracker,
+> **Scope:** owns **P13**
+> ([§ P13](#p13-public-typing-and-internal-test-split), history in
 > [MILESTONES.md](../MILESTONES.md) "P13"). Establishes the durable *ownership* rule for
-> the four test layers and the concrete fix/remove/consolidate work to get there. The
-> `tests/typing/{valid,invalid}/` split that P13 also introduces is tracked in
-> MILESTONES; this gameplan owns the *pytest/doctest* layering.
+> the four test layers and the concrete fix/remove/consolidate work to get there, plus
+> the `tests/typing/{valid,invalid}/` type-check split P13 also introduces.
 >
 > **Provenance.** Audited the full test surface at a `features`-branch working state,
 > commit `5c33e05` (pytest then collected `tests`, `riko`, `README.rst`, and `docs`,
@@ -194,8 +193,10 @@ Enforcement:
   `path::Class[::test]` and `Class::test` citations, and bare `test_*` names (a
   `[param-id]` suffix allowed), must also name a current test class, test, or test-file
   basename. `.claude/skills/tidy/move_tests.py` repoints these forms when it moves or
-  renames a test (a bare name only when no other test keeps it); keep each citation on
-  one line.
+  renames a test (a bare name only when no other test keeps it); an in-place class
+  rename (`--rename` with `DEST` the class's own file) also rewrites whole-word prose
+  mentions, but only of a class name defined once under `tests/`, and refuses a new name
+  already defined there. Keep each citation on one line.
 - The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root
   doc, `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source
   file; gameplans, `MILESTONES.md`, and `docs/*.rst` keep historical paths and are
@@ -612,32 +613,42 @@ this same contract rather than re-proving it.
 
 ## 6. Relationship to the P-track
 
-- **P13 exit tests** (see [MILESTONES.md](../MILESTONES.md)) — `public/test_modules.py`
-  (extended public/EXT `__all__`; no accidental internal exports) + `tests/typing/`.
-  This gameplan supplies the *layering* half of P13; the `tests/typing/{valid,invalid}/`
-  type-check split is MILESTONES' half. Pytest tests that already assert only what
-  pyright checks move there with it:
-  `tests/internal/test_modules.py::TestParserSignature::test_fixed_arity_parser_is_a_type_error`
-  and `TestBareDecorator::test_bare_and_called_forms_type_check`; and the frozen-field
-  assignments pyright rejects under `reportAttributeAccessIssue` (the §1
-  same-declaration rule; found by the 2026-11-14 skill audit):
-  `tests/internal/test_definitions.py::TestResourceFreezing::test_plan_fields_are_read_only`
-  and `TestWriteOperation::test_is_frozen`,
-  `tests/internal/test_modules.py::TestPrepare::test_prepared_module_is_frozen`,
-  `tests/public/test_pipeline.py::TestContext::test_fields_cannot_be_reassigned`,
-  `TestContext::test_private_fields_cannot_be_set`,
-  `TestResource::test_external_value_fields_are_read_only`, the post-pickle frozen
-  assertion of `TestContext::test_roundtrips_through_pickle` (the round trip itself
-  stays), and `tests/public/test_workflow.py::TestNodeFamily::test_node_is_frozen` (a
-  `tests/typing/invalid` case assigning `ModuleNode.name`; delete the pytest method when
-  it lands). `test_plan_fields_are_read_only` must be narrowed before it moves: its
-  ignore holds even without the frozen declaration, because `resource._plan` is the
-  un-narrowed `ResourcePlan` union and the assigned factory is the wrong type for
-  `enter`; assert `isinstance(resource._plan, SyncLifecyclePlan)` first and assign a
-  same-typed value (`resource._plan.enter = resource._plan.enter`) so only the frozen
-  field is rejected (test audit 2026-11-24).
-- **Live status** (done/next/suite count) lives only in the
-  [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
+Live status (done/next/suite count) lives only in the generated
+[PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
+
+### P13: Public, typing, and internal test split
+
+**Goal:** split the suite into public, typing, and internal layers that each own one
+kind of contract. Its exit tests (see [MILESTONES.md](../MILESTONES.md)) are
+`public/test_modules.py` (extended public/EXT `__all__`; no accidental internal
+exports) and `tests/typing/`.
+
+**P13.layering: Pytest and doctest layering.** The indexed public/internal/functional
+layout (§ 3), `manage lint --tests`, and the uncovered-line ratchet
+(`manage test --ratchet`), under the ownership rule of § 1.
+
+**P13.typing: Type-check test split.** The `tests/typing/{valid,invalid}/` split, which
+pyright checks instead of pytest. Pytest tests that already assert only what pyright
+checks move there with it:
+`tests/internal/test_modules.py::TestParserSignature::test_fixed_arity_parser_is_a_type_error`
+and `TestBareDecorator::test_bare_and_called_forms_type_check`; and the frozen-field
+assignments pyright rejects under `reportAttributeAccessIssue` (the §1 same-declaration
+rule; found by the 2026-11-14 skill audit):
+`tests/internal/test_definitions.py::TestResourceFreezing::test_plan_fields_are_read_only`
+and `TestWriteOperation::test_is_frozen`,
+`tests/internal/test_modules.py::TestPrepare::test_prepared_module_is_frozen`,
+`tests/public/test_pipeline.py::TestContext::test_fields_cannot_be_reassigned`,
+`TestContext::test_private_fields_cannot_be_set`,
+`TestResource::test_external_value_fields_are_read_only`, the post-pickle frozen
+assertion of `TestContext::test_roundtrips_through_pickle` (the round trip itself
+stays), and `tests/public/test_workflow.py::TestNodeFamily::test_node_is_frozen` (a
+`tests/typing/invalid` case assigning `ModuleNode.name`; delete the pytest method when
+it lands). `test_plan_fields_are_read_only` must be narrowed before it moves: its ignore
+holds even without the frozen declaration, because `resource._plan` is the un-narrowed
+`ResourcePlan` union and the assigned factory is the wrong type for `enter`; assert
+`isinstance(resource._plan, SyncLifecyclePlan)` first and assign a same-typed value
+(`resource._plan.enter = resource._plan.enter`) so only the frozen field is rejected
+(test audit 2026-11-24).
 
 ## 7. Operations as Code and cross-package test ownership
 

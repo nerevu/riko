@@ -103,6 +103,9 @@ benchmark = "riko.cli.benchmark:main"
 compile-workflow = "riko.cli.compile:run"
 build-workflow = "riko.cli.build_workflow:run"
 
+[project.urls]
+Repository = "https://github.com/nerevu/riko"
+
 [tool.uv]
 # Resolve only releases at least a week old, so a broken or hijacked release never
 # reaches the lock. `exclude-newer-package` admits an urgent one early.
@@ -350,6 +353,7 @@ omit = [
     "*/riko/cli/_import_*.py",
     "*/riko/cli/_lint*.py",
     "*/riko/cli/_logging.py",
+    "*/riko/cli/_planning.py",
     "*/riko/cli/_ratchet.py",
     "*/riko/cli/_release.py",
     "*/riko/cli/_shipped_text.py",
@@ -387,8 +391,8 @@ rows-without-id-lowered = 2026-10-30
 # one function that are themselves the only caller of another such helper. It only
 # goes down: a run fails above it and lowers it on a gain. It records the day as
 # `<key>-lowered`.
-chains = 8
-chains-lowered = 2026-11-24
+chains = 6
+chains-lowered = 2026-11-26
 
 [tool.riko.ratchet]
 # Days a ceiling above may hold without being lowered before its ratchet warns.

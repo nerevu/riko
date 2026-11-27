@@ -66,9 +66,11 @@ whole-stream callable today runs through the pass-through identity table
 (`riko/runtime/_pipeline.py`), so `pipeline.filter(conf=...)` appends the `filter`
 module and `pipeline.filter(pred)` would collide. Landing it needs a callable node that
 declares a select/reorder shape so the execution hands it envelopes rather than bare
-values, which is the same seam S1's envelope-native built-ins use
+values, which is the same seam feed-native-streaming.lazy-operators's envelope-native
+built-ins use
 ([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order));
-settle it beside S1, not before. No owner yet; nothing in the runtime or tests marks it.
+settle it beside lazy-operators, not before. No owner yet; nothing in the runtime or
+tests marks it.
 
 Execution/planning characteristics may extend existing module options/metadata,
 including:

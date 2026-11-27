@@ -9,6 +9,7 @@ import re
 import tomllib
 from ast import Name
 from collections import Counter
+from datetime import date
 from functools import partial
 from itertools import chain
 from shutil import which
@@ -18,16 +19,27 @@ from typing import TYPE_CHECKING
 from riko.base._paths import (
     API_SURFACE_PATH,
     DOCS_DIR,
+    GAMEPLANS_DIR,
+    INTERNAL_DOCS_DIR,
     PACKAGE_DIR,
     PYPROJECT,
     ROOT_DIR,
+    SEQUENCE_PATH,
     TESTS_DIR,
+    TRACKER_PATH,
 )
 
-from ._gen_api_surface import API_SURFACE_BLOCK, generate_api_surface
+from ._gen_api_surface import (
+    API_SURFACE_BLOCK,
+    API_SURFACE_MARKERS,
+    generate_api_surface,
+)
+from ._gen_blocks import gen_block_offenders, read_doc
+from ._gen_planning import gen_planning_offenders
 from ._gen_verbs import VERB_DOCS, VERB_PATTERNS, generate_verb_tables
 from ._import_graph import FUNCTION_NODES
 from ._lint_terms import BANNED_TERMS
+from ._planning import PlanningError, gen_paragraphs, load_planning
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -37,17 +49,13 @@ if TYPE_CHECKING:
 
     from ._lint_terms import BannedTerm
 
-_INTERNAL_DOCS = ROOT_DIR / "_docs"
-_STANDARD = _INTERNAL_DOCS / "DOCUMENTATION_STANDARD.md"
+_STANDARD = INTERNAL_DOCS_DIR / "DOCUMENTATION_STANDARD.md"
 
 _RESERVED_TERMS = re.compile(
     r"^## Reserved terms$(.*?)(?=^## |\Z)", re.DOTALL | re.MULTILINE
 )
 
-_ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
-_TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
-_GAMEPLANS = _INTERNAL_DOCS / "gameplans"
-_SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
+_ROADMAP = INTERNAL_DOCS_DIR / "ROADMAP.md"
 _EXPECTED_SECTIONS = 28
 
 _SECTION_INDEX_RULE = (
@@ -69,7 +77,7 @@ _ROOT_MARKDOWN = frozenset(
     }
 )
 
-_LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
+_LEGACY_INSPIRATION = INTERNAL_DOCS_DIR / "inspiration"
 _INSPIRATION_RULE = "prior-art material belongs under research/inspiration/"
 
 _API_SURFACE_GROUPS = frozenset(
@@ -94,7 +102,7 @@ _NON_AUTHORITATIVE_HEADER = re.compile(
 _NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
 
 _R_PHASE = re.compile(
-    r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
+    r"^### (?P<phase>R\d+[A-Z]?):.*?(?=^### R\d+[A-Z]?:|^## |\Z)",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -118,7 +126,6 @@ _HISTORY_WORDS = re.compile(
     r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
 )
 
-_BLOCK_START = re.compile(r"\s*(?:[-*+]|\d+[.)]|\||#{1,6})\s")
 _SENTENCE = re.compile(r"\S.*?(?:[.!?](?=\s)|\Z)", re.DOTALL)
 
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
@@ -152,18 +159,18 @@ def _tracked_docs() -> set[Path]:
 
     result = run(
         [_GIT, "ls-files", "*.md"],
-        cwd=_INTERNAL_DOCS,
+        cwd=INTERNAL_DOCS_DIR,
         capture_output=True,
         text=True,
         check=False,
     )
-    return {_INTERNAL_DOCS / line for line in result.stdout.splitlines()}
+    return {INTERNAL_DOCS_DIR / line for line in result.stdout.splitlines()}
 
 
 def _gameplan_paths() -> list[Path]:
     """Lists authoritative Markdown gameplans tracked by git in stable order."""
     tracked = _tracked_docs()
-    globbed = _GAMEPLANS.glob("*.md") if _GAMEPLANS.exists() else []
+    globbed = GAMEPLANS_DIR.glob("*.md") if GAMEPLANS_DIR.exists() else []
     return sorted(path for path in globbed if path in tracked)
 
 
@@ -205,7 +212,7 @@ _ROADMAP_CHECKS: dict[str, Callable[[str], Iterable[object]]] = {
 }
 
 AS_BUILT_DOCS: tuple[Path, ...] = tuple(
-    _INTERNAL_DOCS / name
+    INTERNAL_DOCS_DIR / name
     for name in (
         "IMPLEMENTED.md",
         "INTERNALS.md",
@@ -219,15 +226,10 @@ AS_BUILT_DOCS: tuple[Path, ...] = tuple(
 get_posix_root = lambda path: path.relative_to(ROOT_DIR).as_posix()
 
 
-def _read(path: Path) -> str:
-    """Reads a UTF-8 document, or empty text when it is absent."""
-    return path.read_text(encoding="utf-8") if path.exists() else ""
-
-
 def _root_doc_paths() -> list[Path]:
     """Lists root internal Markdown documents tracked by git in stable order."""
     tracked = _tracked_docs()
-    return sorted(path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
+    return sorted(path for path in INTERNAL_DOCS_DIR.glob("*.md") if path in tracked)
 
 
 def _root_markdown_offenders() -> list[str]:
@@ -249,7 +251,7 @@ def _version_tuple(text: str) -> tuple[int, int, int]:
 
 def _packaged_version() -> tuple[int, int, int]:
     """Reads the packaged project version from pyproject.toml."""
-    data = tomllib.loads(_read(PYPROJECT)) if PYPROJECT.exists() else {}
+    data = tomllib.loads(read_doc(PYPROJECT)) if PYPROJECT.exists() else {}
     raw = data.get("project", {}).get("version", "0.0.0")
     return _version_tuple(raw)
 
@@ -257,7 +259,7 @@ def _packaged_version() -> tuple[int, int, int]:
 def _status_banner_offenders() -> list[str]:
     """Finds gameplans that claim phase status locally."""
     paths = _gameplan_paths()
-    return [path.name for path in paths if _STATUS_BANNER.search(_read(path))]
+    return [path.name for path in paths if _STATUS_BANNER.search(read_doc(path))]
 
 
 def _authority_namespace_offenders() -> list[str]:
@@ -265,7 +267,7 @@ def _authority_namespace_offenders() -> list[str]:
     offenders: list[str] = []
 
     for path in _gameplan_paths():
-        header = "\n".join(_read(path).splitlines()[:8])
+        header = "\n".join(read_doc(path).splitlines()[:8])
 
         if _NON_AUTHORITATIVE_HEADER.search(header):
             offenders.append(path.name)
@@ -274,11 +276,17 @@ def _authority_namespace_offenders() -> list[str]:
 
 
 def _phase_closure_offenders() -> list[str]:
-    """Finds R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
+    """
+    Finds R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure.
+
+    A sequence with no phase heading is itself an offender, so a heading-format change
+    cannot leave the check passing while it inspects nothing.
+    """
     markers = ("- **ADD:**", "- **MIGRATE:**", "- **DELETE:**")
     offenders: list[str] = []
+    matches = list(_R_PHASE.finditer(read_doc(SEQUENCE_PATH)))
 
-    for match in _R_PHASE.finditer(_read(_SEQUENCE)):
+    for match in matches:
         phase = match.group("phase")
         body = match.group(0)
         exit_at = body.rfind("**Exit:**")
@@ -292,22 +300,7 @@ def _phase_closure_offenders() -> list[str]:
         ):
             offenders.append(phase)
 
-    return offenders
-
-
-def _gen_paragraphs(text: str) -> Iterator[tuple[int, str]]:
-    """Splits text at blank lines and list, table, and heading starts."""
-    lines, start = text.splitlines(), None
-
-    for lineno, line in enumerate(chain(lines, ("",))):
-        blank = not line.strip()
-
-        if start is not None and (blank or _BLOCK_START.match(line)):
-            yield start + 1, "\n".join(lines[start:lineno])
-            start = None
-
-        if not blank and start is None:
-            start = lineno
+    return offenders if matches else ["no phase heading found"]
 
 
 def _gen_current_citations(
@@ -324,7 +317,10 @@ def _gen_current_citations(
     ``history`` matches (default: one that says what it cites was deleted, retired,
     removed, dropped, merged, or superseded). Skips paragraphs that ``note`` matches.
     """
-    paragraphs = _gen_paragraphs(text)
+    paragraphs = (
+        (start + 1, "\n".join(lines))
+        for start, lines in gen_paragraphs(text.splitlines())
+    )
     noted = (pair for pair in paragraphs if note is None or not note.search(pair[1]))
 
     for start, block in noted:
@@ -451,7 +447,7 @@ def gen_test_symbols(*paths: Path) -> Iterator[str]:
         rel = get_posix_root(path)
         yield rel
         yield path.stem
-        tree = ast.parse(_read(path))
+        tree = ast.parse(read_doc(path))
 
         for node in tree.body:
             if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
@@ -601,7 +597,7 @@ def gen_source_symbols(*paths: Path) -> Iterator[str]:
         rel = get_posix_root(path)
         yield rel
 
-        for name, node in _gen_bound_names(*ast.parse(_read(path)).body):
+        for name, node in _gen_bound_names(*ast.parse(read_doc(path)).body):
             yield f"{rel}::{name}"
 
             if isinstance(node, ast.ClassDef):
@@ -667,7 +663,7 @@ def gen_private_names(*paths: Path) -> Iterator[str]:
     for path in paths:
         yield from get_posix_root(path).removesuffix(".py").split("/")
 
-        for node in ast.walk(ast.parse(_read(path))):
+        for node in ast.walk(ast.parse(read_doc(path))):
             match node:
                 case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
                     yield node.name
@@ -734,7 +730,7 @@ def gen_unruled_terms(text: str, *terms: BannedTerm) -> Iterator[str]:
 
 def _gen_unruled_term_offenders() -> Iterator[str]:
     """Finds banned phrases the tracked documentation standard gives no ruling for."""
-    yield from gen_unruled_terms(_read(_STANDARD), *BANNED_TERMS)
+    yield from gen_unruled_terms(read_doc(_STANDARD), *BANNED_TERMS)
 
 
 def _gen_todo_offenders() -> Iterator[str]:
@@ -742,7 +738,7 @@ def _gen_todo_offenders() -> Iterator[str]:
     docs = (ROOT_DIR / "README.rst", ROOT_DIR / "CONTRIBUTING.rst")
 
     for path in (*docs, *sorted(DOCS_DIR.glob("*.rst"))):
-        for lineno in gen_todo_lines(_read(path)):
+        for lineno in gen_todo_lines(read_doc(path)):
             yield f"{get_posix_root(path)}:{lineno}"
 
 
@@ -755,7 +751,7 @@ def _gen_citation_offenders(
     _known = frozenset(known)
 
     for path in paths:
-        for lineno, cited in scan(_read(path), _known):
+        for lineno, cited in scan(read_doc(path), _known):
             yield f"{get_posix_root(path)}:{lineno}: {cited}"
 
 
@@ -816,47 +812,59 @@ def _gen_stale_private_name_offenders() -> Iterator[str]:
         path
         for path in _tracked_docs()
         if path.name != "MILESTONES.md"
-        and _UNSCANNED_DOCS.isdisjoint(path.relative_to(_INTERNAL_DOCS).parts)
+        and _UNSCANNED_DOCS.isdisjoint(path.relative_to(INTERNAL_DOCS_DIR).parts)
     )
     yield from _gen_citation_offenders(gen_stale_private_names, known, *docs)
 
 
-def _api_surface_offenders() -> list[str]:
+def _gen_api_surface_offenders() -> Iterator[str]:
     """Finds API-surface blocks that drift from the contract declaration."""
-    offenders: list[str] = []
-
-    if text := _read(API_SURFACE_PATH):
-        present = {match["key"] for match in API_SURFACE_BLOCK.finditer(text)}
-
-        if missing := sorted(_API_SURFACE_GROUPS - present):
-            offenders.append(f"missing generated blocks: {missing}")
-
-        if generate_api_surface(text) != text:
-            offenders.append("generated blocks are stale; run `manage codegen --api`")
-    else:
-        offenders.append("document is missing")
-
-    return offenders
+    yield from gen_block_offenders(
+        API_SURFACE_PATH,
+        API_SURFACE_BLOCK,
+        _API_SURFACE_GROUPS,
+        generate_api_surface,
+        "--api",
+        API_SURFACE_MARKERS,
+    )
 
 
 def _gen_verb_table_offenders() -> Iterator[str]:
     """Finds verb tables that drift from the verb declaration."""
     for path, (fmt, blocks) in VERB_DOCS.items():
-        text = _read(path)
-        present = {match["key"] for match in VERB_PATTERNS[fmt].finditer(text)}
+        regenerate = partial(generate_verb_tables, fmt=fmt)
+        pattern = VERB_PATTERNS[fmt]
+        yield from gen_block_offenders(path, pattern, blocks, regenerate, "--verbs")
 
-        if missing := sorted(blocks - present):
-            yield f"{path.name}: missing verb tables {missing}"
-        elif generate_verb_tables(text, fmt) != text:
-            yield f"{path.name}: verb tables are stale; run `manage codegen --verbs`"
+
+def _gen_planning_problems() -> Iterator[str]:
+    """Finds planning-data problems, or the one error that stops it loading."""
+    try:
+        problems = [
+            str(problem) for problem in load_planning().gen_problems(date.today())
+        ]
+    except PlanningError as error:
+        problems = [f"planning data does not load: {error}"]
+
+    yield from problems
+
+
+def _gen_planning_block_offenders() -> Iterator[str]:
+    """Finds planning blocks that are unknown, missing, or stale."""
+    try:
+        data = load_planning()
+    except PlanningError:
+        data = None
+
+    yield from () if data is None else gen_planning_offenders(data)
 
 
 def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     """Finds completion claims for versions newer than the packaged version."""
     return [
         line.strip()
-        for path in (_TRACKER, _ROADMAP)
-        for line in _read(path).splitlines()
+        for path in (TRACKER_PATH, _ROADMAP)
+        for line in read_doc(path).splitlines()
         if _VERSION.search(line)
         and _version_tuple(line) > current
         and _COMPLETION.search(line)
@@ -871,31 +879,33 @@ def _legacy_inspiration_offenders() -> list[str]:
 
 def lint_docs() -> int:
     """Validates static internal-document consistency and authority rules."""
-    roadmap = _read(_ROADMAP)
+    roadmap = read_doc(_ROADMAP)
     roadmap_items = _ROADMAP_CHECKS.items()
     roadmap_checks = {
         f"{_ROADMAP}: {rule}": partial(check, roadmap) for rule, check in roadmap_items
     }
     checks: dict[str, Func[Iterable[object]]] = {
         **roadmap_checks,
-        f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority": (
+        f"{INTERNAL_DOCS_DIR}: root Markdown docs require explicit authority": (
             _root_markdown_offenders
         ),
         f"{_LEGACY_INSPIRATION}: {_INSPIRATION_RULE}": _legacy_inspiration_offenders,
-        f"{_GAMEPLANS}: archive/research material must leave gameplans/": (
+        f"{GAMEPLANS_DIR}: archive/research material must leave gameplans/": (
             _authority_namespace_offenders
         ),
-        f"{_GAMEPLANS}: status banners belong only in PHASE_CHECKLISTS.md": (
+        f"{GAMEPLANS_DIR}: status banners belong only in PHASE_CHECKLISTS.md": (
             _status_banner_offenders
         ),
-        f"{_SEQUENCE}: R-phase exits must contain ADD/MIGRATE/DELETE": (
+        f"{SEQUENCE_PATH}: R-phase exits must contain ADD/MIGRATE/DELETE": (
             _phase_closure_offenders
         ),
-        f"{_INTERNAL_DOCS}: completion claimed above packaged version": partial(
+        f"{INTERNAL_DOCS_DIR}: completion claimed above packaged version": partial(
             _version_claim_offenders, _packaged_version()
         ),
-        str(API_SURFACE_PATH): _api_surface_offenders,
+        "API-surface blocks drift": _gen_api_surface_offenders,
         "verb tables drift": _gen_verb_table_offenders,
+        "planning data problems": _gen_planning_problems,
+        "planning blocks drift": _gen_planning_block_offenders,
         "cited test files no longer exist": _gen_stale_test_citation_offenders,
         "cited tests no longer exist": _gen_stale_test_symbol_offenders,
         "cited source files no longer exist": _gen_stale_path_citation_offenders,

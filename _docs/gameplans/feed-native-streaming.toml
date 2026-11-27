@@ -1,0 +1,36 @@
+# slices
+
+[[slices]]
+id = "source-normalization"
+
+[[slices]]
+id = "lazy-operators"
+blocked_by = ["R5A"]
+
+[[slices]]
+id = "bounded-reducers"
+blocked_by = ["R5A"]
+
+[[slices]]
+id = "timeout"
+blocked_by = ["R5A"]
+
+[[slices]]
+id = "send-receive"
+lands_with = ["R7.pubsub"]
+
+[[slices]]
+id = "bounded-split"
+lands_with = ["R7.fan-in"]
+
+[[slices]]
+id = "streaming-write"
+lands_with = ["R5C.add"]
+
+[[slices]]
+id = "legacy-seams"
+lands_with = ["R10.cleanup"]
+
+[[slices]]
+id = "batch-representation"
+lands_with = ["R8.batching"]

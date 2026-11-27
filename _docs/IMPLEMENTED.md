@@ -108,7 +108,7 @@ directly to an async operator now flows through the wrapper as an `AsyncIterator
 `AsyncPipe` collection path buffered non-Feed-native parsers at the
 `_materialize_legacy_source` seam until the move to `Pipeline` removed it (2026-10-02).
 
-**Tees (R7 Slice A, sync and async).** `Tee` (`riko/base/_iterutils.py`) and `AsyncTee`
+**Tees (R7.tee, sync and async).** `Tee` (`riko/base/_iterutils.py`) and `AsyncTee`
 (`riko/bado/itertools.py`) wrap their source in `auto_close`/`aauto_close`, each of
 which claims its close with one atomic pop of a one-item list, and share one lifecycle
 state (`_TeeState`: idle, reading, done, closed). Every upstream read publishes one
@@ -1163,7 +1163,7 @@ the caller's scope. The ordered (default) run path holds no task group across a 
 (`riko/bado/itertools.py`), and a bare `break` out of it still cancels the caller
 (tripwire
 `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact[asyncio-unordered]`).
-Task hosting for fan-out, this path included, belongs to R7.C.
+Task hosting for fan-out, this path included, belongs to R7.fan-in.
 `riko/execution/_adapt.py` holds what the two executions share across the sync/async
 boundary: `to_sync(call, stream)` (an async stream re-exposed as a lazy sync iterator;
 the sync execution's portal drain and the worker-side upstream reader are the same
@@ -1475,7 +1475,7 @@ run:
   `Pipeline` is safe but releases the run only when the abandoned generator is garbage
   collected and warns with a `ResourceWarning`; `async with pipeline.open()` is the
   prompt-release form. Under `ordered=False` a concurrent async run still cancels the
-  caller on a bare `break` until R7.C (both rows of
+  caller on a bare `break` until R7.fan-in (both rows of
   `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`;
   the `unordered` row is the strict-xfail tripwire).
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
@@ -1745,8 +1745,8 @@ and `::TestSerialize`.
 
 ## Per-item provenance — `_ItemEnvelope` (R5A, in progress)
 
-Implemented in the uncommitted phase-14 tree (2026-11-12); owner
-[implementation-sequence.md § R5A](gameplans/implementation-sequence.md#r5a--feedresult-metadata-and-private-per-item-provenance).
+Owner:
+[implementation-sequence.md § R5A](gameplans/implementation-sequence.md#r5a-per-item-results-and-provenance).
 
 - **Envelope.** `_ItemEnvelope[T]` (`riko/types/_feed.py`) is a generic `NamedTuple` of
   `value`, `item_key` (`MISSING` until R6 key configuration), `generation`, and
@@ -1782,7 +1782,8 @@ Implemented in the uncommitted phase-14 tree (2026-11-12); owner
   coming out (`_TableProvenance`), first-in-first-out when one object is read more than
   once, and a miss derives from the last input. A processor or callable node fed a
   secondary input stream runs whole-stream too, so the table applies and its declared
-  `preserve`/`derive` mode does not (owned by S1/R10 beside `join`; tripwire
+  `preserve`/`derive` mode does not (owned by feed-native-streaming.lazy-operators/R10
+  beside `join`; tripwire
   `tests/internal/test_execution.py::TestBuildEnvelopeStream::test_keeps_a_fan_in_node_s_declared_identity`).
   Riko's operators declare `normalize_item` (`NormalizesItems`), applied before tracking
   so dicts and scalars keep identity; a node's mode comes from `DeclaresIdentity`
@@ -1804,7 +1805,8 @@ Implemented in the uncommitted phase-14 tree (2026-11-12); owner
   `version`, `identity`, or `fn`'s keyword-capable first parameter
   (`gen_positional_names`).
 - **Overhead vs v0.77 tree (20k items):** processor chains and roots 1.00–1.10×, derive
-  (`tokenizer`) about 1.13–1.15×, pass-through operators alone about 1.24× until S1.
+  (`tokenizer`) about 1.13–1.15×, pass-through operators alone about 1.24× until
+  feed-native-streaming.lazy-operators.
 
 ## Write sessions — private seam awaiting `WriteNode`
 
