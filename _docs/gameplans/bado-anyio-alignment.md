@@ -15,7 +15,7 @@
 >
 > **Ownership boundary.** [execution-semantics.md](execution-semantics.md) Appendix A
 > owns the *runtime semantics* of the async primitives
-> (`async_map`/`async_map_stream`/`async_merge`/ `_pool_stream` — bounded concurrency,
+> (`async_map`/`async_map_stream`/`async_merge`/`_pool_stream` — bounded concurrency,
 > ordering, shared budgets, backpressure). [performance.md](performance.md) owns the
 > benchmark harness, the historical regression runner, and the profiler methodology.
 > **This** gameplan owns only the *AnyIO-version alignment audit* (which `bado` helpers
@@ -233,12 +233,12 @@ Buffer full + `tasks_waiting_send` high ⇒ consumer-bound; buffer empty +
    AnyIO alignment unless profiling shows a real problem. The async-context-manager
    reshape of `async_map_stream`/`async_merge` is a separate lifetime decision
    ([execution-semantics.md Appendix A](execution-semantics.md#concurrent-map-and-merge-streams))
-   that rides R7.C.
+   that rides R7.fan-in.
 8. **Repair the benchmark harness** ([performance.md](performance.md) §2 — the missing
    latency fixture) before using it to justify any of the above.
 
 The first three remove abstractions **without losing Riko-specific functionality**;
-`async_map*`/ `_pool_stream` are exactly where Riko *should* own an abstraction over
+`async_map*`/`_pool_stream` are exactly where Riko *should* own an abstraction over
 AnyIO.
 
 ## 6. Relationship to the P-track

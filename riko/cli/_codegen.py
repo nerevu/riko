@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 import click
@@ -18,7 +19,10 @@ from riko.base._paths import (
 
 from ._gen_api_surface import main as gen_api_surface_main
 from ._gen_config import main as gen_config_main
+from ._gen_forward_track import main as gen_forward_track_main
 from ._gen_names import main as gen_names_main
+from ._gen_planning import PLANNING_DOCS
+from ._gen_planning import main as gen_planning_main
 from ._gen_tier_index import TIERS
 from ._gen_tier_index import main as gen_tier_index_main
 from ._gen_user_agents import main as gen_user_agents_main
@@ -28,75 +32,78 @@ from ._gen_verbs import main as gen_verbs_main
 if TYPE_CHECKING:
     from riko.types._wrappers import Func
 
-_CODEGEN: dict[str, tuple[Func[int], str, str]] = {
+_CODEGEN: dict[str, tuple[Func[int], str, str, str]] = {
     "config": (
         gen_config_main,
         f"wrote configuration file to {CONFIG_PATH}",
         "Error updating configuration file!",
+        "Regenerate configuration types",
     ),
     "names": (
         gen_names_main,
         f"regenerated module names to {MODULE_NAMES_PATH} and {MODULE_IDS_PATH}",
         "Error regenerating module names!",
+        "Regenerate module-name catalogs",
     ),
     "api": (
         gen_api_surface_main,
         f"regenerated the API-surface document at {API_SURFACE_PATH}",
         "Error regenerating the API-surface document!",
+        "Regenerate the API-surface document",
     ),
     "tests": (
         gen_tier_index_main,
         f"regenerated the {', '.join(TIERS)} test indexes",
         "Error regenerating the test indexes!",
+        "Regenerate the test tier indexes",
     ),
     "verbs": (
         gen_verbs_main,
         f"regenerated the verb tables in {', '.join(map(str, VERB_DOCS))}",
         "Error regenerating the verb tables!",
+        "Regenerate the function-name verb tables",
     ),
     "user-agents": (
         gen_user_agents_main,
         f"regenerated the random user-agent pools at {USER_AGENTS_PATH}",
         "Error regenerating the random user-agent pools!",
+        "Regenerate the random user-agent pools",
+    ),
+    "planning": (
+        gen_planning_main,
+        f"regenerated the planning blocks in {', '.join(map(str, PLANNING_DOCS))}",
+        "Error regenerating the planning blocks!",
+        "Regenerate the planning tables and dependency graph",
+    ),
+    "progress": (
+        partial(gen_forward_track_main, html=True),
+        "wrote the progress page",
+        "Error writing the progress page!",
+        "Write the progress page (not part of --all)",
     ),
 }
+_ON_DEMAND = frozenset({"progress"})
 
 
-@click.command(name="codegen")
-@click.option("--config", help="Regenerate configuration types", is_flag=True)
-@click.option("--names", help="Regenerate module-name catalogs", is_flag=True)
-@click.option("--api", help="Regenerate the API-surface document", is_flag=True)
-@click.option("--tests", help="Regenerate the test tier indexes", is_flag=True)
-@click.option("--verbs", help="Regenerate the function-name verb tables", is_flag=True)
-@click.option(
-    "--user-agents", help="Regenerate the random user-agent pools", is_flag=True
+@click.command(
+    name="codegen",
+    params=[
+        click.Option([f"--{name}"], help=help_, is_flag=True)
+        for name, (*_, help_) in _CODEGEN.items()
+    ],
 )
-@click.option("--all", "all_", help="Run every generator", is_flag=True)
-def _codegen_command(
-    config: bool = False,
-    names: bool = False,
-    api: bool = False,
-    tests: bool = False,
-    verbs: bool = False,
-    user_agents: bool = False,
-    all_: bool = False,
-) -> None:
+@click.option(
+    "--all", "all_", help="Run every generator except --progress", is_flag=True
+)
+def _codegen_command(all_: bool = False, **selectors: bool) -> None:
     """Regenerate generated project artifacts."""
-    pairs = (
-        ("config", config),
-        ("names", names),
-        ("api", api),
-        ("tests", tests),
-        ("verbs", verbs),
-        ("user-agents", user_agents),
-    )
-    selected = (
-        tuple(_CODEGEN) if all_ else tuple(name for name, enabled in pairs if enabled)
-    )
+    names = (name for name in _CODEGEN if selectors[name.replace("-", "_")])
+    every = (name for name in _CODEGEN if name not in _ON_DEMAND)
+    selected = tuple(every) if all_ else tuple(names)
     selected = selected or ("config",)
 
     for name in selected:
-        runner, summary, error = _CODEGEN[name]
+        runner, summary, error, _ = _CODEGEN[name]
 
         if runner():
             raise RuntimeError(error)

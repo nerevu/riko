@@ -1,6 +1,6 @@
 ---
 name: wrapup
-description: Update riko's internal docs and Claude memory to reflect what landed this session so the user can clear the session without losing state — sweeps _docs/IMPLEMENTED.md, PHASE_CHECKLISTS.md, the owning gameplan, docs/CHANGES.rst, and memory files. Use when the user says "update internal docs", "update the docs so I can clear", "wrap up the session", "prepare for /clear", "sync the docs", or "handoff".
+description: Update riko's internal docs and Claude memory to reflect what landed this session so the user can clear the session without losing state — sweeps _docs/IMPLEMENTED.md, the planning TOMLs (regenerating PHASE_CHECKLISTS.md), the owning gameplan, docs/CHANGES.rst, and memory files. Use when the user says "update internal docs", "update the docs so I can clear", "wrap up the session", "prepare for /clear", "sync the docs", or "handoff".
 ---
 
 # Wrapup (make the session clearable)
@@ -96,8 +96,9 @@ current, run both as one call in the turn after the setup call.
   _docs/PHASE_CHECKLISTS.md`.
 - After tidy: for each owner you expect to touch, the relevant section only:
   `grep -n` for the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
-  `_docs/PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`
-  (top entry block), and `_docs/ROADMAP.md`.
+  `_docs/PHASE_CHECKLISTS.md`, the owning gameplan and the planning TOMLs
+  (`_docs/gameplans/*.toml`), `docs/CHANGES.rst` (top entry block), and
+  `_docs/ROADMAP.md`.
 - Beside the launch: the memory index (`MEMORY.md` is already in context — grep the
   memory directory only for the specific file you will update) and the current
   `session-handoff.md`.
@@ -127,16 +128,23 @@ current**. Writes are not safely repeatable, so the evidence decides:
 
 Owner semantics — each concept has one owner, update it there and nowhere else:
 
-- **`_docs/IMPLEMENTED.md`** — the as-built companion and single source of
-  build completeness. New/changed behavior and mechanism notes go here (this
-  is where "how it works" lives; docstrings state only what the caller gets).
-- **`_docs/PHASE_CHECKLISTS.md`** — authoritative status. Flip checkboxes and
-  status lines only; no prose narratives.
-  Its `Suite: **N passed / M xfailed**` line takes the counts from the
+- **`_docs/IMPLEMENTED.md`** — the as-built companion: what ships and where it
+  lives; landing status lives in the planning TOML. New/changed behavior and
+  mechanism notes go here (this is where "how it works" lives; docstrings state
+  only what the caller gets).
+- **Planning data (`_docs/gameplans/*.toml`)** — authoritative status. Status,
+  landing dates, order, and next-up are derived, never written: set a slice's
+  `designing`/`started`/`landed` date (or a decision's `settled`) in the owning TOML,
+  add or edit the `**<id>: <title>.**` lead-in in the gameplan for a new slice or
+  decision, then run `uv run --active python -m riko.cli.manage codegen --planning`.
+  Never hand-edit a `<!-- planning-* -->` block; no prose narratives.
+- **`_docs/PHASE_CHECKLISTS.md`** — generated status tables plus done-phase
+  summaries. Its `Suite: **N passed / M xfailed**` line takes the counts from the
   recorded test summary whenever they differ; when no summary is recorded,
   leave the line and say so in the report.
-- **The owning gameplan in `_docs/gameplans/`** — update the slice's status
-  and any decisions made this session that refine the target. If a decision
+- **The owning gameplan in `_docs/gameplans/`** — update the slice's prose
+  (its status comes from the TOML) and any decisions made this session that refine
+  the target. If a decision
   contradicts a gameplan, reconcile explicitly rather than leaving both
   versions standing — and the reconciliation is the user's call, not yours:
   ask with AskUserQuestion which side is authoritative (keep the gameplan and
@@ -175,10 +183,11 @@ Hard rules:
 
 ## 3. Apply the doc edits (one response)
 
-Issue every Edit for `_docs/`, `docs/CHANGES.rst`, and the skill snapshot in
-one response. Each edit anchors on the exact lines the evidence batch showed;
-if an anchor is uncertain, widen the grep in step 1 rather than reading the
-file.
+Issue every Edit for `_docs/` (planning TOMLs included), `docs/CHANGES.rst`, and
+the skill snapshot in one response; when a TOML or lead-in changed, run
+`manage codegen --planning` in the step-4 Bash call before the lint. Each edit
+anchors on the exact lines the evidence batch showed; if an anchor is uncertain, widen
+the grep in step 1 rather than reading the file.
 
 ## 4. Verify (one Bash call)
 
@@ -220,11 +229,11 @@ section describes only its current frontier, not history:
 The preamble also carries a **Docket** list: the next three items of work across the
 whole tree, in order, each with its owner (gameplan section, handoff section, or tracker
 row) and the test or xfail it flips. Derive it from the evidence, not recollection: open
-next actions in the handoff sections first, then the forward order in
-`_docs/PHASE_CHECKLISTS.md` (the M1 row) and
-`_docs/gameplans/implementation-sequence.md` § 4. Below it, a **Suggested command**
-line: the one prompt to paste after `/clear` that starts docket item 1 cold (a skill
-invocation such as `/go …` or `/triage …` with the file, function, or test named).
+next actions in the handoff sections first, then the generated next-up block
+(`<!-- planning-next -->`) in `_docs/gameplans/implementation-sequence.md`. Below it,
+a **Suggested command** line: the one prompt to paste after `/clear` that starts docket
+item 1 cold (a skill invocation such as `/go …` or `/triage …` with the file, function,
+or test named).
 
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
@@ -271,8 +280,10 @@ End with a short manifest: tidy's fixes and open findings, the
 the **suggested command** to run after `/clear` (in a code block, ready to paste), each
 file updated and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session is safe
-to clear, and any **script candidates**: candidates come from the main loop as much as
-from subagents: any helper script written this session into the scratchpad or `/tmp`
+to clear, a reminder (when the planning TOML or a lead-in changed) to push and then ask
+Claude to regenerate (`manage codegen --progress`) and republish the
+progress view, and any **script candidates**: candidates come from the main loop as much
+as from subagents: any helper script written this session into the scratchpad or `/tmp`
 (inline heredoc scripts included), any scan, count, or cross-check run by hand three or
 more times, and any subagent whose completion notice shows a long run (roughly 10+
 minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper

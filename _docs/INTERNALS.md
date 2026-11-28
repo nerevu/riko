@@ -15,7 +15,8 @@ lives there; `_docs/KEY_PATHS.md` maps concrete source locations; and
 ## Codegen & generated files
 
 The `manage codegen` command is selector-based. With no selector it regenerates
-config types; selectors are additive, and `--all` runs every generator:
+config types; selectors are additive, and `--all` runs every generator except the
+on-demand `--progress`:
 
 ```text
 manage codegen
@@ -60,6 +61,57 @@ at call sites.
   the installed `fake-useragent`'s bundled `browsers.jsonl` (a lint-group dependency,
   read without network). `UserAgent.RANDOM` draws from both. The drift guard in
   `tests/internal/test_codegen.py` skips when `fake-useragent` is not installed.
+- **Planning blocks** — `riko/cli/_gen_planning.py` (`manage codegen --planning`)
+  rewrites the `<!-- planning-* -->` blocks in `PLANNING_DOCS`: the R/P tracker tables
+  in `_docs/PHASE_CHECKLISTS.md`, the Mermaid graph, next-up, lanes, and decisions in
+  `_docs/gameplans/implementation-sequence.md`, and the slice table in each other
+  gameplan listed there (`_docs/gameplans/feed-native-streaming.md`). Its source is
+  the planning model from `riko/cli/_planning.py` (`load_planning`), which joins the
+  facts in
+  `_docs/gameplans/*.toml` (dates, `blocked_by`/`scheduled_after` edges, riders, areas,
+  lanes, decisions) to the titles and prose in their Markdown homes (`### <id>: name`
+  headings, `**<id>: title.**` lead-ins, whose title is the bold text minus its final
+  period) by id, and derives status, landing dates, order, next-up, and unlocks. Edit
+  the TOML or the lead-in, never a block.
+  `manage lint --docs` reports planning-data problems (unknown refs, cycles, dead
+  ends, missing Markdown homes, landed before a predecessor) and stale, missing, or
+  unknown planning blocks. `python -m riko.cli._gen_planning --json` prints the whole
+  model with links pinned to the current commit instead of writing any document. Each
+  Markdown home records the line it starts on and its heading's text, exported as
+  `line`, `doc`, and `section`; a heading's `plan_url` is its rendered anchor, while a
+  lead-in or exit bullet, which has no anchor of its own, links to its line in the
+  source view (`?plain=1#L<line>`).
+- **Forward track** — `riko/cli/_gen_forward_track.py` adapts the planning model to an
+  external page's contract, `_docs/forward-track.schema.json`, with its page copy in
+  `_docs/forward-track.toml`. Run as a module it prints the view for the current commit
+  and exits 1 when the view breaks the schema or its cross-reference checks. Work items
+  read `<ref> · <title>` (a rider takes the ref of the slice it rides and keeps its own
+  tag; an exit item reads `<phase> · ADD`) and carry the optional `planUrl` and
+  `location` (`implementation-sequence.md › R7 › R7.fan-in`). Open phases become
+  `areas`: one card per phase (its open milestones and the other-area phases it really
+  `needs`), placed by `_place` on a grid of real in-area `edges`; `areaEdges` are the
+  cross-area dependencies, transitively reduced. `plans` is the shelf: each plan
+  file with slices that land with no phase (`lands_with` empty), its title from the
+  Markdown H1, and each such slice's status (`ready`, `waiting`, `in_progress`,
+  `complete`, `deferred`), `needs` (its unfinished blockers, a slice of its own plan
+  by label), and row and column from `_place_shelf`, which centers each parent over
+  the children only it leads to. The page opens each plan on its first slices and
+  reveals the rest per card, compacting empty columns and drawing a dashed "via"
+  connector through a hidden slice.
+  `manage codegen --progress` (left out of `--all`) renders the validated view through
+  `_docs/forward-track/index.html.j2` (its `style.css` and `controls.js` inlined, and no
+  document wrapper since the artifact host adds one) to `output/forward-track.html`,
+  which is never committed: overview tiles, Next up, Phases, History, Scheduled work
+  (area boxes stacked per column, cards on a CSS grid, elbow connectors drawn by the
+  script, then the plans shelf as one disclosure row per plan) beside Release gates,
+  and a dialog per phase. It refuses (exit 1, no file)
+  when the view fails its checks. Claude republishes the page to the progress-view
+  artifact (<https://claude.ai/artifact/Gy1JHYcXhr1EaTdmjEzdYM>) on request.
+- **Marked blocks** — `riko/cli/_gen_blocks.py` is the shared helper behind the
+  verb, API-surface, and planning generators: it builds the block patterns
+  (`<!-- key -->`/`<!-- /key -->` in Markdown, `.. begin key`/`.. end key` in RST),
+  rewrites the blocks with the do-not-edit note, and reports drifted ones for
+  `manage lint --docs`.
 
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.

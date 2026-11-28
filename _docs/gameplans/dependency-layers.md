@@ -200,7 +200,7 @@ behavior shared across higher layers lives in the lowest layer its importers sha
 
 - **Generic runtime helpers are in `base/`.** `_guards.py` (generic shape guards),
   `_require_guards.py` (the `require_*`/`narrow_*`/`def_from_*`/`validator_from_*`
-  family plus `require_arg`/ `require_conf_key`), `_recordutils.py` (`field_names`,
+  family plus `require_arg`/`require_conf_key`), `_recordutils.py` (`field_names`,
   `required_attrs_keys`, the compact serializers), `_sentinels.py` (moved whole:
   `MISSING`, `StreamState`, the `Sentinel` shape and its guards), and in `_typing.py`
   `require_enum`/`resolve_enum` plus the runtime `isinstance` tuples (their type
@@ -226,7 +226,7 @@ behavior shared across higher layers lives in the lowest layer its importers sha
   (`test_module_conf_rejects_dataclass_values`), so it is a contract, not a generic
   helper.
 - **Cross-layer wrapper behavior is in `definitions/_wrapping.py`:**
-  `prepare_call`/`build_call`/ `stamp_wrapper_meta`, needed by both `execution` and
+  `prepare_call`/`build_call`/`stamp_wrapper_meta`, needed by both `execution` and
   `modules`. The wrapper protocols stay in `types/_wrappers.py`.
 
 No layer was added and `LAYER_DEPENDENCIES` did not change.

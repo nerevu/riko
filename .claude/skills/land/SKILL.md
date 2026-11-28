@@ -158,7 +158,9 @@ for iterating on one gate alone.
    next session, and a prettify before tidy has run marks nothing.
 
 3. **Codegen drift**: if the change touched anything with a generated artifact
-   (configs, module names/ids, API surface blocks, pipeline fixtures), pass
+   (configs, module names/ids, API surface blocks, pipeline fixtures, the planning
+   TOMLs `_docs/gameplans/*.toml` or their Markdown lead-ins, which regenerate the
+   `<!-- planning-* -->` blocks), pass
    `--codegen` to `all` (alone:
    `python $G run codegen --mutates -- <manage> codegen --all`) and check `git diff`
    on the generated files. A diff
@@ -295,9 +297,10 @@ to an agent, which repeats their work by hand for many minutes.
    first and split a file only when its hunks are different concepts. A file that one
    branch commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame
    hunks included. A hunk that names something another hunk introduces goes in or after
-   that hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go
-   with the step whose source change regenerates them. The coverage-ratchet line in
-   `pyproject.toml` goes with the step whose tests or code moved it:
+   that hunk's step. Generated files (tier indexes, API-surface blocks, verb tables,
+   planning blocks) go with the step whose source change regenerates them. The
+   coverage-ratchet line in `pyproject.toml` goes with the step whose tests or code
+   moved it:
    `diff_uncovered.py --baseline-ref HEAD` names each file whose missing count changed.
    Put it elsewhere only for a stated reason, such as a later branch commit that also
    changes the ceiling, and say why. Message files: subject at most 50 characters, house
@@ -318,7 +321,8 @@ to an agent, which repeats their work by hand for many minutes.
    step (ruff's undefined/unused names and `import riko`; `--full-checks` adds
    `lint --all`, `--verify-types`, and full-project pyright on the step's own
    tree for bisect-safe commits; `--tests` runs the suite with the ratchet on each
-   step, one at a time, so run it alone), and replays the
+   step, one at a time, and skips every suite after the first that fails, so run
+   it alone), and replays the
    autosquash in a throwaway worktree. It writes `NN.patch`/`NN.msg`,
    `commands.txt` (always led by `git reset -q`),
    `chain.txt`, and each step's files with `+added/-removed` line counts (plus

@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Riko Forward Track snapshot",
+  "description": "Content contract for the forward-track page. Arrays preserve display order. The renderer supplies visual styles, status captions, controls, standard headings, and the snapshot marker; it derives counts and filters from phase status. Work-item status is independent of phase status. Strings are plain text with optional inline backticks, never executable HTML.",
+  "$comment": "Application checks: phase and milestone IDs are unique, as are area IDs and card IDs. Focus references resolve; focus.phase is the sole next_up phase. Work IDs are unique within a phase. Every card need names a card ref, every prerequisite card names a card ID, and every area edge names area IDs. Plan IDs share the area IDs' namespace and shelf-slice IDs the card IDs'; every plan edge names one of that plan's slice IDs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "snapshot": {"$ref": "#/$defs/snapshot"},
+    "page": {"$ref": "#/$defs/page"},
+    "focus": {"$ref": "#/$defs/focus"},
+    "phases": {"type": "array", "items": {"$ref": "#/$defs/phase"}, "minItems": 1},
+    "milestones": {"type": "array", "items": {"$ref": "#/$defs/milestone"}, "minItems": 1},
+    "history": {"type": "array", "items": {"$ref": "#/$defs/historyEvent"}, "minItems": 0, "description": "Newest first."},
+    "areas": {"type": "array", "items": {"$ref": "#/$defs/area"}, "minItems": 0},
+    "areaEdges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "minItems": 0, "description": "Real dependencies between areas, transitively reduced."},
+    "plans": {"type": "array", "items": {"$ref": "#/$defs/shelfPlan"}, "minItems": 0, "description": "Plans with slices that ride no planning phase, by plan id."}
+  },
+  "required": ["snapshot", "page", "focus", "phases", "milestones", "history", "areas", "areaEdges", "plans"],
+  "$defs": {
+    "link": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri", "pattern": "^https?://"}
+      },
+      "required": ["label", "url"]
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "branch": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "pattern": "^[a-fA-F0-9]{7,64}$"},
+        "date": {"type": "string", "format": "date"},
+        "unreleasedVersion": {"type": "string", "minLength": 1},
+        "repository": {"$ref": "#/$defs/link"},
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/link"}, "minItems": 1}
+      },
+      "required": ["branch", "commit", "date", "unreleasedVersion", "repository", "sources"]
+    },
+    "page": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "documentTitle": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "subtitle": {"type": "string", "minLength": 1},
+        "historyCaption": {"type": "string", "minLength": 1},
+        "outlook": {"type": "string", "minLength": 1}
+      },
+      "required": ["documentTitle", "title", "subtitle", "historyCaption", "outlook"]
+    },
+    "focus": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "phase": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"},
+        "milestone": {"type": "string", "pattern": "^M[0-9]+$"},
+        "heading": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "decision": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "heading": {"type": "string", "minLength": 1},
+            "body": {"type": "string", "minLength": 1}
+          },
+          "required": ["heading", "body"]
+        }
+      },
+      "required": ["phase", "milestone", "heading", "summary"]
+    },
+    "workItem": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "Unique within its phase. The slice tag may repeat."},
+        "tag": {"type": "string", "minLength": 1, "description": "Optional display tag, e.g. bounded-split."},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["planned", "next_up", "in_progress", "complete", "deferred"]},
+        "body": {"type": "string", "minLength": 1},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://", "description": "Link to the item's paragraph at the snapshot commit."},
+        "location": {"type": "string", "minLength": 1, "description": "Location trail, e.g. implementation-sequence.md › R7 › R7.fan-in."}
+      },
+      "required": ["id", "title", "status", "body"]
+    },
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "kind": {"enum": ["unlocks", "scheduled_before", "proposed"]},
+        "badge": {"type": "string", "minLength": 1, "description": "Compact card label, e.g. Before R6."},
+        "detail": {"type": "string", "minLength": 1, "description": "Full explanation shown in the dialog."}
+      },
+      "required": ["kind", "badge", "detail"]
+    },
+    "phase": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "purpose": {"type": "string", "minLength": 1},
+        "status": {"enum": ["landed", "next_up", "pending"]},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "dependency": {"$ref": "#/$defs/dependency"},
+        "workKind": {"enum": ["implementation", "slices"]},
+        "work": {"type": "array", "items": {"$ref": "#/$defs/workItem"}, "minItems": 1}
+      },
+      "required": ["id", "title", "purpose", "status", "planUrl", "dependency", "workKind", "work"]
+    },
+    "milestone": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^M[0-9]+$"},
+        "title": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "date": {"type": "string", "format": "date"},
+        "prerequisites": {"type": "array", "items": {"$ref": "#/$defs/prerequisite"}}
+      },
+      "required": ["id", "title", "summary", "planUrl"]
+    },
+    "prerequisite": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["landed", "next_up", "pending"]},
+        "detail": {"type": "string"},
+        "card": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "The open phase card the ref belongs to."}
+      },
+      "required": ["ref", "title", "status", "detail"]
+    },
+    "historyEvent": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "when": {"type": "string", "minLength": 1, "description": "Display precision as recorded, including ranges, relative gaps or By 14 Nov."},
+        "badge": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri", "pattern": "^https?://", "description": "Release page, or the release list for the collapsed row."}
+      },
+      "required": ["when", "badge", "title"]
+    },
+    "edge": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "upstream": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "downstream": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"}
+      },
+      "required": ["upstream", "downstream"]
+    },
+    "card": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "ref": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["next_up", "pending"]},
+        "milestones": {"type": "array", "items": {"type": "string", "pattern": "^M[0-9]+$"}},
+        "needs": {"type": "array", "items": {"type": "string", "pattern": "^R[0-9]+[A-Z]*$"}, "description": "Open phases in other areas this card really depends on."},
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0},
+        "span": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2, "description": "First and last column of the card and its descendants."},
+        "forked": {"type": "boolean", "description": "A parent of the card has another child."}
+      },
+      "required": ["id", "ref", "title", "status", "milestones", "needs", "row", "column", "span", "forked"]
+    },
+    "area": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0},
+        "cards": {"type": "array", "items": {"$ref": "#/$defs/card"}, "minItems": 1},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "description": "Real dependencies between this area's cards."}
+      },
+      "required": ["id", "title", "row", "column", "cards", "edges"]
+    },
+    "shelfSlice": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "label": {"type": "string", "minLength": 1, "description": "The slice id without its plan prefix."},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["ready", "waiting", "in_progress", "complete", "deferred"]},
+        "needs": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Open decisions and unfinished work this slice still waits on, a slice of its own plan by label."},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0}
+      },
+      "required": ["id", "label", "title", "status", "needs", "row", "column"]
+    },
+    "shelfPlan": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "slices": {"type": "array", "items": {"$ref": "#/$defs/shelfSlice"}, "minItems": 1},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "description": "Dependencies between this plan's shelf slices."}
+      },
+      "required": ["id", "title", "planUrl", "slices", "edges"]
+    }
+  }
+}

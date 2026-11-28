@@ -1,0 +1,33 @@
+# slices
+
+[[slices]]
+id = "connector-contracts"
+
+[[slices]]
+id = "file-http-adapters"
+blocked_by = ["connectors.connector-contracts", "R5C"]
+
+[[slices]]
+id = "object-storage"
+blocked_by = ["connectors.connector-contracts", "R11.resource-seams"]
+
+[[slices]]
+id = "mail-brokers"
+blocked_by = [
+  "connectors.connector-contracts",
+  "R11.resource-seams",
+  "R6",
+  "R7.pubsub",
+]
+
+[[slices]]
+id = "structured-sources"
+blocked_by = ["connectors.connector-contracts", "R6"]
+
+[[slices]]
+id = "airtable-adapter"
+lands_with = ["R11.remaining"]
+
+[[slices]]
+id = "catalog-cli"
+blocked_by = ["connectors.connector-contracts", "cli.click-registry"]

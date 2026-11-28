@@ -123,7 +123,7 @@ demonstrated need).
 
 ## 23. AnyIO and Twisted
 
-> **Shipped:** see [IMPLEMENTED.md §23](../IMPLEMENTED.md#23-anyio-runtime-shipped)
+> **Shipped:** see [IMPLEMENTED.md §23](../IMPLEMENTED.md#23-anyio-runtime)
 > (AnyIO is the sole runtime; no Twisted; pull-based `Feed`). **Remaining:** the
 > protocol-adapter design and the `asyncioreactor` escape hatch below.
 

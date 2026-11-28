@@ -154,7 +154,7 @@ See
 The CLI (`riko/cli/manage.py`) returns process exit codes: `0` completed · `1` failed ·
 `2` CLI usage/config error. Richer future CLI exit/status contracts are planned and
 owned by [cli.md](gameplans/cli.md); see
-[IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes-shipped) for as-built detail.
+[IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes) for as-built detail.
 
 ## 10. Delivery guarantee
 

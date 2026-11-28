@@ -172,7 +172,7 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   on it. Resource definitions, optional `state_store`, Context-local module definitions,
   and identity-encoder selection are resolved during execution preparation.
 - **Constructor stops being a union of every module's knobs.**
-  `assign`/`field`/`func`/`targets`/ `skip_if` belong to the declared node/step rather
+  `assign`/`field`/`func`/`targets`/`skip_if` belong to the declared node/step rather
   than global Pipeline execution config.
 - **Collapse the runtime-utility surface.** De-emphasize backend/bridge helpers from the
   stable API; users write normal Python iteration.
@@ -306,7 +306,7 @@ landed with `Pipeline.with_execution(...)` on 2026-10-03 (`MISSING` keeps the cu
 setting, explicit `None` restores the default), so R2 is discharged in full.
 
 **Merge sequencing** is the M1 v1-parity milestone in
-[implementation-sequence.md § 4](implementation-sequence.md#m1--v1-parity-merge-next--features):
+[implementation-sequence.md § 4](implementation-sequence.md#m1-v1-parity-merge):
 close R4B → R4C callable nodes → R4D workflow inputs → R5A → R7 → merge `next` →
 `features`. R5B, R5C, and later phases follow the merge. This section owns the defect
 half of the gate; that milestone owns the capability half.

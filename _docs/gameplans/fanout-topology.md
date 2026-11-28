@@ -341,7 +341,7 @@ other; a zero buffer would deadlock that composition. Rendezvous (zero buffer) r
 the rule for subscriptions (§5.2) and for branches driven as execution tasks, which
 arrive in a later slice with the execution-scoped task group.
 
-**Tee contract (decided 2026-11-16 (user), R7 Slice A).**
+**Tee contract (decided 2026-11-16 (user), R7.tee).**
 
 - Registration: every branch is registered before the first upstream advancement;
   `branch()` afterwards, or after close, raises `PipelineStateError`. Reentrant
@@ -356,15 +356,15 @@ arrive in a later slice with the execution-scoped task group.
   later read until closed.
 - Strict overflow: under strict managed execution an overflow is reported only after
   attempting the upstream read; non-strict may reject a full buffer before reading (a
-  possible false positive at EOF). Strict validates splitter cardinality/counts only
-  (no per-item provenance ids), applies to managed execution only (direct module
-  splitters are non-strict), defaults off, and early close never forces extra upstream
-  reads to finish validation (the `strict` knob lands in R7 Slice B, its enforcement in
-  Slice C's shared walk; knob in execution-semantics § 6.5).
+  possible false positive at EOF). Strict validates splitter cardinality/counts only (no
+  per-item provenance ids), applies to managed execution only (direct module splitters
+  are non-strict), defaults off, and early close never forces extra upstream reads to
+  finish validation (the `strict` knob lands in R7.settings, its enforcement in
+  R7.fan-in's shared walk; knob in execution-semantics § 6.5).
 - Limits: low-level `Tee`/`AsyncTee` default to unlimited and never read global
   settings; managed execution passes its effective `branch_buffer` explicitly at every
   tee site (explicit splitters, implicit shared-port fan-out, and the async splitter
-  input tee); direct `riko.modules.split` calls keep the process default (Slice C).
+  input tee); direct `riko.modules.split` calls keep the process default (R7.fan-in).
   Unlimited stays `inf`: `RIKO_BRANCH_BUFFER` accepts whole numbers of at least 1 or
   `inf`, `0` keeps being rejected with a warning, and there is no `None` normalization.
 - Close: natural exhaustion closes the source promptly and buffered values still drain
@@ -407,9 +407,9 @@ arrive in a later slice with the execution-scoped task group.
   cleanup obligation (`tests/internal/test_tee.py`
   `TestAsyncTee::test_cancelling_a_waiter_leaves_the_owed_close_to_the_reader`). A
   detached read task owned by the execution (a Web-Streams-style tee, where one branch's
-  deadline cannot interrupt a shared read) is to be reconsidered once Slice C's
-  execution task group lands; Slice C's design also aims for no riko-owned mutex (user,
-  2026-11-23): `Tee`'s lock is then the last one, removable once the driver task
+  deadline cannot interrupt a shared read) is to be reconsidered once R7.fan-in's
+  execution task group lands; R7.fan-in's design also aims for no riko-owned mutex
+  (user, 2026-11-23): `Tee`'s lock is then the last one, removable once the driver task
   confines each tee to one thread and hands items to branch workers through queues
   (which also retires its GIL reliance). `Tee` uses one `threading.Lock` plus one
   `Condition` over it, never held across `next(source)`; an advancing flag plus the
@@ -456,7 +456,7 @@ option (default `True`) on the `split` module; `isolate=False` shares each value
 across branches. Plain one-port fan-out (one source port feeding several stream edges,
 no split node) always isolates.
 
-Decided 2026-11-16 (user), R7 Slice A: fan-out is atomic. Every isolated copy is
+Decided 2026-11-16 (user), R7.tee: fan-out is atomic. Every isolated copy is
 prepared before any branch buffer receives the item; a copy failure is fatal, raised
 as `PipelineError` chained from the copy error and naming the node/branch where known,
 and never falls back to sharing.
@@ -576,7 +576,7 @@ build refused one source port feeding more than one stream edge
 (`Workflow.require_executable()`), because both consumers would have shared one
 one-shot iterator.
 
-**As built (R7 slice 1, 2026-11-14).** Value addressing is `(node, port)`-keyed: the
+**As built (`R7.ports`, 2026-11-14).** Value addressing is `(node, port)`-keyed: the
 step table maps each `PortKey` to one stream per reader (`ExecutionPlan.get_port_demand`
 counts the readers of each port in a run), and `_resolve_node_inputs` pops one per
 incoming edge. A port with several readers is teed (`Tee`/`AsyncTee`, isolated copies);
@@ -771,6 +771,22 @@ F7  Branch-to-union/join ergonomic contracts
 ```
 
 These F labels do not create a parallel implementation sequence.
+
+### P11: Publish and subscribe protocols
+
+**Goal:** give publish/subscribe execution-owned publisher and subscription objects in
+place of the global hub. The tracker first named this contract
+`Publisher`/`Subscription`; this plan and
+[execution-semantics.md](execution-semantics.md) reshape it into the object-first
+`publish`/`subscribe` contract (§ 4) over `SubscribeNode`/`PublishEdge` topology
+(§ 14.1), with execution-owned lifecycle and receive-time `func` semantics (F5).
+
+**P11.pubsub: Object-first publish and subscribe.** The object-first contract lands with
+R7's object-first publish/subscribe slice.
+
+**P11.poll: Source polling.** `Pipeline.poll` recurrence is specified in
+[feed-monitoring.md](feed-monitoring.md) and stays unscheduled until that plan moves its
+slices into planning data.
 
 ## 17. Definition of done
 

@@ -1,12 +1,13 @@
 # Riko Implemented Runtime (as-built)
 
-This is the **as-built companion** — everything that **ships today**, verified against
-the code. It documents both stable core sections (from
+This is the **as-built companion**: what **ships today** and where it lives, verified
+against the code. It documents both stable core sections (from
 [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md)) and the shipped parts of feature topics
-(owned by gameplans). **This file is the single source for build-completeness:** each
-section is tagged **Implemented** (fully ships) or **Partial** (ships in part; its
-remaining/planned work is linked per section). A topic **absent here is Planned**
-(nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP.md#index).
+(owned by gameplans). Whether and when a phase or slice landed lives in the planning
+TOML (`gameplans/*.toml`), shown in [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md); the
+**Implemented**/**Partial** notes still on some sections predate that and go when this
+file is generated (implementation-sequence.md, planning-data step 3). Find any `§N` via
+the [ROADMAP §-index](ROADMAP.md#index).
 
 > **Provenance.** These are shipped facts, not aspirations. If code and this document
 > disagree, the code is authoritative and this document is the bug. Planned semantics
@@ -14,31 +15,31 @@ remaining/planned work is linked per section). A topic **absent here is Planned*
 
 ## Index
 
-- [0. Architectural direction (shipped)](#0-architectural-direction-shipped)
-- [1. Product layers — Riko Core (shipped)](#1-product-layers--riko-core-shipped)
+- [0. Architectural direction](#0-architectural-direction)
+- [1. Product layers — Riko Core](#1-product-layers--riko-core)
 - [2. Core item and stream types](#2-core-item-and-stream-types)
-- [3. Pipe behavior (shipped)](#3-pipe-behavior-shipped)
-- [6. Async execution and backpressure (shipped)](#6-async-execution-and-backpressure-shipped)
-- [7. Timeout (shipped)](#7-timeout-shipped)
-- [8. Union (shipped)](#8-union-shipped)
-- [9. Exit codes (shipped)](#9-exit-codes-shipped)
-- [Logging (shipped)](#logging-shipped)
-- [13. Filter semantics (shipped)](#13-filter-semantics-shipped)
-- [14. Sort keys and feed dates (shipped)](#14-sort-keys-and-feed-dates-shipped)
-- [23. AnyIO runtime (shipped)](#23-anyio-runtime-shipped)
-- [24. Module discovery (shipped)](#24-module-discovery-shipped)
-- [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
-- [Workflow graph index (shipped)](#workflow-graph-index-shipped)
-- [Canonical value encoder (R2A, shipped)](#canonical-value-encoder-r2a-shipped)
-- [Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)](#workflow-v2-serialization--workflowserialize--workflowparse-r4a5-shipped)
-- [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
-- [Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, shipped)](#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)
-- [Callable nodes — `Pipeline.map` (R4C, shipped)](#callable-nodes--pipelinemap-r4c-shipped)
+- [3. Pipe behavior](#3-pipe-behavior)
+- [6. Async execution and backpressure](#6-async-execution-and-backpressure)
+- [7. Timeout](#7-timeout)
+- [8. Union](#8-union)
+- [9. Exit codes](#9-exit-codes)
+- [Logging](#logging)
+- [13. Filter semantics](#13-filter-semantics)
+- [14. Sort keys and feed dates](#14-sort-keys-and-feed-dates)
+- [23. AnyIO runtime](#23-anyio-runtime)
+- [24. Module discovery](#24-module-discovery)
+- [Subscription lifecycle — `subscribe` / `publish`](#subscription-lifecycle--subscribe--publish)
+- [Workflow graph index](#workflow-graph-index)
+- [Canonical value encoder](#canonical-value-encoder)
+- [Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse`](#workflow-v2-serialization--workflowserialize--workflowparse)
+- [25. Conversion — export converters](#25-conversion--export-converters)
+- [Private execution runtime — `SyncExecution` / `AsyncExecution`](#private-execution-runtime--syncexecution--asyncexecution)
+- [Callable nodes — `Pipeline.map`](#callable-nodes--pipelinemap)
 - [Write sessions — private seam awaiting `WriteNode`](#write-sessions--private-seam-awaiting-writenode)
 
 ---
 
-## 0. Architectural direction (shipped)
+## 0. Architectural direction
 
 > **Partial.** Direction beyond what ships (callable pipes, batches, schema/state, RDP,
 > Connect) is [roadmap](ROADMAP.md).
@@ -54,7 +55,7 @@ Not yet shipped (see ROADMAP §0): callable `map`/`flat_map` pipes, logical reco
 batches, explicit schema/state handling, the Riko Data Protocol, and the Connect
 orchestration layer.
 
-## 1. Product layers — Riko Core (shipped)
+## 1. Product layers — Riko Core
 
 > **Partial.** Riko Connect (orchestration) is not started →
 > [rdp-connect.md](gameplans/rdp-connect.md).
@@ -64,7 +65,7 @@ orchestration layer.
 - synchronous and asynchronous pipelines
 - built-in modules
 - stream and Feed processing
-- meza-backed export converters (see [§25](#25-conversion--export-converters-shipped))
+- meza-backed export converters (see [§25](#25-conversion--export-converters))
 
 Not yet shipped in Core: callable pipes, logical batches, schema projection, and
 error/disposition callbacks and sinks. **Riko Connect** is not started.
@@ -108,7 +109,7 @@ directly to an async operator now flows through the wrapper as an `AsyncIterator
 `AsyncPipe` collection path buffered non-Feed-native parsers at the
 `_materialize_legacy_source` seam until the move to `Pipeline` removed it (2026-10-02).
 
-**Tees (R7 Slice A, sync and async).** `Tee` (`riko/base/_iterutils.py`) and `AsyncTee`
+**Tees (R7.tee, sync and async).** `Tee` (`riko/base/_iterutils.py`) and `AsyncTee`
 (`riko/bado/itertools.py`) wrap their source in `auto_close`/`aauto_close`, each of
 which claims its close with one atomic pop of a one-item list, and share one lifecycle
 state (`_TeeState`: idle, reading, done, closed). Every upstream read publishes one
@@ -135,18 +136,21 @@ Per-fetch source bodies are **eager-read, lazy-parse** under async iteration:
 a `BytesIO` before parsing, so there is no read-time backpressure. Streaming parsers
 pair `await async_url_open(...)` with `auto_close` (`riko/base/_iterutils.py`,
 close-on-iteration), never `async with`. `auto_close`/`aauto_close` are twin close-once
-classes, so a close before the first read still releases the file; one read from, then
-collected unclosed, closes (the async one cannot await) and warns `ResourceWarning` only
-when a value it closes is a resource (`has_open_resource`: anything with
-`close`/`aclose` other than a generator or another wrapper), as an abandoned generator
-stays silent. The processor/operator wrappers close the parser's output with
-`maybe_closing` (the async processor and operator wrap their result in `auto_close`, and
-`async_flatten` closes the batch it is reading), so closing a pipe's output early
-reaches the file, sync or async, without a finalizer warning. They never close their
-input: a source the caller still holds stays open (see `feed-native-streaming.md` § 11).
-Incremental `httpx.stream()` body reads and `AsyncClient` reuse are **Partial** (not
-implemented). Sync `Fetch` differs — its non-memoized path streams `r.raw`
-incrementally.
+classes that look up each value's closer once, when built. `auto_close` refuses a value
+whose only close is async unless it is given a `bridge` that runs the close on an event
+loop (an async run's sync splitter passes `syncify`, as its take runs on a worker), and
+`maybe_closing` refuses the same value. A close before the first read still releases
+the file; one read from, then collected unclosed, closes (the async one cannot await)
+and warns `ResourceWarning` only when a value it closes is a resource
+(`has_open_resource`: anything with `close`/`aclose` other than a generator or another
+wrapper), as an abandoned generator stays silent. The processor/operator wrappers close
+the parser's output with `maybe_closing` (the async processor and operator wrap their
+result in `auto_close`, and `async_flatten` closes the batch it is reading), so closing
+a pipe's output early reaches the file, sync or async, without a finalizer warning. They
+never close their input: a source the caller still holds stays open (see
+`feed-native-streaming.md` § 11). Incremental `httpx.stream()` body reads and
+`AsyncClient` reuse are **Partial** (not implemented). Sync `Fetch` differs — its
+non-memoized path streams `r.raw` incrementally.
 
 Every URL fetch is bounded by `settings.fetch_timeout` (`RIKO_FETCH_TIMEOUT`, 30 s): the
 sync `opener` family (`riko/io/_sync.py`) passes it to `requests.get` as the per-request
@@ -234,7 +238,7 @@ the stored spelling for every mapping kind. `alist` and `materialize`
 logger's level); `truncate_content` (`riko/coercion/_sequences.py`) shortens `bytes`
 like `str`.
 
-## 3. Pipe behavior (shipped)
+## 3. Pipe behavior
 
 > **Partial.** Remaining lazy-Feed-chaining gaps →
 > [execution-semantics.md](gameplans/execution-semantics.md).
@@ -279,7 +283,7 @@ Riko does **not** detect consumed async iterables, recreate them automatically, 
 a custom consumed-state exception — the underlying `StopAsyncIteration` behavior is
 authoritative. Synchronous `Items` retain their ordinary iterable semantics.
 
-## 6. Async execution and backpressure (shipped)
+## 6. Async execution and backpressure
 
 > **Partial.** Reorder-buffer indexing, `ordered=False` fix, cancellation/cleanup →
 > [execution-semantics.md §6](gameplans/execution-semantics.md#6-async-execution-and-backpressure).
@@ -297,7 +301,7 @@ and preserves legitimate `None` results through the `MISSING` sentinel; eager
 materialization is by design, with the streaming variants above as the bounded
 alternative.
 
-## 7. Timeout (shipped)
+## 7. Timeout
 
 > **Partial.** `idle`/`item` modes + `on_timeout` policy →
 > [execution-semantics.md §7](gameplans/execution-semantics.md#7-timeout).
@@ -307,7 +311,7 @@ Lifetime (`total`) timeout ships for both sync and async through `TimeoutIterato
 blocked read cannot overrun the deadline; async `timeout=0` means "no timeout" (matching
 sync). Full async `anext` cancellation remains partial.
 
-## 8. Union (shipped)
+## 8. Union
 
 > **Partial.** The user-facing concurrent `merge` operator →
 > [execution-semantics.md §8](gameplans/execution-semantics.md#8-union-and-merge).
@@ -325,7 +329,7 @@ The internal `async_merge` primitive (`riko/bado/itertools.py`) also ships — b
 arrival-order — but has no production caller since the collection classes were deleted.
 The user-facing `merge` operator is not yet built.
 
-## 9. Exit codes (shipped)
+## 9. Exit codes
 
 > **Partial.** The `RunStatus` enum + formal 4-code scheme are planned (no gameplan
 > yet).
@@ -333,7 +337,7 @@ The user-facing `merge` operator is not yet built.
 The CLI returns process exit codes (`riko/cli/manage.py`). The `RunStatus` enum and the
 formal 4-code completed/failed/usage/partial scheme are not yet implemented.
 
-## Logging (shipped)
+## Logging
 
 riko has one pygogo configuration: `Gogo("riko")` in `riko/base/_logging.py`, with both
 its low and high handlers on stderr. Each module takes `get_logger(__name__)`, a
@@ -343,7 +347,7 @@ parent's level. `set_log_level` is the one knob; the default WARNING is applied 
 `manage -v`/`-vv`/`-q` map to INFO/DEBUG/ERROR through `resolve_log_level` in
 `riko/cli/_logging.py`, which also holds the `manage` uncaught-exception hook.
 
-## 13. Filter semantics (shipped)
+## 13. Filter semantics
 
 > **Partial.** Drop-policy / disposition semantics →
 > [execution-semantics.md §13](gameplans/execution-semantics.md#13-filter-semantics).
@@ -352,7 +356,7 @@ parent's level. `set_log_level` is the one knob; the default WARNING is applied 
 rule's `op` is validated once at prep; missing operands are then treated as `None` and
 the comparison is skipped. Drop-policy and disposition semantics are absent.
 
-## 14. Sort keys and feed dates (shipped)
+## 14. Sort keys and feed dates
 
 `sort` builds its key with `build_sort_key` (`riko/modules/_sortutils.py`): a
 `(present, value)` pair whose `value` comes from `def_itemgetter`. An item lacking the
@@ -425,7 +429,7 @@ Without `lxml` (the `perf` extra), `xml2etree` parses XML with the standard-libr
 parser and HTML with `html5lib`, and the module's
 `etree`/`html`/`html5parser`/`XML_PARSER` names are `None`.
 
-## 23. AnyIO runtime (shipped)
+## 23. AnyIO runtime
 
 > **Partial.** Protocol adapters + the `asyncioreactor` escape hatch →
 > [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md).
@@ -442,7 +446,7 @@ adapter concern, not a core-runtime concern. That adapter design (asyncio-native
 libraries; the Twisted `asyncioreactor` escape hatch for server roles) is roadmap, in
 ROADMAP §23.
 
-## 24. Module discovery (shipped)
+## 24. Module discovery
 
 Module discovery is the derived catalog. `list_modules()` / `list_module_metadata()`
 (defined in `riko/modules/_metadata.py`, re-exported from the stable `riko` surface;
@@ -454,7 +458,7 @@ as a `frozenset`, `pollable`); subtype is derived (see `get_module_subtypes` in
 `gen_registry_catalog`, so extension modules are discoverable too. Unqualified names are
 reserved for built-ins; dotted namespaces for extensions.
 
-**Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
+**Typed discovery.** `list_modules(*, type, subtype, category)` and
 `describe_module(name) -> ModuleDefinition | None` (both in `riko/modules/_metadata.py`,
 both on the stable `riko` surface) give filtered runtime truth.
 **The three filter axes are all lowercase `Literal` strings, not enums** —
@@ -489,14 +493,14 @@ raise). Regenerate with `manage codegen --names` (drift guard
 module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider`
 / `get_module_provider` in `riko/types/modules.py`: the first dotted segment,
 `BUILTIN_PROVIDER` = `"riko"` when unqualified). `NameEntry` (`riko/ext/codegen.py`)
-derives `provider`/`class_name`/ `member`/`alias` from its name and category: built-ins
+derives `provider`/`class_name`/`member`/`alias` from its name and category: built-ins
 group by category into the bucket classes; a provider's modules form one class per
 provider whose members drop the prefix (`Example.LOOKUP`), and the flat `Modules` alias
 keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`). Provider classes come
 from the plugin's own codegen run, never riko's `_names.py`; `list_modules(provider=)`
 filters by provider.
 
-## Feed link discovery (shipped)
+## Feed link discovery
 
 `riko/rss/discovery.py` finds the feeds a page advertises in its `LINK` tags.
 `RSSLinkParser` accepts a link whose `type` equals a link type or ends with `/` plus one
@@ -508,7 +512,7 @@ declaration order (RSS, Atom, RDF, JSON Feed, `text/xml`, `xml`). A given `link_
 relative hrefs resolve against it. `feedautodiscovery` exposes this as its `link_type`
 conf key.
 
-## Module registry & pipe resolution (P8, shipped)
+## Module registry & pipe resolution
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free**
 layers sharing one overloaded `require(name, is_async)` contract
@@ -603,9 +607,7 @@ restores the module, target, and workflow-store registrations on exit; it replac
 three `reset_*` functions and, like `warnings.catch_warnings`, is not thread-safe) in
 each group, all on `riko.ext` (grouped in `riko/ext/modules.py`, `riko/ext/targets.py`,
 and `riko/ext/workflows.py`). P9A discoverability (generated `Modules` tree,
-`list_modules`/`describe_module`) shipped — see §24 above. Remaining P9 (non-P9A): the
-installed-env aggregate `riko.generated.Modules` + `.pyi` stubs →
-[module-enums.md](gameplans/module-enums.md).
+`list_modules`/`describe_module`) shipped — see §24 above.
 
 **Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `is_async`
 (`riko/modules/_decorators.py::_resolve_is_async`) — from an `async def` or the
@@ -622,7 +624,7 @@ no-argument `cls.__new__(cls)` (pickle/copy) still returns an instance. Per-subc
 `__new__` overloads type the bare form as the wrapper and the called form as the
 decorator instance.
 
-**Fluent surface (P9, partial — shipped):** value-taking chaining — `pipeline | "name"`,
+**Fluent surface:** value-taking chaining — `pipeline | "name"`,
 `pipeline | other_pipeline` (associative composition), `items | Pipeline(...)`, and
 `.pipe()` — plus the `ModuleName` `StrEnum` base (`riko/types/_enums.py`) and
 `normalize_module_name` (`riko/definitions/_module_definition.py`); a name may be a
@@ -632,7 +634,7 @@ implementations take `ModuleNameLike`, so registry errors carry the plain string
 generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER`
 resolves identically to `pipeline.filter()`; see §24.
 
-## Workflow graph index (shipped)
+## Workflow graph index
 
 `Workflow.index` interprets a `Workflow`'s edges into one immutable `WorkflowIndex`
 (`riko/types/_workflow.py`). Edge-level `edges`/`incoming`/`outgoing` keep full port
@@ -663,7 +665,7 @@ executions read the same index instead of rescanning edges. Structure pinned by
 > concepts never move onto it. See
 > [extensibility § E3.11](gameplans/extensibility.md#e311-reuse-of-the-shipped-graph-index).
 
-## Canonical value encoder (R2A, shipped)
+## Canonical value encoder
 
 The single deterministic value-freezing/encoding system that durable checkpoint
 identity, per-item generation, idempotency, and semantic fingerprints share — no
@@ -705,7 +707,7 @@ contracts. `Context(identity_encoder=...)` backend selection is deferred (R3-adj
 the stdlib encoder is the reference. Tests: `tests/internal/test_values.py` (golden
 canonical bytes + golden digests + rule matrix) plus module doctests.
 
-## `Workflow` v2 model (R4A.1, shipped)
+## `Workflow` v2 model
 
 The structural v2 vocabulary (no execution runtime yet — R4B executes it). Pure
 contracts live in `riko/types/_workflow.py` (`Endpoint`, the frozen `PortEdge` base with
@@ -822,7 +824,7 @@ emits the byte-stable `WorkflowDocument`, so `Workflow.parse(flow.serialize()) =
 `Workflow(nodes: 3, edges: 2; outputs: default)` otherwise, `Workflow(empty)`;
 `Pipeline(...)` appends `seed`/`context` when present).
 
-## Workflow v2 normalization — `normalize_workflow` (R4A.2, shipped)
+## Workflow v2 normalization — `normalize_workflow`
 
 The single authoring-sugar normalization boundary: `RawWorkflow` in, one `Workflow` out,
 so no other subsystem reinterprets shorthand. Lives in `riko/definitions/_normalize.py`
@@ -860,7 +862,7 @@ key set from each node/edge/ endpoint's `fields()` and fails if authoring omits 
 drop out of the authoring surface. Tests: `tests/public/test_workflow.py` plus module
 doctests.
 
-## Workflow v2 validation — `Workflow.validate()` (R4A.3, shipped)
+## Workflow v2 validation — `Workflow.validate()`
 
 Strict structural validation is a **method on the model**, not a standalone function:
 `Workflow` owns `validate()` (raises `InvalidPipelineError` on the first violation) and
@@ -889,7 +891,7 @@ schemas yet; they land with that metadata. Tests: `tests/public/test_workflow.py
 (builds `Workflow` graphs directly and asserts `flow.validate()`/`is_valid`) plus
 module doctests.
 
-## Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)
+## Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse`
 
 Deterministic byte-stable canonical serialization of a `Workflow` and its round-tripping
 parser. Lives in `riko/definitions/_serialize.py`
@@ -969,7 +971,7 @@ conversion path, now reachable from the command line through `build-workflow`. T
 `COMPILE` is now `compile_workflow` alone, and `extract_dependencies` (released name)
 has no replacement beyond reading `Workflow` node names.
 
-## Workflow v1→v2 migration — `parse_pipedef` (R4A.4, shipped)
+## Workflow v1→v2 migration — `parse_pipedef`
 
 A one-shot offline conversion of a `PipeDef` (`modules` plus `src`/`tgt` `wires`) into
 `Workflow`. Lives in `riko/definitions/_migrate.py` (`parse_pipedef`, which returns a
@@ -1014,7 +1016,7 @@ Shared plumbing is reused, not reinvented: the legacy
 the module and edge splits use `partition` from `riko/base/_iterutils`. Tests:
 `tests/public/test_workflow.py` plus module doctests.
 
-## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
+## Subscription lifecycle — `subscribe` / `publish`
 
 > **Partial.** The shipped compatibility behavior and the revised MVP/F5 staging
 boundary are documented in
@@ -1075,7 +1077,7 @@ closes, so cleanup no longer depends on a user drain. The strict xfail
 `TestPipelineSubscriptions::test_idle_drain_returns_promptly` in
 `tests/public/test_pipeline.py` marks the gap for the replacement.
 
-## 25. Conversion — export converters (shipped)
+## 25. Conversion — export converters
 
 > **Partial.** Batch/dataframe path (Arrow/Polars/SQL) →
 > [database-transforms.md §25](gameplans/database-transforms.md#25-conversion-and-dataframe-integration).
@@ -1098,7 +1100,7 @@ at a destination. Meza owns conversion work. The Batch/dataframe path
 (Arrow/Narwhals/Polars/SQL execution representations selected by capability) is
 deferred.
 
-## Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, shipped)
+## Private execution runtime — `SyncExecution` / `AsyncExecution`
 
 > **Shipped.** The private execution package, its lifetime primitives, execution-local
 > resource acquisition, the `EventSink` transport, canonical-workflow preparation
@@ -1111,15 +1113,17 @@ deferred.
 > native-vs-adapter from the pre-resolved callables
 > (`PreparedNode.sync_interface`/`async_interface`, each `None` when the mode has no
 > native pipe, in which case the execution adapts the other) without re-inspecting the
-> registry. Non-default output ports fail closed (a reachable non-`out` source port or a
-> selected non-`out` output raises), and a multi-output splitter node is refused when
-> the plan is built, by its declared module type, before any node runs. Sync-under-async
-> and async-under-sync work are both lazy: a sync-only node under async execution runs
-> on a worker thread, reads its async inputs from there, and hands back one item per
-> `__anext__`; and a loop `embed` that exists only as sync or only as async is adapted
-> at execution time into a metadata-preserving wrapper matching the host. The fluent
-> authoring surface (`Pipeline.from_module(name, conf=…)`, `.pipe()`, attribute
-> chaining, `|`, and `items | Pipeline(…)` source seeding) ships now too.
+> registry. An edge or selected output may read only a port its node produces (an
+> ordinary module produces `out`; a splitter produces one port per split, `out` through
+> `out:N` where N is one less than its `splits` count); any other port raises
+> `InvalidPipelineError` when the plan is built, and splitter nodes run through
+> port-keyed dispatch. Sync-under-async and async-under-sync work are both lazy: a
+> sync-only node under async execution runs on a worker thread, reads its async inputs
+> from there, and hands back one item per `__anext__`; and a loop `embed` that exists
+> only as sync or only as async is adapted at execution time into a metadata-preserving
+> wrapper matching the host. The fluent authoring surface
+> (`Pipeline.from_module(name, conf=…)`, `.pipe()`, attribute chaining, `|`, and
+> `items | Pipeline(…)` source seeding) ships now too.
 > `Pipeline.with_execution(...)` stores a frozen `ExecutionSettings`
 > (`riko/definitions/_settings.py`; field checks are `require_*` guards attached with
 > `validator_from_require` — `ordered` is `validator_from_require(require_instance,
@@ -1163,7 +1167,7 @@ the caller's scope. The ordered (default) run path holds no task group across a 
 (`riko/bado/itertools.py`), and a bare `break` out of it still cancels the caller
 (tripwire
 `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact[asyncio-unordered]`).
-Task hosting for fan-out, this path included, belongs to R7.C.
+Task hosting for fan-out, this path included, belongs to R7.fan-in.
 `riko/execution/_adapt.py` holds what the two executions share across the sync/async
 boundary: `to_sync(call, stream)` (an async stream re-exposed as a lazy sync iterator;
 the sync execution's portal drain and the worker-side upstream reader are the same
@@ -1198,8 +1202,10 @@ async stream), and the `adapt_embed`/`async_adapt_embed` sync/async loop-embed w
   (`riko/base/_iterutils.py`): with an unsuppressed primary error (or the exception a
   native context manager replaced it with), each cleanup failure is noted on that
   primary and logged, and the primary is raised; with no primary, a lone failure is
-  raised bare and several as an `ExceptionGroup`. A native replacement with no cleanup
-  failures propagates bare.
+  raised bare and several as an `ExceptionGroup`. A `GeneratorExit` from closing a run
+  early counts as no primary, so that close raises the failure. A native replacement
+  with no cleanup failures propagates bare. At the `with pipeline.open(...)` boundary a
+  failed close replaces the block's own error, as plain Python context managers do.
 
 **Resource acquisition.** `acquire` / `aacquire` resolve a `Resource` at most once
 (single-flight, keyed by resource identity); a repeat returns the first value or replays
@@ -1358,8 +1364,11 @@ run:
   another async-only node reads that node's async stream directly on the portal loop
   (`_AsyncNodeOutput`); the thread demand still counts one node thread for each such
   node (the over-count for adjacent holders that are both sync or both async is
-  deferred). A reachable non-`out` source port or a selected non-`out` output fails
-  closed with `InvalidPipelineError` (executable port-keyed delivery is R7).
+  deferred). Delivery is port-keyed: an edge or selected output that reads a port its
+  node does not produce (for an ordinary module, anything but `out`) raises
+  `InvalidPipelineError` when the plan is built (rows `nondefault-source-output-port` /
+  `nondefault-selected-output-port` in
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects`).
 - `AsyncExecution.arun(plan, output="default")` is the async counterpart, returning an
   `AsyncStream`. Native async nodes chain natively; an adapted node (sync-only pipe
   under async execution) runs off the event loop through the bridge and nothing is
@@ -1426,7 +1435,7 @@ run:
   (`with SyncExecution() as e: yield from e.run(plan, seed=seed)` / the
   `async with AsyncExecution()` analogue), so early close, exhaustion, or failure
   unwinds the input streams and the exit stack.
-- **Per-run seeds and `Pipeline.open()` (R4C, 2026-10-24).** `pipeline(seed=None, /)`
+- **Per-run seeds and `Pipeline.open()`.** `pipeline(seed=None, /)`
   and `seed | pipeline` return a private `_PipelineStream` (`riko/runtime/_run.py`)
   behind the public `riko.types.PipelineStream[T]` protocol: single-use, sync- *and*
   async-iterable, and its own iterator in both modes, so `for x in pipeline(items)`
@@ -1475,7 +1484,7 @@ run:
   `Pipeline` is safe but releases the run only when the abandoned generator is garbage
   collected and warns with a `ResourceWarning`; `async with pipeline.open()` is the
   prompt-release form. Under `ordered=False` a concurrent async run still cancels the
-  caller on a bare `break` until R7.C (both rows of
+  caller on a bare `break` until R7.fan-in (both rows of
   `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`;
   the `unordered` row is the strict-xfail tripwire).
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
@@ -1675,7 +1684,7 @@ the embed is no longer re-prepared per parent (2026-10-20; conf-parse memoizatio
 `run_item`/`arun_item` positionally when the embed is sync or async like the loop
 (`host_is_async`), and keeps the keyword-bound call otherwise.
 
-## Callable nodes — `Pipeline.map` (R4C, shipped)
+## Callable nodes — `Pipeline.map`
 
 `PipelineDefinition.map(fn, *, resources, version, identity, **kwargs)` appends a
 `CallableNode` (`riko/definitions/_nodes.py`): `fn` (compared by identity), `version`,
@@ -1743,10 +1752,10 @@ Regressions: `tests/public/test_callable_nodes.py::TestPipelineMap`,
 `tests/public/test_workflow_documents.py::TestWorkflowParse`, `::TestNormalizeWorkflow`,
 and `::TestSerialize`.
 
-## Per-item provenance — `_ItemEnvelope` (R5A, in progress)
+## Per-item provenance — `_ItemEnvelope`
 
-Implemented in the uncommitted phase-14 tree (2026-11-12); owner
-[implementation-sequence.md § R5A](gameplans/implementation-sequence.md#r5a--feedresult-metadata-and-private-per-item-provenance).
+Owner:
+[implementation-sequence.md § R5A](gameplans/implementation-sequence.md#r5a-per-item-results-and-provenance).
 
 - **Envelope.** `_ItemEnvelope[T]` (`riko/types/_feed.py`) is a generic `NamedTuple` of
   `value`, `item_key` (`MISSING` until R6 key configuration), `generation`, and
@@ -1782,7 +1791,8 @@ Implemented in the uncommitted phase-14 tree (2026-11-12); owner
   coming out (`_TableProvenance`), first-in-first-out when one object is read more than
   once, and a miss derives from the last input. A processor or callable node fed a
   secondary input stream runs whole-stream too, so the table applies and its declared
-  `preserve`/`derive` mode does not (owned by S1/R10 beside `join`; tripwire
+  `preserve`/`derive` mode does not (owned by feed-native-streaming.lazy-operators/R10
+  beside `join`; tripwire
   `tests/internal/test_execution.py::TestBuildEnvelopeStream::test_keeps_a_fan_in_node_s_declared_identity`).
   Riko's operators declare `normalize_item` (`NormalizesItems`), applied before tracking
   so dicts and scalars keep identity; a node's mode comes from `DeclaresIdentity`
@@ -1804,7 +1814,8 @@ Implemented in the uncommitted phase-14 tree (2026-11-12); owner
   `version`, `identity`, or `fn`'s keyword-capable first parameter
   (`gen_positional_names`).
 - **Overhead vs v0.77 tree (20k items):** processor chains and roots 1.00–1.10×, derive
-  (`tokenizer`) about 1.13–1.15×, pass-through operators alone about 1.24× until S1.
+  (`tokenizer`) about 1.13–1.15×, pass-through operators alone about 1.24× until
+  feed-native-streaming.lazy-operators.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

@@ -1,0 +1,42 @@
+# slices
+
+[[slices]]
+id = "backend-spikes"
+
+[[slices]]
+id = "database-targets"
+blocked_by = ["database-transforms.backend-spikes"]
+
+[[slices]]
+id = "batch-streaming"
+blocked_by = ["database-transforms.database-targets"]
+
+[[slices]]
+id = "pushdown"
+blocked_by = ["database-transforms.database-targets"]
+
+[[slices]]
+id = "sql-write"
+blocked_by = ["database-transforms.database-targets"]
+
+[[slices]]
+id = "schema-drift"
+blocked_by = ["database-transforms.sql-write"]
+
+[[slices]]
+id = "dbt-runner-protocol"
+
+[[slices]]
+id = "dbt-core-adapter"
+blocked_by = ["database-transforms.dbt-runner-protocol"]
+
+[[slices]]
+id = "dbt-orchestration"
+blocked_by = ["database-transforms.dbt-core-adapter"]
+
+[[slices]]
+id = "dbt-ibis"
+blocked_by = [
+  "database-transforms.dbt-core-adapter",
+  "database-transforms.backend-spikes",
+]

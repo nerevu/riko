@@ -1,0 +1,76 @@
+# slices
+
+[[slices]]
+id = "client-spikes"
+
+[[slices]]
+id = "capability-catalog"
+blocked_by = ["mcp.client-spikes"]
+
+[[slices]]
+id = "execution-resources"
+blocked_by = ["mcp.client-spikes"]
+
+[[slices]]
+id = "mcp-discovery"
+blocked_by = ["mcp.capability-catalog", "mcp.execution-resources"]
+
+[[slices]]
+id = "apis-guru-provider"
+blocked_by = ["mcp.capability-catalog"]
+
+[[slices]]
+id = "openapi-provider"
+blocked_by = ["mcp.capability-catalog"]
+
+[[slices]]
+id = "openapi-executor"
+blocked_by = ["mcp.openapi-provider", "mcp.execution-resources"]
+
+[[slices]]
+id = "plan-validation"
+blocked_by = [
+  "mcp.capability-catalog",
+  "mcp.mcp-discovery",
+  "mcp.openapi-executor",
+]
+
+[[slices]]
+id = "result-artifacts"
+blocked_by = ["mcp.plan-validation"]
+
+[[slices]]
+id = "parallel-execution"
+blocked_by = ["mcp.plan-validation", "R6"]
+
+[[slices]]
+id = "streamable-http"
+blocked_by = ["mcp.execution-resources"]
+
+[[slices]]
+id = "authenticated-integrations"
+blocked_by = ["mcp.streamable-http", "R11.resource-seams"]
+
+[[slices]]
+id = "site-integration"
+blocked_by = ["mcp.mcp-discovery"]
+
+[[slices]]
+id = "capability-index"
+blocked_by = ["mcp.capability-catalog"]
+
+[[slices]]
+id = "security-fixtures"
+blocked_by = ["mcp.plan-validation"]
+
+[[slices]]
+id = "sandboxed-computation"
+blocked_by = ["mcp.plan-validation"]
+
+[[slices]]
+id = "prompt-support"
+blocked_by = ["mcp.mcp-discovery"]
+
+[[slices]]
+id = "mcp-server"
+blocked_by = ["mcp.plan-validation", "mcp.result-artifacts"]

@@ -26,8 +26,8 @@ from ._import_graph import (
     InvalidArchitectureError,
     ModuleInfo,
     collect_imports,
+    gen_import_targets,
     load_modules,
-    resolve_import_targets,
 )
 
 if TYPE_CHECKING:
@@ -229,7 +229,7 @@ def load_architecture_report(
         is_init_source = _is_init_module(module)
 
         for ref in collect_imports(module):
-            for target in resolve_import_targets(ref, module_names):
+            for target in gen_import_targets(ref, module_names):
                 if (target_layer := _layer_for(target)) is None:
                     continue
 

@@ -1,0 +1,62 @@
+# slices
+
+[[slices]]
+id = "command-inventory"
+
+[[slices]]
+id = "click-registry"
+
+[[slices]]
+id = "config-context"
+
+[[slices]]
+id = "output-contract"
+
+[[slices]]
+id = "core-commands"
+blocked_by = ["cli.click-registry", "cli.config-context", "cli.output-contract"]
+
+[[slices]]
+id = "mcp-commands"
+blocked_by = [
+  "cli.click-registry",
+  "cli.output-contract",
+  "mcp.capability-catalog",
+  "mcp.mcp-discovery",
+]
+
+[[slices]]
+id = "ai-commands"
+blocked_by = [
+  "cli.click-registry",
+  "cli.output-contract",
+  "ai-inference.infer",
+  "ai-inference.summarization",
+  "ai-inference.research",
+  "ai-inference.task-decomposition",
+  "ai-inference.evaluations",
+]
+
+[[slices]]
+id = "chat-adapter"
+blocked_by = ["cli.output-contract"]
+
+[[slices]]
+id = "site-commands"
+blocked_by = ["cli.click-registry"]
+
+[[slices]]
+id = "command-shell"
+blocked_by = ["cli.click-registry"]
+
+[[slices]]
+id = "command-docs"
+blocked_by = ["cli.click-registry"]
+
+[[slices]]
+id = "terminal-ui"
+blocked_by = ["cli.output-contract", "cli.core-commands"]
+
+[[slices]]
+id = "operations-commands"
+blocked_by = ["cli.click-registry", "cli.output-contract", "R11A"]

@@ -273,8 +273,12 @@ CODEGEN_SELECTORS = [
     pytest.param(["--names", "--api"], ["names", "api"], id="names-api"),
     pytest.param(["--tests", "--verbs"], ["tests", "verbs"], id="tests-verbs"),
     pytest.param(["--user-agents"], ["user-agents"], id="user-agents"),
+    pytest.param(["--planning"], ["planning"], id="planning"),
+    pytest.param(["--progress"], ["progress"], id="progress"),
     pytest.param(
-        ["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"], id="all"
+        ["--all"],
+        ["config", "names", "api", "tests", "verbs", "user-agents", "planning"],
+        id="all",
     ),
 ]
 
@@ -291,7 +295,7 @@ class TestCodegenCommand:
             _codegen,
             "_CODEGEN",
             {
-                name: (_record(calls, name), name, f"{name} failed")
+                name: (_record(calls, name), name, f"{name} failed", name)
                 for name in _codegen._CODEGEN
             },
         )
@@ -1014,6 +1018,37 @@ class TestDocsTodos:
         )
         offenders = list(_docs._gen_todo_offenders())
         assert offenders == ["README.rst:1", "docs/FAQ.rst:3"]
+
+
+_EXIT = "\n\n**Exit:**\n\n"
+PHASE_CLOSURES = [
+    pytest.param(
+        f"### R90: Done{_EXIT}- **ADD:** a\n- **MIGRATE:** b\n- **DELETE:** c\n",
+        [],
+        id="closed",
+    ),
+    pytest.param(
+        f"### R90: Open{_EXIT}- **DELETE:** c\n- **ADD:** a\n", ["R90"], id="unordered"
+    ),
+    pytest.param("### R90 — Old\n\nNo exit.\n", ["no phase heading found"], id="none"),
+]
+
+
+class TestPhaseClosure:
+    """The sequence lint over each planning phase's exit items."""
+
+    @pytest.mark.parametrize(("text", "expected"), PHASE_CLOSURES)
+    def test_offenders_name_each_open_phase(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        text: str,
+        expected: list[str],
+    ) -> None:
+        path = tmp_path / "sequence.md"
+        path.write_text(text, encoding="utf-8")
+        monkeypatch.setattr(_docs, "SEQUENCE_PATH", path)
+        assert _docs._phase_closure_offenders() == expected
 
 
 TERM_PATTERNS = [

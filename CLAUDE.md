@@ -10,8 +10,8 @@ in `_docs/`:
 - `_docs/INTERNALS.md` — codegen, discovery/export surfaces, import tooling, tooling
   gotchas
 - `_docs/DOCUMENTATION_STANDARD.md` — **read before writing docstrings/doctests**
-- `_docs/PHASE_CHECKLISTS.md` — live status (start here); `_docs/ROADMAP.md` —
-  authority/router index
+- `_docs/PHASE_CHECKLISTS.md` — live status (start here; generated from
+  `_docs/gameplans/*.toml`); `_docs/ROADMAP.md` — authority/router index
 
 ## Key Paths
 
@@ -69,6 +69,10 @@ Important concrete locations:
   `riko/exceptions.py`) + `_api_surface.py`
 - generated config objects: `riko/coercion/_configs.py`
 - generated discovery/id files: `riko/modules/_names.py` + `riko/types/_module_ids.py`
+- planning data: the model `load_planning`/`PlanningData` in `riko/cli/_planning.py`
+  (TOML facts joined to Markdown prose), the `planning-*` block renderers and the
+  `--json` export in `_gen_planning.py`, the forward-track adapter in
+  `_gen_forward_track.py`, the shared marked-block helper in `_gen_blocks.py`
 
 ## Dependency Direction
 
@@ -99,12 +103,13 @@ split the type so the higher layer extends it.
 | `_docs/INTERNALS.md` | codegen/discovery/import-lint/tooling internals |
 | `_docs/gameplans/dependency-layers.md` | authoritative human-readable package DAG + executable import-policy mapping |
 | `_docs/RUNTIME_CONTRACT.md` | **stable** shipped runtime guarantees; feature/end-state topics live in gameplans |
-| `_docs/IMPLEMENTED.md` | as-built companion + single source for build completeness |
-| `_docs/PHASE_CHECKLISTS.md` | authoritative P-track status |
+| `_docs/IMPLEMENTED.md` | as-built companion: what ships and where it lives; landing status lives in the planning TOML |
+| `_docs/PHASE_CHECKLISTS.md` | generated status tables plus done-phase summaries |
 | `_docs/MILESTONES.md` | P-track history companion, not forward implementation order |
 | `_docs/ROADMAP.md` | routing-only authority index for shipped contracts, active owners, status/history, and forward sequence |
 | `_docs/gameplans/implementation-sequence.md` | authoritative forward dependency order among owner contracts |
 | `_docs/gameplans/` | active target/implementation plans, one semantic owner per concept |
+| `_docs/gameplans/*.toml` | planning-data source (dates, edges, lanes, decisions) beside each owning gameplan; status, order, and next-up are derived |
 | `_docs/research/` | prior art/rationale; context only, never authoritative |
 | `_docs/archive/` | superseded historical plans; history only |
 | `_docs/DOCUMENTATION_STANDARD.md` | authoritative docstring/doctest/`__init__.py` standard |
@@ -339,12 +344,15 @@ a `normalize`; substituting a default the caller supplies or chooses
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--api`, `--tests`, `--verbs`, `--user-agents` are additive; `--all`
-  runs all generators.
+  `--names`, `--api`, `--tests`, `--verbs`, `--user-agents`, `--planning` are
+  additive; `--all`
+  runs all generators. `--progress` writes the git-ignored progress page and is
+  never part of `--all`.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
   `riko/modules/_names.py`, `riko/types/_module_ids.py`, `riko/base/_user_agents.py`,
   the marked name blocks in `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md`
-  and `CONTRIBUTING.rst`, and
+  and `CONTRIBUTING.rst`, the `<!-- planning-* -->` blocks (sourced from
+  `_docs/gameplans/*.toml`; edit the TOML, run `manage codegen --planning`), and
   the `tests/<tier>/__init__.py` tier indexes all have canonical sources and drift
   guards. The `workflows`/`pyworkflows` fixture trees are not generated; they are
   `WorkflowDocument`s plus hand-maintained typed probes.

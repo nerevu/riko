@@ -256,7 +256,7 @@ At minimum:
 
 ---
 
-## Pending phase exit-test ownership
+## Phase exit-test ownership
 
 Detailed semantic tests live with owning gameplans. P-track categories remain
 historical/status buckets:

@@ -87,7 +87,8 @@ hits an unrelated use of the same text.
 - `_docs/DOCUMENTATION_STANDARD.md` — Reserved terms, no internal jargon,
   doctest rules, docstring rules.
 - `_docs/gameplans/implementation-sequence.md` and the topical gameplan for
-  the touched area — to tell an owned gap from a defect.
+  the touched area, with their planning TOMLs (`_docs/gameplans/*.toml`: slice
+  dates, edges, decisions) — to tell an owned gap from a defect.
 
 Settled exceptions are **not findings**: identifiers the Reserved terms rows
 say are kept (callable-sense "pipe",

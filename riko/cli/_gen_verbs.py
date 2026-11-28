@@ -5,19 +5,25 @@ from __future__ import annotations
 
 from functools import partial
 from itertools import chain
-from re import DOTALL, Match, Pattern, compile
-from typing import TYPE_CHECKING, Literal
+from re import compile
+from typing import TYPE_CHECKING
 
 from riko.base._funcutils import compose
 from riko.base._paths import ROOT_DIR
 from riko.base._strutils import get_codegen_note, wrap_words
 from riko.base._verbs import VERB_PAIRS, VERBS
 
+from ._gen_blocks import (
+    TableFormat,
+    build_block_pattern,
+    build_md_table,
+    generate_blocks,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
     from pathlib import Path
-
-type TableFormat = Literal["md", "rst"]
+    from re import Pattern
 
 _CODE = compile(r"`([^`]+)`")
 _NBSP = "\x00"
@@ -30,25 +36,14 @@ _RST_WIDTHS: dict[str, tuple[int, ...]] = {
     "verb-pairs": (27, 88),
 }
 
-_BEGINS: dict[TableFormat, str] = {
-    "md": "<!-- {key}: {note} -->\n",
-    "rst": ".. begin {key}: {note}\n",
-}
-
-_KEY = rf"(?P<key>{'|'.join(sorted(_RST_WIDTHS, key=len, reverse=True))})"
-
 VERB_DOCS: dict[Path, tuple[TableFormat, frozenset[str]]] = {
     ROOT_DIR / "CONTRIBUTING.rst": ("rst", frozenset({"verbs", "verb-pairs"})),
     ROOT_DIR / "CLAUDE.md": ("md", frozenset({"verb-rules", "verb-pairs"})),
 }
 
 VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
-    "md": compile(
-        rf"<!-- {_KEY}(?:: [^>\n]*)? -->\n.*?(?P<end><!-- /(?P=key) -->)", DOTALL
-    ),
-    "rst": compile(
-        rf"\.\. begin {_KEY}(?:: [^\n]*)?\n.*?(?P<end>\.\. end (?P=key))", DOTALL
-    ),
+    "md": build_block_pattern(_RST_WIDTHS, "md"),
+    "rst": build_block_pattern(_RST_WIDTHS, "rst"),
 }
 
 _word_lens = compose(partial(map, len), str.split)
@@ -84,12 +79,6 @@ def _get_table(key: str) -> Sequence[Sequence[str]]:
     return table
 
 
-def _render_md(table: Sequence[Sequence[str]]) -> str:
-    header, *body = table
-    lines = [header, ["---"] * len(header), *body]
-    return "\n".join(map(_pipe_cap, lines))
-
-
 def __gen_parts(
     wrapped_pairs: Iterable[tuple[Sequence[str], int]], i: int
 ) -> Iterator[str]:
@@ -97,13 +86,19 @@ def __gen_parts(
         yield (lines[i] if i < len(lines) else "").replace(_NBSP, " ").ljust(width)
 
 
-def _render_rst(table: Sequence[Sequence[str]], caps: Sequence[int]) -> str:
+def _render_md(key: str) -> str:
+    return f"{build_md_table(_get_table(key))}\n"
+
+
+def _render_rst(key: str) -> str:
+    table = _get_table(key)
     cells = [[_sub(cell).replace(_OLD, _NEW) for cell in row] for row in table]
     cols = zip(*cells, strict=True)
     word_lens = (max(chain.from_iterable(map(_word_lens, col))) for col in cols)
+    caps = _RST_WIDTHS[key]
     widths = [max(cap, size) for cap, size in zip(caps, word_lens, strict=True)]
     _rule = lambda char: _cap((char * (width + 2) for width in widths), "+")
-    lines = [_rule("-")]
+    lines = ["", _rule("-")]
 
     for index, row in enumerate(cells):
         pairs = zip(row, widths, strict=True)
@@ -112,6 +107,7 @@ def _render_rst(table: Sequence[Sequence[str]], caps: Sequence[int]) -> str:
         lines.extend(_pipe_cap(_gen_parts(i)) for i in range(max(map(len, wrapped))))
         lines.append(_rule("=" if index == 0 else "-"))
 
+    lines.extend(["", ""])
     return "\n".join(lines)
 
 
@@ -135,19 +131,8 @@ def generate_verb_tables(text: str, fmt: TableFormat) -> str:
         | Mistaken pair | Test |
 
     """
-
-    def _replace(match: Match[str]) -> str:
-        table = _get_table(key := match["key"])
-
-        if fmt == "md":
-            body = f"{_render_md(table)}\n"
-        else:
-            body = f"\n{_render_rst(table, _RST_WIDTHS[key])}\n\n"
-
-        begin = _BEGINS[fmt].format(key=key, note=_NOTE)
-        return f"{begin}{body}{match['end']}"
-
-    return VERB_PATTERNS[fmt].sub(_replace, text)
+    render = _render_md if fmt == "md" else _render_rst
+    return generate_blocks(text, VERB_PATTERNS[fmt], render, _NOTE, fmt)
 
 
 def main() -> int:

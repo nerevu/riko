@@ -1,0 +1,53 @@
+# slices
+
+[[slices]]
+id = "scenario-schema"
+
+[[slices]]
+id = "model-policies"
+blocked_by = ["agent-scenarios.scenario-schema", "ai-inference.model-profiles"]
+
+[[slices]]
+id = "tool-grants"
+blocked_by = [
+  "agent-scenarios.scenario-schema",
+  "mcp.capability-catalog",
+  "mcp.plan-validation",
+]
+
+[[slices]]
+id = "team-routing"
+blocked_by = [
+  "agent-scenarios.scenario-schema",
+  "agents.pubsub-branches",
+  "agents.iterative-loop",
+]
+
+[[slices]]
+id = "retrieval"
+blocked_by = ["agent-scenarios.scenario-schema", "R11.resource-seams"]
+
+[[slices]]
+id = "profiles"
+blocked_by = ["agent-scenarios.model-policies", "agent-scenarios.tool-grants"]
+
+[[slices]]
+id = "evaluation"
+blocked_by = ["agent-scenarios.scenario-schema"]
+
+[[slices]]
+id = "tool-call-evaluation"
+blocked_by = ["agent-scenarios.evaluation", "agent-scenarios.tool-grants"]
+
+[[slices]]
+id = "cli-adapter"
+blocked_by = [
+  "agent-scenarios.team-routing",
+  "agent-scenarios.evaluation",
+  "cli.click-registry",
+  "cli.output-contract",
+]
+
+[[slices]]
+id = "openapi-proposals"
+blocked_by = ["agent-scenarios.tool-grants", "mcp.openapi-provider"]

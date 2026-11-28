@@ -37,19 +37,21 @@ recorded here so the cutover session does not rediscover them:
   `SyncPipe.split`/`AsyncPipe.split`, `tests/public/test_collections.py::test_split`
   (since removed), and the two split fixtures (`pipe_QMrlL_FS3BGlpwryODY80A`,
   `pipe_zKJifuNS3BGLRQK_GsevXg`) are the only executable split paths, and they go with
-  the v1 surface. The v2 execution refuses a splitter node when its plan is built (by
-  the module's declared type, before any upstream runs). Do not bridge the gap with an
+  the v1 surface. Until port-keyed dispatch landed (`R7.ports`, 2026-11-14), the v2
+  execution refused a splitter node when its plan was built (by the module's declared
+  type, before any upstream ran). Do not bridge the gap with an
   eager positional cascade delivery in the v2 execution: that reimplements the
   whole-source copy R7 replaces with execution-owned bounded branches
   ([fanout-topology.md §7](fanout-topology.md#7-split-is-streaming-fan-out)). Done at
   step 2: the two split fixtures survive as `WorkflowDocument`s (workflow documents),
   and their functional expectations (7 items / first title
   `[Weight] More parents think their overweight…`; 6 items / first title
-  `Open researcher open course`) are strict-xfail acceptance tests in
+  `Open researcher open course`) are acceptance tests in
   `tests/functional/test_basics.py` (`test_first_item_title_prefix[split]`,
-  `test_first_item_field[simplemath]`) plus the strict-xfail probe-equivalence case in
-  `tests/internal/test_codegen.py`; R7 un-xfails them. GitHub issue #61 (v1 split
-  routing by traversal order) is closed as superseded by this cutover plus R7.
+  `test_first_item_field[simplemath]`) plus the probe-equivalence case in
+  `tests/internal/test_codegen.py`; `R7.ports` un-xfailed them. GitHub issue #61
+  (v1 split routing by traversal order) is closed as superseded by this cutover plus
+  R7.
 
 ## Step 0 — Gate
 
@@ -156,9 +158,9 @@ Blocks step 4.
   `compile_pipe_def`). `run-pipe` gained document execution (`-p flow.json`, or an
   example id resolving to `examples/pipelines/{pipeid}.json`), sync or async, alongside
   its unchanged script path. `benchmark` is ported off `SyncPipe`/`AsyncPipe`: rows
-  `sync_pipe`/ `async_pipe` (one `Pipeline` run per feed) and
+  `sync_pipe`/`async_pipe` (one `Pipeline` run per feed) and
   `sync_workflow`/`async_workflow` (one fan-in graph of every feed into `union`) replace
-  `sync_collection`/`par_sync_collection`/`async_collection`/ `async_pipe2`, with the
+  `sync_collection`/`par_sync_collection`/`async_collection`/`async_pipe2`, with the
   parallel row dropped until the execution takes a concurrency option. `build_pipe_def`
   is **deleted** in favour of `Workflow.parse` (its interim STABLE alias `parse_dag` was
   removed 2026-10-12), which expands the same `PipeDag` straight to a validated
@@ -189,7 +191,7 @@ file).
   kazeeki/`pipe_58a5…`/`pipe_8NMk…` probes and `examples/*.py` run on `Pipeline`. The
   same commit settled the workflow vocabulary (two tiers: the
   `RawWorkflow`/`RawNode`/`RawEdge`/`RawEndpoint` TypedDicts beneath the bare
-  `Workflow`/`Node`/ `Edge`/`Endpoint` attrs classes, with `WorkflowLike` accepting
+  `Workflow`/`Node`/`Edge`/`Endpoint` attrs classes, with `WorkflowLike` accepting
   either and `WorkflowDocument` naming the serialized form; graph names on STABLE) and
   the eight-verb table now in `CLAUDE.md` (`Workflow.parse`, `build-workflow`, …).
   `subscribe`/`publish`/`split`/`parallel` have no replacement yet (recorded in
