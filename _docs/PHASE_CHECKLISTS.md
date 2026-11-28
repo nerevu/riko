@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **4257 passed / 118 xfailed**. The user commits.
+Suite: **4270 passed / 118 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -102,8 +102,8 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule).
 | [R4C · Callable nodes](gameplans/implementation-sequence.md#r4c-callable-nodes) | Complete | 2026-11-03 | R4D, M1 (callable nodes) |
 | [R4D · Workflow input schemas](gameplans/implementation-sequence.md#r4d-workflow-input-schemas) | Complete | 2026-11-10 | R5A, M1 (workflow input schemas) |
 | [R5A · Per-item results and provenance](gameplans/implementation-sequence.md#r5a-per-item-results-and-provenance) | Complete | 2026-11-14 | R7 (the final provenance envelope), M1 (the per-item envelope), R5C, feed-native-streaming |
-| [R7 · Publish, subscribe, and split](gameplans/implementation-sequence.md#r7-publish-subscribe-and-split) | In progress |  | M1 (local pub/sub, split, and fan-in), before R4L (no execution code) |
-| [R4L · DotDict literal access](gameplans/implementation-sequence.md#r4l-dotdict-literal-access) | Planned |  | R4E (literal data access first), M2 |
+| [R7 · Publish, subscribe, and split](gameplans/implementation-sequence.md#r7-publish-subscribe-and-split) | In progress |  | M1 (local pub/sub, split, and fan-in), before R4L (no execution code), agents, connectors, before planning-data |
+| [R4L · DotDict literal access](gameplans/implementation-sequence.md#r4l-dotdict-literal-access) | Planned |  | R4E (literal data access first), M2, before planning-data |
 | [R4E · Module configuration contracts](gameplans/implementation-sequence.md#r4e-module-configuration-contracts) | Planned |  | before R5C (rescheduled ahead of M2), M2 |
 | [R5C · Write and action effects](gameplans/implementation-sequence.md#r5c-write-and-action-effects) | Planned |  | M2 (deletes `Sinks` before the announcement), P9, R6 (effects before durability), connectors |
 | [R2B · Semantic identity and version contract](gameplans/implementation-sequence.md#r2b-semantic-identity-and-version-contract) | Planned |  | R5B (cache keys use effective fingerprints), R6 (semantic identity and central idempotency) |

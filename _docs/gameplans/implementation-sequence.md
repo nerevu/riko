@@ -209,8 +209,8 @@ flowchart TD
     n_P13["P13 · Public, typing, and internal test split"]
     n_P11["P11 · Publish and subscribe protocols"]
     n_M1["M1 · v1-parity merge"]
-    n_P9["P9 · Fluent discoverability"]
     n_M2["M2 · Announcement release"]
+    n_P9["P9 · Fluent discoverability"]
     n_M3["M3 · Monthly-invoicing release"]
     n_P12["P12 · Stable errors and events"]
     n_P14["P14 · Extensions outside core"]
@@ -246,14 +246,14 @@ flowchart TD
     n_R4L --> n_M2
     n_R4E -.-> n_R5C
     n_R4E --> n_M2
-    n_R5C --> n_P9
     n_R5C --> n_M2
+    n_R5C --> n_P9
     n_R5C --> n_R6
-    n_P9 --> n_R12
     n_M2 --> n_M3
     n_M2 -.-> n_R8
     n_M2 -.-> n_R10
     n_M2 -.-> n_R11
+    n_P9 --> n_R12
     n_M3 -.-> n_R2B
     n_M3 --> n_M4
     n_R2B --> n_R5B
@@ -309,8 +309,8 @@ flowchart TD
     class n_R4L planned
     class n_R4E planned
     class n_R5C planned
-    class n_P9 planned
     class n_M2 planned
+    class n_P9 planned
     class n_M3 planned
     class n_R2B planned
     class n_R5B planned
@@ -1485,13 +1485,15 @@ here for merge sequencing; its correctness-audit rows remain the gate's defect h
 
 **Goal:** stop `DotDict.get` from interpreting stored business data as configuration.
 
-**R7.definition: no execution code.** R4L touches no execution code, so it is built in
-parallel with R7.fan-in and R7.pubsub (user, 2026-11-22).
+**R7.definition: no execution code.** R4L touches no execution code, so it is built
+between the R7 slices rather than after them (user, 2026-11-22), taking its turn in the
+alternation with the TOML migration batches (user, 2026-11-27).
 
 **M1: merged after the parity merge.** Rescheduled (user, 2026-11-22): R4L merges right
 after M1.
 
-**R4L.build: Build beside R7.** Built in parallel with R7.fan-in and R7.pubsub.
+**R4L.build: Build beside R7.** Built between R7.definition and R7.fan-in, with a TOML
+migration batch on either side.
 
 **R4L.merge: Merge after M1.** The merge that closes the phase's exit items.
 
@@ -3556,8 +3558,8 @@ slice-shaped item rides a slice in the order; only tooling chores stay on
 | Lane | Owner | Trigger | Lands with | Status |
 | --- | --- | --- | --- | --- |
 | [announcement-post · M2 announcement post](#housekeeping-lanes) | user |  |  | Planned |
-| [docstring-ratchet · pydocstyle ratchet](#housekeeping-lanes) | user | the slice each rider lands with | R7.definition, R4E | In progress |
 | [inline-tables · Inline parametrize-table ceiling](#housekeeping-lanes) | user | next /land after the ceiling-holder tables are folded |  | Complete |
+| [docstring-ratchet · pydocstyle ratchet](#housekeeping-lanes) | user | the slice each rider lands with | R7.definition, R4E | In progress |
 | [planning-data · Generated planning data](#housekeeping-lanes) | user |  |  | In progress |
 | [policy-ignore-audit · ruff policy-ignore audit](#housekeeping-lanes) |  |  | R10.parity-batch | Planned |
 | [skill-tooling · Skill tooling](#housekeeping-lanes) | the skill being touched | next /wrapup or /land touching those skills |  | Planned |
@@ -3652,9 +3654,10 @@ count, and progress bar, opening into its slices laid out by their own
 `blocked_by` edges, each naming the work it still waits on. A slice that
 lands with a phase stays in that phase's work instead (user, 2026-11-27).
 
-**planning-data.step-1: TOML sources and generated views.** A TOML source beside
-every gameplan with slices, the
-generated R-track and P-track tables in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md),
+**planning-data.step-1: TOML sources and generated views.** TOML sources beside the
+first gameplans with slices (feed-native-streaming, database-transforms,
+agent-scenarios, agents, ai-inference, mcp, cli, and connectors), the generated
+R-track and P-track tables in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md),
 the §3 graph as a generated Mermaid block, a generated §6 next-slice block, the JSON a
 progress view reads (the riko Forward Track artifact is one), and the matching
 `/wrapup`, `/triage`, `/tidy`, and `CLAUDE.md` updates; the tracker's evidence notes
@@ -3666,14 +3669,30 @@ Each migrated gameplan names its slices by what they deliver
 records the old label once ("Earlier notes call it S3.") so older prose and commit
 subjects still resolve. Exit slices keep `add`, `migrate`, and `delete`.
 
-Gameplans with slices that still need a TOML: agent-scenarios, agents, ai-inference,
-artifact-conversion, autopilot-provisioning, azure-automation, bado-anyio-alignment,
-cli, connectors, correctness-audit, dotdict-parsing, enrichment-modules,
-entity-resolution, fanout-topology, feed-monitoring, highergov-feed, mcp,
-microsoft-administration, monthly-dashboard, operations-as-code, orchestration,
-performance, provider-integrations, rdp-connect, reference-data, rest-incremental,
-riko-site, tabular-interop, and v1-cutover; extensibility, commercialization, and
-module-documentation have ordered labels that may not count as slices.
+The rest of the gameplans with slices migrate in five themed batches that alternate
+with the coding slices: one batch, then one coding slice, then the next batch (user,
+2026-11-27). Related plans share a batch, so their cross-plan
+`blocked_by` edges resolve in one pass.
+
+**planning-data.microsoft-tomls: Microsoft and operations plans.** TOML sources for
+microsoft-administration, azure-automation, autopilot-provisioning, and
+operations-as-code.
+
+**planning-data.provider-tomls: Provider and feed plans.** TOML sources for
+provider-integrations, rest-incremental, feed-monitoring, and highergov-feed.
+
+**planning-data.runtime-tomls: Runtime plans.** TOML sources for fanout-topology,
+orchestration, rdp-connect, bado-anyio-alignment, and performance; the last two list
+numbered steps rather than labelled slices.
+
+**planning-data.data-tomls: Data and conversion plans.** TOML sources for
+artifact-conversion, tabular-interop, entity-resolution, enrichment-modules, and
+reference-data.
+
+**planning-data.release-tomls: Release and site plans.** TOML sources for
+monthly-dashboard, riko-site, v1-cutover, correctness-audit, and dotdict-parsing, plus a
+decision on whether the ordered labels in extensibility, commercialization, and
+module-documentation count as slices.
 
 **planning-data.timing: Commit-derived durations.** A tool records each landed slice's
 elapsed days, active commit days, and active session hours from git and the session
@@ -3710,8 +3729,8 @@ done-phase summaries in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) fold into 
 phases' lead-ins, history of removed behavior (such as the "Subscription lifecycle"
 section) moves to the owning gameplan, and [MILESTONES.md](../MILESTONES.md) is
 archived under `archive/` (the user makes the file move; ten files reference it,
-including the docs lint's file lists). It follows step 1 because most of the prose
-belongs to gameplans that step 1 has not yet migrated.
+including the docs lint's file lists). It follows the five migration batches because
+most of the prose belongs to gameplans they migrate.
 
 ## 6. Next implementation slice
 
@@ -3722,10 +3741,10 @@ The next coding work, in order (status: the R-track table in
 | Slice | Phase | Status | Waiting on |
 | --- | --- | --- | --- |
 | [R7.definition · The small definition-layer PR](#r7-publish-subscribe-and-split) | [R7 · Publish, subscribe, and split](#r7-publish-subscribe-and-split) | Planned |  |
-| [R7.fan-in · Task group and concurrent fan-in](#r7-publish-subscribe-and-split) | [R7 · Publish, subscribe, and split](#r7-publish-subscribe-and-split) | Planned |  |
-| [R7.pubsub · Object-first publish/subscribe](#r7-publish-subscribe-and-split) | [R7 · Publish, subscribe, and split](#r7-publish-subscribe-and-split) | Planned |  |
-| [R7.output-types · Per-module-type wrapper outputs](#r7-publish-subscribe-and-split) | [R7 · Publish, subscribe, and split](#r7-publish-subscribe-and-split) | Planned |  |
+| [planning-data.microsoft-tomls · Microsoft and operations plans](#housekeeping-lanes) | [planning-data · Generated planning data](#housekeeping-lanes) | Planned |  |
 | [R4L.build · Build beside R7](#r4l-dotdict-literal-access) | [R4L · DotDict literal access](#r4l-dotdict-literal-access) | Planned |  |
+| [planning-data.provider-tomls · Provider and feed plans](#housekeeping-lanes) | [planning-data · Generated planning data](#housekeeping-lanes) | Planned |  |
+| [R7.fan-in · Task group and concurrent fan-in](#r7-publish-subscribe-and-split) | [R7 · Publish, subscribe, and split](#r7-publish-subscribe-and-split) | Planned |  |
 <!-- /planning-next -->
 
 It is not an Operations as Code, state-store, cache, or pub/sub PR.

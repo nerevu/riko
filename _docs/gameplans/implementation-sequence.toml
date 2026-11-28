@@ -145,7 +145,10 @@ slices = [
 [phases.R4L]
 area = "config"
 slices = [
-  { id = "build", scheduled_after = ["R7.definition"] },
+  { id = "build", scheduled_after = [
+    "R7.definition",
+    "planning-data.microsoft-tomls",
+  ] },
   { id = "merge", scheduled_after = ["M1"] },
   { id = "add", lands_with = ["R4L.merge"] },
   { id = "migrate", lands_with = ["R4L.merge"] },
@@ -226,10 +229,10 @@ slices = [
   { id = "definition" },
   { id = "settings", lands_with = ["R7.definition", "R7.fan-in"] },
   { id = "union", lands_with = ["R7.definition"] },
-  { id = "fan-in" },
+  { id = "fan-in", scheduled_after = ["planning-data.provider-tomls"] },
   { id = "pool-hosting", lands_with = ["R7.fan-in"] },
-  { id = "pubsub" },
-  { id = "output-types" },
+  { id = "pubsub", scheduled_after = ["planning-data.runtime-tomls"] },
+  { id = "output-types", scheduled_after = ["planning-data.data-tomls"] },
   { id = "add", lands_with = ["R7.fan-in", "R7.pubsub"] },
   { id = "migrate", lands_with = ["R7.pubsub", "R7.output-types"] },
   { id = "delete", lands_with = ["R7.pubsub"] },
@@ -350,10 +353,21 @@ owner = "user"
 slices = [
   { id = "forward-track-links", started = 2026-11-27, landed = 2026-11-27 },
   { id = "html-view", started = 2026-11-27, landed = 2026-11-27 },
-  { id = "plan-shelf", started = 2026-11-27 },
-  { id = "step-1", started = 2026-11-25 },
+  { id = "plan-shelf", started = 2026-11-27, landed = 2026-11-27 },
+  { id = "step-1", started = 2026-11-25, landed = 2026-11-27 },
+  { id = "microsoft-tomls", scheduled_after = ["R7.definition"] },
+  { id = "provider-tomls", scheduled_after = ["R4L.build"] },
+  { id = "runtime-tomls", scheduled_after = ["R7.fan-in"] },
+  { id = "data-tomls", scheduled_after = ["R7.pubsub"] },
+  { id = "release-tomls", scheduled_after = ["R7.output-types"] },
   { id = "timing" },
   { id = "phase-sizing", blocked_by = ["planning-data.timing"] },
-  { id = "step-3" },
+  { id = "step-3", blocked_by = [
+    "planning-data.microsoft-tomls",
+    "planning-data.provider-tomls",
+    "planning-data.runtime-tomls",
+    "planning-data.data-tomls",
+    "planning-data.release-tomls",
+  ] },
   { id = "step-2", scheduled_after = ["M1"] },
 ]
