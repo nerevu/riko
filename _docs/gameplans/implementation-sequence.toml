@@ -370,4 +370,7 @@ slices = [
     "planning-data.release-tomls",
   ] },
   { id = "step-2", scheduled_after = ["M1"] },
+  { id = "empty-focus", flips = [
+    "tests/internal/test_codegen.py::TestBuildForwardTrack::test_track_without_a_ready_main_track_slice_has_no_focus",
+  ] },
 ]

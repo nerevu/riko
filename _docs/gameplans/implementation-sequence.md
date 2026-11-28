@@ -3732,6 +3732,14 @@ archived under `archive/` (the user makes the file move; ten files reference it,
 including the docs lint's file lists). It follows the five migration batches because
 most of the prose belongs to gameplans they migrate.
 
+**planning-data.empty-focus: Progress view without a focus.** The progress view
+requires a focus today, so it cannot be generated once no main-track slice is ready,
+whether every one is complete or every one is blocked. This slice makes the focus
+optional across the generator, `_docs/forward-track.schema.json`, and the template, and
+adds an overview for the completed state. It flips
+`TestBuildForwardTrack::test_track_without_a_ready_main_track_slice_has_no_focus` in
+`tests/internal/test_codegen.py`.
+
 ## 6. Next implementation slice
 
 The next coding work, in order (status: the R-track table in
