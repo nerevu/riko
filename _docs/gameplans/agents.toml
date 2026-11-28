@@ -1,0 +1,32 @@
+# slices
+
+[[slices]]
+id = "dag-utility"
+
+[[slices]]
+id = "pubsub-branches"
+blocked_by = ["R7.pubsub"]
+
+[[slices]]
+id = "event-adapters"
+blocked_by = ["agents.pubsub-branches", "connectors.mail-brokers"]
+
+[[slices]]
+id = "iterative-loop"
+blocked_by = ["R9"]
+
+[[slices]]
+id = "loop-checkpoints"
+blocked_by = ["agents.iterative-loop", "R6"]
+
+[[slices]]
+id = "tool-idempotency"
+blocked_by = ["R6"]
+
+[[slices]]
+id = "topology-inspection"
+blocked_by = ["agents.pubsub-branches", "agents.loop-checkpoints"]
+
+[[slices]]
+id = "deployment-examples"
+blocked_by = ["agents.event-adapters", "agents.loop-checkpoints"]

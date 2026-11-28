@@ -105,15 +105,15 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule).
 | [R7 · Publish, subscribe, and split](gameplans/implementation-sequence.md#r7-publish-subscribe-and-split) | In progress |  | M1 (local pub/sub, split, and fan-in), before R4L (no execution code) |
 | [R4L · DotDict literal access](gameplans/implementation-sequence.md#r4l-dotdict-literal-access) | Planned |  | R4E (literal data access first), M2 |
 | [R4E · Module configuration contracts](gameplans/implementation-sequence.md#r4e-module-configuration-contracts) | Planned |  | before R5C (rescheduled ahead of M2), M2 |
-| [R5C · Write and action effects](gameplans/implementation-sequence.md#r5c-write-and-action-effects) | Planned |  | P9, M2 (deletes `Sinks` before the announcement), R6 (effects before durability) |
+| [R5C · Write and action effects](gameplans/implementation-sequence.md#r5c-write-and-action-effects) | Planned |  | M2 (deletes `Sinks` before the announcement), P9, R6 (effects before durability), connectors |
 | [R2B · Semantic identity and version contract](gameplans/implementation-sequence.md#r2b-semantic-identity-and-version-contract) | Planned |  | R5B (cache keys use effective fingerprints), R6 (semantic identity and central idempotency) |
 | [R5B · Cache replay](gameplans/implementation-sequence.md#r5b-cache-replay) | Planned |  | M5 (the finalized CacheNode contract) |
-| [R6 · Checkpoints and durable state](gameplans/implementation-sequence.md#r6-checkpoints-and-durable-state) | Planned |  | R9, M4 (semantic identity and central idempotency), R11 (durable state for provider writes) |
-| [R9 · Resumable loops](gameplans/implementation-sequence.md#r9-resumable-loops) | Planned |  | R10 |
+| [R6 · Checkpoints and durable state](gameplans/implementation-sequence.md#r6-checkpoints-and-durable-state) | Planned |  | R9, M4 (semantic identity and central idempotency), R11 (durable state for provider writes), agents, connectors, mcp |
+| [R9 · Resumable loops](gameplans/implementation-sequence.md#r9-resumable-loops) | Planned |  | R10, agents |
 | [R8 · Batch execution](gameplans/implementation-sequence.md#r8-batch-execution) | Planned |  | R10 |
 | [R10 · Feed-native cleanup and parity proof](gameplans/implementation-sequence.md#r10-feed-native-cleanup-and-parity-proof) | In progress |  | M4 (the frozen parser protocol), R11 (only after the core contracts are stable) |
-| [R11 · Adapters and providers](gameplans/implementation-sequence.md#r11-adapters-and-providers) | Planned |  | M3 (the read-only connector slices), M4 (Airtable and provider CRUD), R11A (the service seams it consumes), R12 |
-| [R11A · Operations as Code scaffolding](gameplans/implementation-sequence.md#r11a-operations-as-code-scaffolding) | Planned |  | M6 (its two exit fixtures), before R12 |
+| [R11 · Adapters and providers](gameplans/implementation-sequence.md#r11-adapters-and-providers) | Planned |  | M3 (the read-only connector slices), M4 (Airtable and provider CRUD), R11A (the service seams it consumes), R12, agent-scenarios, connectors, mcp |
+| [R11A · Operations as Code scaffolding](gameplans/implementation-sequence.md#r11a-operations-as-code-scaffolding) | Planned |  | M6 (its two exit fixtures), before R12, cli |
 | [R12 · External proof and release gate](gameplans/implementation-sequence.md#r12-external-proof-and-release-gate) | Planned |  | M5 (the external proof and release gate) |
 | [M1 · v1-parity merge](gameplans/implementation-sequence.md#m1-v1-parity-merge) | In progress |  | before R4L (merged after the parity merge), before R4E (after the parity merge), M2, before planning-data |
 | [M2 · Announcement release](gameplans/implementation-sequence.md#m2-announcement-release) | Planned |  | M3, before R8 (the spike needs only real graphs), before R10 (parity fixes without waiting for the phase), before R11 (resource seams may land right after M2) |

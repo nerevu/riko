@@ -2028,7 +2028,7 @@ A milestone, not an R-phase, per [monthly-dashboard.md](monthly-dashboard.md). S
 converged rerun create no duplicate Airtable history/current-state records.
 
 **R11.remaining: Airtable and provider CRUD.** Beyond the read-only slices M3 needs:
-[connectors.md](connectors.md) C4's Airtable keyed record-store adapter and
+the [connectors.md](connectors.md) `airtable-adapter` keyed record-store adapter and
 [provider-integrations.md](provider-integrations.md) P2 and P4 (CRUD/search, batch +
 idempotency policy).
 

@@ -1,0 +1,48 @@
+# slices
+
+[[slices]]
+id = "provider-architecture"
+
+[[slices]]
+id = "model-profiles"
+blocked_by = ["ai-inference.provider-architecture"]
+
+[[slices]]
+id = "infer"
+blocked_by = ["ai-inference.model-profiles"]
+
+[[slices]]
+id = "capability-retrieval"
+blocked_by = ["ai-inference.provider-architecture", "mcp.capability-catalog"]
+
+[[slices]]
+id = "capability-selection"
+blocked_by = ["ai-inference.capability-retrieval", "ai-inference.model-profiles"]
+
+[[slices]]
+id = "discovery-queries"
+blocked_by = ["ai-inference.capability-selection", "mcp.apis-guru-provider"]
+
+[[slices]]
+id = "task-decomposition"
+blocked_by = ["ai-inference.capability-selection"]
+
+[[slices]]
+id = "verification"
+blocked_by = ["ai-inference.capability-selection"]
+
+[[slices]]
+id = "summarization"
+blocked_by = ["ai-inference.model-profiles", "mcp.result-artifacts"]
+
+[[slices]]
+id = "research"
+blocked_by = ["ai-inference.verification"]
+
+[[slices]]
+id = "workflow-profiles"
+blocked_by = ["ai-inference.model-profiles"]
+
+[[slices]]
+id = "evaluations"
+blocked_by = ["ai-inference.workflow-profiles"]

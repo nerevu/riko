@@ -85,8 +85,14 @@ _CLASS_DEFS = (
 PLANNING_DOCS: dict[Path, frozenset[str]] = {
     TRACKER_PATH: frozenset({"track-r", "track-p"}),
     SEQUENCE_PATH: frozenset({"graph", "next", "lanes", "decisions"}),
+    GAMEPLANS_DIR / "agent-scenarios.md": frozenset({"slices"}),
+    GAMEPLANS_DIR / "agents.md": frozenset({"slices"}),
+    GAMEPLANS_DIR / "ai-inference.md": frozenset({"slices"}),
+    GAMEPLANS_DIR / "cli.md": frozenset({"slices"}),
+    GAMEPLANS_DIR / "connectors.md": frozenset({"slices"}),
     GAMEPLANS_DIR / "database-transforms.md": frozenset({"slices"}),
     GAMEPLANS_DIR / "feed-native-streaming.md": frozenset({"slices"}),
+    GAMEPLANS_DIR / "mcp.md": frozenset({"slices"}),
 }
 
 PLANNING_PATTERN = build_block_pattern(

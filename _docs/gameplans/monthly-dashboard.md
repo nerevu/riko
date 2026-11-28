@@ -461,7 +461,7 @@ The **M4 monthly-reports release** in
 |---|---|
 | MD0 | shipped entry-point seam |
 | MD1 | R3 resources (shipped) + R11 connector credential-reference contract |
-| MD2 | R5C `WriteNode`/`WriteResult` + R6 idempotency + connectors C4 Airtable adapter |
+| MD2 | R5C `WriteNode`/`WriteResult` + R6 idempotency + `connectors.airtable-adapter` |
 | MD3 | R11: azure-automation AZ0/AZ2/AZ3 (Graph REST) |
 | MD4–MD7 | R11: rest-incremental R0–R4 + provider-integrations P0–P2/P4 |
 | MD8–MD10 | R4C `map` (M1); domain code in `riko-msp` |
