@@ -281,7 +281,7 @@ the **suggested command** to run after `/clear` (in a code block, ready to paste
 file updated and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session is safe
 to clear, a reminder (when the planning TOML or a lead-in changed) to push and then ask
-Claude to regenerate (`python -m riko.cli._gen_forward_track --html`) and republish the
+Claude to regenerate (`manage codegen --progress`) and republish the
 progress view, and any **script candidates**: candidates come from the main loop as much
 as from subagents: any helper script written this session into the scratchpad or `/tmp`
 (inline heredoc scripts included), any scan, count, or cross-check run by hand three or

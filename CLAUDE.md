@@ -346,7 +346,8 @@ a `normalize`; substituting a default the caller supplies or chooses
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
   `--names`, `--api`, `--tests`, `--verbs`, `--user-agents`, `--planning` are
   additive; `--all`
-  runs all generators.
+  runs all generators. `--progress` writes the git-ignored progress page and is
+  never part of `--all`.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
   `riko/modules/_names.py`, `riko/types/_module_ids.py`, `riko/base/_user_agents.py`,
   the marked name blocks in `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md`

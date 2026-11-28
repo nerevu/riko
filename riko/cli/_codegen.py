@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 import click
@@ -18,6 +19,7 @@ from riko.base._paths import (
 
 from ._gen_api_surface import main as gen_api_surface_main
 from ._gen_config import main as gen_config_main
+from ._gen_forward_track import main as gen_forward_track_main
 from ._gen_names import main as gen_names_main
 from ._gen_planning import PLANNING_DOCS
 from ._gen_planning import main as gen_planning_main
@@ -73,7 +75,14 @@ _CODEGEN: dict[str, tuple[Func[int], str, str, str]] = {
         "Error regenerating the planning blocks!",
         "Regenerate the planning tables and dependency graph",
     ),
+    "progress": (
+        partial(gen_forward_track_main, html=True),
+        "wrote the progress page",
+        "Error writing the progress page!",
+        "Write the progress page (not part of --all)",
+    ),
 }
+_ON_DEMAND = frozenset({"progress"})
 
 
 @click.command(
@@ -83,11 +92,14 @@ _CODEGEN: dict[str, tuple[Func[int], str, str, str]] = {
         for name, (*_, help_) in _CODEGEN.items()
     ],
 )
-@click.option("--all", "all_", help="Run every generator", is_flag=True)
+@click.option(
+    "--all", "all_", help="Run every generator except --progress", is_flag=True
+)
 def _codegen_command(all_: bool = False, **selectors: bool) -> None:
     """Regenerate generated project artifacts."""
     names = (name for name in _CODEGEN if selectors[name.replace("-", "_")])
-    selected = tuple(_CODEGEN) if all_ else tuple(names)
+    every = (name for name in _CODEGEN if name not in _ON_DEMAND)
+    selected = tuple(every) if all_ else tuple(names)
     selected = selected or ("config",)
 
     for name in selected:

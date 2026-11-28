@@ -3640,8 +3640,8 @@ of the slice it rides, and fills two optional `workItem` fields the schema gains
 
 **planning-data.html-view: Generated progress view.** An HTML view rendered from the
 forward-track JSON, published as an artifact and regenerated on demand, so every slice
-shows its status, label, and a link to its paragraph. `python -m
-riko.cli._gen_forward_track --html` renders the validated JSON through the Jinja
+shows its status, label, and a link to its paragraph. `manage codegen
+--progress` renders the validated JSON through the Jinja
 template in `_docs/forward-track/` into one self-contained page: overview, next up,
 phases, history, then open work grouped into areas (laid out by their real
 dependencies, one card per phase) beside the release gates M1 to M5.

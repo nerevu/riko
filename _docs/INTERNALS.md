@@ -15,7 +15,8 @@ lives there; `_docs/KEY_PATHS.md` maps concrete source locations; and
 ## Codegen & generated files
 
 The `manage codegen` command is selector-based. With no selector it regenerates
-config types; selectors are additive, and `--all` runs every generator:
+config types; selectors are additive, and `--all` runs every generator except the
+on-demand `--progress`:
 
 ```text
 manage codegen

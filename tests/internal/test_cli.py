@@ -274,6 +274,7 @@ CODEGEN_SELECTORS = [
     pytest.param(["--tests", "--verbs"], ["tests", "verbs"], id="tests-verbs"),
     pytest.param(["--user-agents"], ["user-agents"], id="user-agents"),
     pytest.param(["--planning"], ["planning"], id="planning"),
+    pytest.param(["--progress"], ["progress"], id="progress"),
     pytest.param(
         ["--all"],
         ["config", "names", "api", "tests", "verbs", "user-agents", "planning"],
