@@ -12,7 +12,8 @@ from riko.base._exceptions import RikoError
 from riko.base._iterutils import gen_non_null
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Iterator
+    from collections.abc import Set as AbstractSet
     from pathlib import Path
 
 type _ImportKind = Literal["module", "local", "type"]
@@ -283,13 +284,14 @@ def collect_imports(module: ModuleInfo) -> tuple[_ImportRef, ...]:
     return tuple(visitor.refs)
 
 
-def resolve_import_targets(
-    ref: _ImportRef, module_names: Collection[str]
-) -> tuple[str, ...]:
+def gen_import_targets(
+    ref: _ImportRef, module_names: AbstractSet[str]
+) -> Iterator[str]:
     if ref.form == "import":
-        result = (ref.imported,) if ref.imported else ()
+        if ref.imported:
+            yield ref.imported
     else:
-        targets: list[str] = []
+        seen: set[str] = set()
 
         for name, _ in ref.names:
             if name == "*":
@@ -298,9 +300,6 @@ def resolve_import_targets(
                 candidate = f"{ref.imported}.{name}" if ref.imported else name
                 target = candidate if candidate in module_names else ref.imported
 
-            if target and target not in targets:
-                targets.append(target)
-
-        result = tuple(targets)
-
-    return result
+            if target and target not in seen:
+                seen.add(target)
+                yield target
