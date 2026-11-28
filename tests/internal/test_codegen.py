@@ -324,6 +324,15 @@ _TRACK_RELEASES = [
     Release("v8.0.0", _DAY1, "v8.0.0"),
     Release("v9.0.0", _DAY2, "Release"),
 ]
+_LANE_REFS = [f"L1.{key}" for key in "abcde"]
+_FOCUS_PLAN = {
+    "phases": {"R90": {"area": "core", "slices": [{"id": "a"}]}},
+    "milestones": {
+        "M90": {"blocked_by": _LANE_REFS},
+        "M91": {"blocked_by": ["M90", "R90.a"]},
+    },
+    "lanes": {"L1": {"owner": "user", "slices": [{"id": key} for key in "abcde"]}},
+}
 
 RENAME_CONF = RenameRawConf(
     {
@@ -448,16 +457,11 @@ def gen_fixture_paths() -> Iterator[Path]:
 
 
 def _compile_fixtures(unrunnable: bool = False) -> list[Any]:
-    params = []
-
-    for path in gen_fixture_paths():
-        if (path.stem in UNRUNNABLE) != unrunnable:
-            continue
-
-        marks = FIXTURE_MARKS.get(path.stem, ())
-        params.append(pytest.param(path, id=path.stem, marks=marks))
-
-    return params
+    return [
+        pytest.param(path, id=path.stem, marks=FIXTURE_MARKS.get(path.stem, ()))
+        for path in gen_fixture_paths()
+        if (path.stem in UNRUNNABLE) == unrunnable
+    ]
 
 
 async def _arun_document(flow: Workflow) -> list[Item]:
@@ -1296,6 +1300,20 @@ PLANNING_PROBLEMS = [
         id="started-under-open-decision",
     ),
     pytest.param(
+        {
+            "phases": {
+                "X1": {"decisions": [{"id": "q"}]},
+                "X2": {
+                    "blocked_by": ["X1.q"],
+                    "slices": [{"id": "a"}, {"id": "b", "started": _DAY1}],
+                },
+            }
+        },
+        "",
+        "X2.b started while X1.q is open",
+        id="later-slice-started-under-open-decision",
+    ),
+    pytest.param(
         {"phases": {"X1": {"landed": date(2027, 1, 1)}}},
         "",
         "X1 has a future landed date, 2027-01-01",
@@ -1409,6 +1427,34 @@ NEXT_SLICES = [
     ),
 ]
 
+NEXT_WAITING = [
+    pytest.param(
+        {"X1": {"decisions": [{"id": "q"}]}, "X2": {"blocked_by": ["X1.q"]}, "X3": {}},
+        ("X1", "X3"),
+        id="open-decision",
+    ),
+    pytest.param(
+        {"X1": {}, "X2": {"blocked_by": ["X1"]}, "X3": {}},
+        ("X1", "X3"),
+        id="unfinished-blocker",
+    ),
+    pytest.param(
+        {"X1": _LANDED, "X2": {"blocked_by": ["X1"]}, "X3": {}},
+        ("X2", "X3"),
+        id="landed-blocker",
+    ),
+    pytest.param(
+        {"X1": {}, "X2": {"scheduled_after": ["X1"]}},
+        ("X1", "X2"),
+        id="chosen-order-never-waits",
+    ),
+    pytest.param(
+        {"X1": {}, "X2": {"blocked_by": ["X1"], "slices": [{"id": "a"}, {"id": "b"}]}},
+        ("X1",),
+        id="phase-blocker-holds-every-slice",
+    ),
+]
+
 PLANNING_UNLOCKS = [
     pytest.param(
         {"X1": {"slices": [{"id": "a"}]}, "X2": {"blocked_by": ["X1.a"]}},
@@ -1463,13 +1509,15 @@ class TestPlanningData:
     def test_ties_use_natural_sort(self):
         assert _plan({"X10": {}, "X4B": {}, "X4A": {}}).order == ("X4A", "X4B", "X10")
 
-    def test_open_decision_skips_a_next_slice(self):
-        phases = {
-            "X1": {"decisions": [{"id": "q"}]},
-            "X2": {"blocked_by": ["X1.q"]},
-            "X3": {},
-        }
-        assert _plan(phases).next_slices == ("X1", "X3")
+    @pytest.mark.parametrize(("phases", "refs"), NEXT_WAITING)
+    def test_next_slices_wait_for_their_blockers(self, phases, refs):
+        assert _plan(phases).next_slices == refs
+
+    def test_every_own_slice_waits_on_its_container(self):
+        slices = [{"id": "a"}, {"id": "b"}, {"id": "c", "lands_with": ["X2.a"]}]
+        data = _plan({"X1": {}, "X2": {"blocked_by": ["X1"], "slices": slices}})
+        waiting = [data.get_waiting(f"X2.{key}") for key in "abc"]
+        assert waiting == [("X1",), ("X1",), ()]
 
     @pytest.mark.parametrize(("phases", "milestones", "refs"), NEXT_SLICES)
     def test_next_slices_rank_by_the_milestone_they_feed(
@@ -1886,6 +1934,16 @@ class TestBuildForwardTrack:
     def test_field_maps_from_the_planning_data(self, path, expected):
         track = _build_track()
         assert _find(track, *path) == expected
+
+    def test_focus_reaches_past_the_next_slices(self):
+        data = PlanningData.from_documents({"plan": _FOCUS_PLAN}, {})
+        track = build_forward_track(data, _TRACK_SNAPSHOT, _TRACK_PAGE, [])
+        assert data.next_slices == tuple(_LANE_REFS)
+        assert _find(track, "focus", "phase") == "R90"
+        assert _find(track, "phases", "R90", "work", "a", "status") == "next_up"
+        assert (
+            _find(track, "milestones", "M91", "prerequisites", 1, "status") == "next_up"
+        )
 
     def test_doubled_next_up_is_a_problem(self):
         track = _build_track()

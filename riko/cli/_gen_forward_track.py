@@ -206,15 +206,16 @@ def _gen_work_entries(data: PlanningData, node: Node) -> Iterator[_Entry]:
 
 
 def _gen_work_items(
-    data: PlanningData, snapshot: Snapshot, *entries: _Entry
+    data: PlanningData, snapshot: Snapshot, focus: str, *entries: _Entry
 ) -> Iterator[dict[str, object]]:
     """
     Generates a planning phase's work items from its work entries.
 
-    Each item takes its status from the planning data, and an item with a Markdown
-    home also links to its paragraph and names where it sits.
+    Each item takes its status from the planning data, the focus slice and the next
+    slices count as next up, and an item with a Markdown home also links to its
+    paragraph and names where it sits.
     """
-    upcoming = frozenset(data.next_slices)
+    upcoming = frozenset((*data.next_slices, focus))
 
     for ref, key, label, tag in entries:
         found = _WORK_STATUSES.get(data.get_status(ref), "planned")
@@ -452,17 +453,17 @@ def _build_areas(
 
 
 def _gen_prerequisites(
-    data: PlanningData, node: Node, **statuses: str
+    data: PlanningData, node: Node, focus: str, **statuses: str
 ) -> Iterator[dict[str, object]]:
     """
     Generates a milestone's prerequisites in order, each with its Markdown reason.
 
     A prerequisite that is a planning phase the view shows takes that phase's status;
-    any other counts as next up while it is in progress, in design, or one of the next
-    slices. A prerequisite in an open planning phase names that phase's card. The
-    reason is its prose, or its title while it has none.
+    any other counts as next up while it is in progress, in design, the focus slice, or
+    one of the next slices. A prerequisite in an open planning phase names that phase's
+    card. The reason is its prose, or its title while it has none.
     """
-    upcoming = frozenset(data.next_slices)
+    upcoming = frozenset((*data.next_slices, focus))
 
     for ref in node.blocked_by:
         reason = data.reasons.get((node.id, ref))
@@ -492,7 +493,7 @@ def build_forward_track(
     """
     Builds the forward-track view of the planning data.
 
-    The focus is the first next slice that belongs to a main-track planning phase,
+    The focus is the first ready slice that belongs to a main-track planning phase,
     with that planning phase's first open decision when it has one. Each open planning
     phase is a card in its area's grid, and the history runs newest first.
 
@@ -510,7 +511,7 @@ def build_forward_track(
 
     Raises:
 
-        ValueError: If no next slice belongs to a main-track planning phase.
+        ValueError: If no ready slice belongs to a main-track planning phase.
 
     Examples:
 
@@ -537,14 +538,14 @@ def build_forward_track(
     shown = {n.id for n in [*phases, *milestones]}
     candidates = (
         ref
-        for ref in data.next_slices
+        for ref in data.ready_slices
         if _PHASE.fullmatch(data.slices[ref].container)
         and data.slices[ref].container in shown
     )
     focus = next(candidates, None)
 
     if focus is None:
-        raise ValueError("no next slice belongs to a main-track planning phase")
+        raise ValueError("no ready slice belongs to a main-track planning phase")
 
     owner = data.slices[focus].container
     legs = (data.get_leg(focus), data.get_leg(owner), finals[-1].id if finals else None)
@@ -616,7 +617,7 @@ def build_forward_track(
                 "planUrl": _get_plan_url(data, snapshot, n),
                 "dependency": _build_dependency(data, n, shown),
                 "workKind": "implementation" if n.id in exits else "slices",
-                "work": list(_gen_work_items(data, snapshot, *entries[n.id])),
+                "work": list(_gen_work_items(data, snapshot, focus, *entries[n.id])),
             }
             for n in phases
         ],
@@ -625,7 +626,7 @@ def build_forward_track(
                 "id": n.id,
                 "title": _get_title(data, n.id),
                 "summary": _get_detail(data, n.id),
-                "prerequisites": list(_gen_prerequisites(data, n, **statuses)),
+                "prerequisites": list(_gen_prerequisites(data, n, focus, **statuses)),
                 "planUrl": _get_plan_url(data, snapshot, n),
                 **({} if n.landed is None else {"date": n.landed.isoformat()}),
             }

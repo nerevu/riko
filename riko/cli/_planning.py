@@ -24,6 +24,7 @@ import networkx as nx
 from attrs import define, field
 
 from riko.base._guards import require_listlike, require_mapping
+from riko.base._iterutils import gen_non_null
 from riko.base._paths import GAMEPLANS_DIR, SEQUENCE_PATH, TRACKER_PATH
 from riko.base._require_guards import (
     require_from_form,
@@ -223,11 +224,12 @@ def _get_optional[T](
     elif isinstance(value, int) and cls is float:
         value = float(value)
 
-    return (
-        None
-        if value is None
-        else require_instance(cls, value, where, error=PlanningError)
-    )
+    if value is None:
+        found = None
+    else:
+        found = require_instance(cls, value, where, error=PlanningError)
+
+    return found
 
 
 def _get_date(table: Mapping[str, object], key: str, what: str) -> date | None:
@@ -259,9 +261,7 @@ def _get_tables(
     return tables.items()
 
 
-def _build_slices(
-    container: str, table: Mapping[str, object], what: str
-) -> tuple[Slice, ...]:
+def _build_slices(container: str, what: str, **table: object) -> tuple[Slice, ...]:
     """Builds a container's slices, or its one implicit slice when it lists none."""
     if "slices" in table:
         if carried := sorted(_SLICE_ONLY_KEYS.intersection(table)):
@@ -288,11 +288,11 @@ def _freeze_docs(docs: Mapping[str, str]) -> FrozenDict[str, str]:
     return FrozenDict(docs)
 
 
-def _combine(progresses: Sequence[Progress]) -> Progress:
+def _combine(*progresses: Progress) -> Progress:
     """Combines slice progress into its container's progress."""
     statuses = {progress.status for progress in progresses}
     dates = (progress.landed for progress in progresses)
-    landed = max((d for d in dates if d is not None), default=None)
+    landed = max(gen_non_null(dates), default=None)
 
     if "complete" in statuses and statuses <= _DONE:
         result = Progress("complete", landed)
@@ -569,8 +569,14 @@ class Slice:
 
         """
         slice_id = table.get("id")
-        estimate = table.get("estimate")
+        given = table.get("estimate")
         require_estimate = require_from_form(Estimate, error=PlanningError)
+
+        if given is None:
+            estimate = None
+        else:
+            estimate = require_estimate(given, f"{what} 'estimate'")
+
         built = cls(
             container=container,
             id=None if slice_id is None else _require_id(slice_id, f"{what} 'id'"),
@@ -581,9 +587,7 @@ class Slice:
             lands_with=_get_refs(table, "lands_with", what),
             blocked_by=_get_refs(table, "blocked_by", what),
             scheduled_after=_get_refs(table, "scheduled_after", what),
-            estimate=None
-            if estimate is None
-            else require_estimate(estimate, f"{what} 'estimate'"),
+            estimate=estimate,
             elapsed_days=_get_optional(int, table, "elapsed_days", what),
             active_days=_get_optional(int, table, "active_days", what),
             session_hours=_get_optional(float, table, "session_hours", what),
@@ -610,9 +614,7 @@ class Slice:
         A rider is complete once every host is, and lands on the latest host landing.
         """
         hosts = [lookup.get(host) for host in self.lands_with]
-        done = [
-            host for host in hosts if host is not None and host.status == "complete"
-        ]
+        done = [host for host in gen_non_null(hosts) if host.status == "complete"]
         host_dates = [host.landed for host in done if host.landed is not None]
 
         if self.landed is not None:
@@ -750,7 +752,7 @@ class Node:
             area=area,
             blocked_by=_get_refs(table, "blocked_by", what),
             scheduled_after=_get_refs(table, "scheduled_after", what),
-            slices=_build_slices(node_id, table, what),
+            slices=_build_slices(node_id, what, **table),
             decisions=tuple(
                 Decision.from_table(node_id, entry, f"{what}.decisions[{index}]")
                 for index, entry in enumerate(decisions)
@@ -779,10 +781,10 @@ class Node:
         prerequisites is complete; a planning phase combines its slices.
         """
         found = (lookup.get(ref) for ref in self.blocked_by)
-        statuses = {progress.status for progress in found if progress is not None}
+        statuses = {progress.status for progress in gen_non_null(found)}
 
         if self.kind == "phase":
-            result = _combine([item.get_progress(lookup) for item in self.slices])
+            result = _combine(*(item.get_progress(lookup) for item in self.slices))
         elif self.landed is not None:
             result = Progress("complete", self.landed)
         elif "complete" in statuses:
@@ -833,7 +835,7 @@ class Lane:
         table = _require_table(value, what, _LANE_KEYS)
         node_id = _require_id(lane_id, what)
         owner = _get_optional(str, table, "owner", what)
-        slices = _build_slices(node_id, table, what)
+        slices = _build_slices(node_id, what, **table)
 
         if owner is None and any(not item.lands_with for item in slices):
             raise PlanningError(f"{what}: missing 'owner' for a self-landing slice")
@@ -849,7 +851,7 @@ class Lane:
 
     def get_progress(self, lookup: Mapping[str, Progress]) -> Progress:
         """Gets its progress by combining its slices'."""
-        return _combine([item.get_progress(lookup) for item in self.slices])
+        return _combine(*(item.get_progress(lookup) for item in self.slices))
 
 
 @define(frozen=True, slots=True)
@@ -916,12 +918,12 @@ class PlanFile:
                 Lane.from_table(key, value, f"{what} lanes.{key}")
                 for key, value in lanes
             ),
-            slices=_build_slices(stem, table, what) if "slices" in table else (),
+            slices=_build_slices(stem, what, **table) if "slices" in table else (),
         )
 
     def get_progress(self, lookup: Mapping[str, Progress]) -> Progress:
         """Gets its progress by combining its slices'."""
-        return _combine([item.get_progress(lookup) for item in self.slices])
+        return _combine(*(item.get_progress(lookup) for item in self.slices))
 
 
 @define(frozen=True, slots=True)
@@ -1053,10 +1055,9 @@ class PlanningData:
         return dict(firsts)
 
     def _get_blockers(self, item: Slice) -> tuple[str, ...]:
-        """Gets a slice's blockers, with its container's when it is the first."""
+        """Gets a slice's blockers, with its container's when it lands on its own."""
         owner = self.containers.get(item.container)
-        is_entry = owner is not None and self._entries.get(owner.id) == item.ref
-        inherited = owner.blocked_by if owner is not None and is_entry else ()
+        inherited = () if owner is None or item.lands_with else owner.blocked_by
         return (*item.blocked_by, *inherited)
 
     @cached_property
@@ -1142,20 +1143,25 @@ class PlanningData:
         progress = self._progress.get(ref)
         return None if progress is None else progress.landed
 
+    def _get_unmet(self, *refs: str) -> tuple[str, ...]:
+        """Gets the known refs not yet complete or, for a decision, settled."""
+        return tuple(
+            ref for ref in refs if ref in self.refs and self.get_status(ref) not in _MET
+        )
+
     @cached_property
-    def next_slices(self) -> tuple[str, ...]:
+    def ready_slices(self) -> tuple[str, ...]:
         """
-        The first few slices to work on next, earliest milestone first.
+        Every slice ready to work on, earliest milestone first.
 
         A slice qualifies when it is self-landing, neither complete nor deferred, and
-        every decision blocking it is settled. Slices rank by the earliest accepted
-        milestone each one feeds (its leg), then by work order, which already breaks
-        ties by natural id; a slice that feeds no milestone ranks after every slice
-        that does.
+        every ``blocked_by`` ref of its own and of its container is complete or, for a
+        decision, settled. A ``scheduled_after`` ref, like the order of a container's
+        slices, only orders work and never holds a slice back. Slices rank by the
+        earliest accepted milestone each one feeds (its leg), then by work order, which
+        already breaks ties by natural id; a slice that feeds no milestone ranks after
+        every slice that does.
         """
-        open_decisions = {
-            ref for ref, item in self.decisions.items() if item.settled is None
-        }
         positions = self._positions
         legs = {
             ref: self.get_leg(ref)
@@ -1163,7 +1169,7 @@ class PlanningData:
             if (item := self.slices.get(ref)) is not None
             and not item.lands_with
             and self._progress[ref].status not in _DONE
-            and open_decisions.isdisjoint(self._get_blockers(item))
+            and not self.get_waiting(ref)
         }
         refs = sorted(
             legs,
@@ -1172,7 +1178,12 @@ class PlanningData:
                 positions[ref],
             ),
         )
-        return tuple(refs[:NEXT_COUNT])
+        return tuple(refs)
+
+    @cached_property
+    def next_slices(self) -> tuple[str, ...]:
+        """The first few slices to work on next: the head of ``ready_slices``."""
+        return self.ready_slices[:NEXT_COUNT]
 
     @cached_property
     def _unlocks(self) -> Mapping[str, tuple[Unlock, ...]]:
@@ -1213,15 +1224,10 @@ class PlanningData:
         """
         Gets the open decisions and unfinished blockers a slice still waits on.
 
-        A container's first self-landing slice waits on its container's blockers too.
+        A self-landing slice waits on its container's blockers too.
         """
         item = self.slices.get(ref)
-        blockers = () if item is None else self._get_blockers(item)
-        return tuple(
-            blocker
-            for blocker in blockers
-            if blocker in self.refs and self.get_status(blocker) not in _MET
-        )
+        return self._get_unmet(*(() if item is None else self._get_blockers(item)))
 
     def get_leg(self, ref: str) -> str | None:
         """Gets the earliest accepted milestone that transitively depends on a ref."""
@@ -1367,7 +1373,7 @@ class PlanningData:
                 for unlock in self._unlocks.get(owner.id, ())
             )
             consumers = (
-                node for node in downstreams if node is not None and node is not owner
+                node for node in gen_non_null(downstreams) if node is not owner
             )
 
             if (
@@ -1407,11 +1413,7 @@ class PlanningData:
 
         for owner in self._owners:
             if isinstance(owner, Node) and owner.landed is not None:
-                unmet = (
-                    r
-                    for r in owner.blocked_by
-                    if r in self.refs and self.get_status(r) not in _MET
-                )
+                unmet = self._get_unmet(*owner.blocked_by)
                 yield from (f"{owner.id} landed before {r} completed" for r in unmet)
 
     def _gen_date_problems(self, today: date) -> Iterator[str]:
