@@ -118,7 +118,7 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule).
 | [M1 · v1-parity merge](gameplans/implementation-sequence.md#m1-v1-parity-merge) | In progress |  | before R4L (merged after the parity merge), before R4E (after the parity merge), M2, before planning-data |
 | [M2 · Announcement release](gameplans/implementation-sequence.md#m2-announcement-release) | Planned |  | M3, before R8 (the spike needs only real graphs), before R10 (parity fixes without waiting for the phase), before R11 (resource seams may land right after M2) |
 | [M3 · Monthly-invoicing release](gameplans/implementation-sequence.md#m3-monthly-invoicing-release) | Planned |  | before R2B (not needed for read-only counts), M4 |
-| [M4 · Monthly-reports release](gameplans/implementation-sequence.md#m4-monthly-reports-release) | Planned |  | before R8 (full batching follows the Monthly-reports release) |
+| [M4 · Monthly-reports release](gameplans/implementation-sequence.md#m4-monthly-reports-release) | Planned |  | before R8 (full batching follows the Monthly-reports release), M5 (ships after the monthly-reports release) |
 | [M6 · riko-ops preview](gameplans/implementation-sequence.md#m6-riko-ops-preview) (proposed) | Planned |  |  |
 | [M5 · Core 1.0](gameplans/implementation-sequence.md#m5-core-10) | Planned |  |  |
 <!-- /planning-track-r -->

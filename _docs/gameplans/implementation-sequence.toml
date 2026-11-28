@@ -311,7 +311,7 @@ blocked_by = ["M2", "R11.read-only"]
 blocked_by = ["M3", "R6", "R11.remaining", "R10.parser-protocol"]
 
 [milestones.M5]
-blocked_by = ["R12", "R5B", "P13.typing"]
+blocked_by = ["M4", "R12", "R5B", "P13.typing"]
 
 [milestones.M6]
 blocked_by = ["R11A"]
@@ -352,6 +352,7 @@ slices = [
   { id = "html-view", started = 2026-11-27, landed = 2026-11-27 },
   { id = "step-1", started = 2026-11-25 },
   { id = "timing" },
+  { id = "phase-sizing", blocked_by = ["planning-data.timing"] },
   { id = "step-3" },
   { id = "step-2", scheduled_after = ["M1"] },
 ]

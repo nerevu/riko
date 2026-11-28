@@ -266,6 +266,7 @@ flowchart TD
     n_P14 --> n_R12
     n_R9 --> n_R10
     n_M4 -.-> n_R8
+    n_M4 --> n_M5
     n_R8 --> n_R10
     n_R10 --> n_M4
     n_R10 --> n_R11
@@ -2061,6 +2062,9 @@ external-extension proof, but R12 itself is not required.
 
 **Goal:** release Core 1.0 once the completion criteria in §7 hold.
 
+**M4: ships after the monthly-reports release.** Core 1.0 is the last release in the
+sequence; its work already waits on most of M4's.
+
 **R12: the external proof and release gate.** Core 1.0 waits for the external proof and
 release gate.
 
@@ -3662,6 +3666,14 @@ transcripts, backfills the landed slices, and feeds scheduling predictions (the 
 reserves `elapsed_days`, `active_days`, `session_hours`, and `estimate`). It also
 re-checks the landing dates dug from git with low confidence: R0 and R1 (2026-09-21),
 R4B, P5, P7, P8, and P10.
+
+**planning-data.phase-sizing: Equal-effort phases.** Every open phase should take about
+the same effort, so each card on the progress view stands for a similar amount of work
+(user, 2026-11-27). A phase's size is the sum of its open slices' `estimate`, or its
+open slice count until estimates exist; `manage lint --docs` flags a phase outside
+0.5–2× the median, and `/wrapup` asks for a resize whenever the plan changed. A phase
+whose slices serve more than one release (R10 and R11 today) is split into one phase per
+release.
 
 **planning-data.step-2: Tripwire ownership and restatement lint.** Each strict xfail
 gets exactly one owning slice in TOML, and `manage lint --docs` rejects phase status or
