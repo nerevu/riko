@@ -350,6 +350,7 @@ owner = "user"
 slices = [
   { id = "forward-track-links", started = 2026-11-27, landed = 2026-11-27 },
   { id = "html-view", started = 2026-11-27, landed = 2026-11-27 },
+  { id = "plan-shelf", started = 2026-11-27 },
   { id = "step-1", started = 2026-11-25 },
   { id = "timing" },
   { id = "phase-sizing", blocked_by = ["planning-data.timing"] },

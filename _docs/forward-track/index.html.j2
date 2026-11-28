@@ -1,5 +1,6 @@
 {% set phase_labels = {'landed': ('✓', 'Landed'), 'next_up': ('◉', 'Next up'), 'pending': ('○', 'Pending')} %}
 {% set work_labels = {'complete': ('✓', 'Done'), 'next_up': ('◉', 'Next up'), 'in_progress': ('◐', 'In progress'), 'planned': ('○', 'Planned'), 'deferred': ('–', 'Deferred')} %}
+{% set shelf_labels = {'complete': ('✓', 'Done'), 'ready': ('◉', 'Ready'), 'in_progress': ('◐', 'In progress'), 'waiting': ('○', 'Waiting'), 'deferred': ('–', 'Deferred')} %}
 {% set gate_rows = {'landed': ('done', '✓'), 'next_up': ('next', '◉'), 'pending': ('open', '○')} %}
 {% set phase = dict(phases|map(attribute='id')|zip(phases)) %}
 {% set gate = dict(milestones|map(attribute='id')|zip(milestones)) %}
@@ -8,6 +9,9 @@
 {% set done = counted|selectattr('status', 'equalto', 'complete')|list %}
 {% macro prose(value) -%}
 {% for part in value.split('`') %}{% if loop.index is even %}<code>{{ part }}</code>{% else %}{{ part }}{% endif %}{% endfor %}
+{%- endmacro %}
+{% macro series(items) -%}
+{% if items|length < 3 %}{{ items|join(' and ') }}{% else %}{{ items[:-1]|join(', ') }}, and {{ items[-1] }}{% endif %}
 {%- endmacro %}
 {% macro badge(id, extra='') -%}
 <span class="badge {{ id|lower }}{{ extra }}">{{ id }}</span>
@@ -64,7 +68,16 @@
 {% endfor %}
 </div>
 {% endfor %}
-<svg class="wires" aria-hidden="true"></svg></div></section>
+<svg class="wires" aria-hidden="true"></svg></div>
+{% if plans %}<section class="shelf" id="plans" aria-labelledby="plans-title"><h3 id="plans-title">Plans not yet scheduled</h3><p class="sub">Slices that ride no phase, one plan per row. Open a row to see its slices in order.</p>
+<div class="shelf-row shelf-head" aria-hidden="true"><span>Plan</span><span>Slices</span><span>Ready</span><span>Progress</span></div>
+{%- for p in plans %}{% set plan_counted = p.slices|rejectattr('status', 'equalto', 'deferred')|list %}{% set plan_ready = p.slices|selectattr('status', 'equalto', 'ready')|list|length %}{% set plan_done = plan_counted|selectattr('status', 'equalto', 'complete')|list|length %}{% set plan_total = plan_counted|length or 1 %}{% set width = p.slices|map(attribute='column')|max + 1 %}
+<details class="shelf-plan" id="plan-{{ p.id }}"><summary class="shelf-row"><span class="plan-name"><b>{{ p.title }}</b></span><span class="num">{{ p.slices|length }}</span><span class="num">{{ plan_ready }}</span><span class="bar" role="img" aria-label="{{ plan_done }} of {{ plan_counted|length }} done, {{ plan_ready }} ready"><i class="done" style="width:{{ (100 * plan_done / plan_total)|round|int }}%"></i><i class="ready" style="width:{{ (100 * plan_ready / plan_total)|round|int }}%"></i></span></summary>
+<div class="plan-body"><div class="lgraph shelf-graph" data-shelf data-edges="{% for e in p.edges %}{{ e.upstream }}>{{ e.downstream }}{{ ' ' if not loop.last }}{% endfor %}" style="--visible-columns:{{ width }}">
+{%- for s in p.slices %}<div class="cell" data-column="{{ s.column }}" style="grid-column:{{ s.column + 1 }};grid-row:{{ s.row + 1 }}"><article class="card shelf-card {{ s.status }}" id="{{ s.id }}" data-label="{{ s.label }}"><div class="card-top"><h4>{% if s.planUrl is defined %}<a href="{{ s.planUrl }}">{{ s.label }}</a>{% else %}{{ s.label }}{% endif %}</h4><span class="pill {{ s.status }}">{{ shelf_labels[s.status]|join(' ') }}</span></div><div>{{ s.title }}</div>{% if s.needs %}<p class="blockers">Needs {{ series(s.needs) }}.</p>{% endif %}</article></div>{% endfor %}<svg class="wires" aria-hidden="true"></svg></div>
+<a class="plan-link" href="{{ p.planUrl }}">Read the plan ↗</a></div></details>{% endfor %}
+</section>{% endif %}
+</section>
 <section id="gates"><h2>Release gates</h2><p class="sub">What each release waits on.</p>
 <div class="gates"><section class="lane"><h3>Release sequence</h3>
 {%- for m in milestones %}{% set rows = (m.prerequisites if m.prerequisites is defined else [])|rejectattr('ref', 'in', gate)|list %}{% set left = rows|rejectattr('status', 'equalto', 'landed')|list|length %}{% if not loop.first %}<div class="children"><div class="child">{% endif %}<article class="gate" id="gate-{{ m.id|lower }}" data-open="detail-{{ m.id }}" tabindex="0" role="button" aria-haspopup="dialog"><header>{{ badge(m.id) }}<h3>{{ m.title }}</h3><span class="state">{{ left ~ ' left' if left else 'Ready' }}</span></header><ul>{% for r in rows %}{% set row = gate_rows[r.status] %}<li class="{{ row[0] }}"><span class="g">{{ row[1] }}</span>{% if r.card is defined and r.status != 'landed' %}<a href="#{{ r.card }}"><b>{{ r.ref }}</b> {{ r.title }}</a>{% else %}<span><b>{{ r.ref }}</b> {{ r.title }}</span>{% endif %}</li>{% endfor %}</ul></article>{% if not loop.first %}</div></div>{% endif %}{% endfor %}</section></div>

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Riko Forward Track snapshot",
   "description": "Content contract for the forward-track page. Arrays preserve display order. The renderer supplies visual styles, status captions, controls, standard headings, and the snapshot marker; it derives counts and filters from phase status. Work-item status is independent of phase status. Strings are plain text with optional inline backticks, never executable HTML.",
-  "$comment": "Application checks: phase and milestone IDs are unique, as are area IDs and card IDs. Focus references resolve; focus.phase is the sole next_up phase. Work IDs are unique within a phase. Every card need names a card ref, every prerequisite card names a card ID, and every area edge names area IDs.",
+  "$comment": "Application checks: phase and milestone IDs are unique, as are area IDs and card IDs. Focus references resolve; focus.phase is the sole next_up phase. Work IDs are unique within a phase. Every card need names a card ref, every prerequisite card names a card ID, and every area edge names area IDs. Plan IDs share the area IDs' namespace and shelf-slice IDs the card IDs'; every plan edge names one of that plan's slice IDs.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -13,9 +13,10 @@
     "milestones": {"type": "array", "items": {"$ref": "#/$defs/milestone"}, "minItems": 1},
     "history": {"type": "array", "items": {"$ref": "#/$defs/historyEvent"}, "minItems": 0, "description": "Newest first."},
     "areas": {"type": "array", "items": {"$ref": "#/$defs/area"}, "minItems": 0},
-    "areaEdges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "minItems": 0, "description": "Real dependencies between areas, transitively reduced."}
+    "areaEdges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "minItems": 0, "description": "Real dependencies between areas, transitively reduced."},
+    "plans": {"type": "array", "items": {"$ref": "#/$defs/shelfPlan"}, "minItems": 0, "description": "Plans with slices that ride no planning phase, by plan id."}
   },
-  "required": ["snapshot", "page", "focus", "phases", "milestones", "history", "areas", "areaEdges"],
+  "required": ["snapshot", "page", "focus", "phases", "milestones", "history", "areas", "areaEdges", "plans"],
   "$defs": {
     "link": {
       "type": "object", "additionalProperties": false,
@@ -170,6 +171,31 @@
         "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "description": "Real dependencies between this area's cards."}
       },
       "required": ["id", "title", "row", "column", "cards", "edges"]
+    },
+    "shelfSlice": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "label": {"type": "string", "minLength": 1, "description": "The slice id without its plan prefix."},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["ready", "waiting", "in_progress", "complete", "deferred"]},
+        "needs": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Open decisions and unfinished work this slice still waits on, a slice of its own plan by label."},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "row": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0}
+      },
+      "required": ["id", "label", "title", "status", "needs", "row", "column"]
+    },
+    "shelfPlan": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "planUrl": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "slices": {"type": "array", "items": {"$ref": "#/$defs/shelfSlice"}, "minItems": 1},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}, "description": "Dependencies between this plan's shelf slices."}
+      },
+      "required": ["id", "title", "planUrl", "slices", "edges"]
     }
   }
 }

@@ -260,6 +260,13 @@ _TRACK_PLANS = {
         },
     },
     "stream": {"slices": [{"id": "S90", "lands_with": ["R91.a"]}]},
+    "shelf": {
+        "slices": [
+            {"id": "a"},
+            {"id": "b", "blocked_by": ["shelf.a"]},
+            {"id": "c", "blocked_by": ["R93"]},
+        ]
+    },
 }
 _TRACK_TEXT = """## Areas
 
@@ -309,7 +316,11 @@ _TRACK_TEXT = """## Areas
 
 ### R97: Right
 """
-_TRACK_DOCS = {"plan.md": _TRACK_TEXT, "stream.md": "**S90: Riding slice.** Prose.\n"}
+_TRACK_DOCS = {
+    "plan.md": _TRACK_TEXT,
+    "stream.md": "**S90: Riding slice.** Prose.\n",
+    "shelf.md": "# Shelf gameplan\n\n**a: First shelf slice.** Prose.\n",
+}
 _TRACK_PAGE = {
     "documentTitle": "document",
     "title": "title",
@@ -1731,6 +1742,26 @@ class TestBuildExport:
 
 FORWARD_TRACK_FIELDS = [
     pytest.param(("focus", "phase"), "R91", id="focus-phase"),
+    pytest.param(("plans", "ids"), ["shelf"], id="shelf-skips-riding-plans"),
+    pytest.param(("plans", "shelf", "title"), "Shelf", id="shelf-title"),
+    pytest.param(
+        ("plans", "shelf", "slices", "shelf-a", "status"), "ready", id="shelf-ready"
+    ),
+    pytest.param(
+        ("plans", "shelf", "slices", "shelf-b", "status"), "waiting", id="shelf-waiting"
+    ),
+    pytest.param(
+        ("plans", "shelf", "slices", "shelf-b", "needs"), ["a"], id="shelf-needs-own"
+    ),
+    pytest.param(
+        ("plans", "shelf", "slices", "shelf-c", "needs"), ["R93"], id="shelf-needs"
+    ),
+    pytest.param(("plans", "shelf", "slices", "shelf-b", "row"), 1, id="shelf-row"),
+    pytest.param(
+        ("plans", "shelf", "edges"),
+        [{"upstream": "shelf-a", "downstream": "shelf-b"}],
+        id="shelf-edges",
+    ),
     pytest.param(("focus", "milestone"), "M90", id="focus-milestone"),
     pytest.param(
         ("focus", "decision"),
@@ -1963,6 +1994,15 @@ class TestBuildForwardTrack:
         problems = gen_forward_track_problems({**_build_track(), "areaEdges": edges})
         assert list(problems) == ["area edge names unknown area nowhere"]
 
+    def test_unknown_plan_edge_end_is_a_problem(self):
+        track = _build_track()
+        found = track["plans"]
+        assert isinstance(found, list)
+        edges = [{"upstream": "shelf-a", "downstream": "nowhere"}]
+        plans = [{**plan, "edges": edges} for plan in found]
+        problems = gen_forward_track_problems({**track, "plans": plans})
+        assert list(problems) == ["plan shelf edge names unknown slice nowhere"]
+
 
 FORWARD_TRACK_PAGE_MARKUP = [
     pytest.param(
@@ -1978,6 +2018,13 @@ FORWARD_TRACK_PAGE_MARKUP = [
         '<section class="lane area" id="area-core"><h3>Core work</h3>', id="area-box"
     ),
     pytest.param('<span class="needs">Depends on R91, R92</span>', id="needs-pill"),
+    pytest.param(
+        '<details class="shelf-plan" id="plan-shelf"><summary class="shelf-row">'
+        '<span class="plan-name"><b>Shelf</b></span><span class="num">3</span>'
+        '<span class="num">1</span>',
+        id="shelf-row",
+    ),
+    pytest.param('<p class="blockers">Needs R93.</p>', id="shelf-blockers-note"),
     pytest.param(
         '<span class="badges"><span class="badge m90">M90</span>'
         '<span class="badge m91">M91</span></span>',
@@ -2036,7 +2083,7 @@ class TestBuildForwardTrackPage:
         assert needle in build_forward_track_page(_build_track())
 
     def test_page_ids_are_unique_and_every_reference_resolves(self):
-        page = build_forward_track_page(_build_track())
+        page = build_forward_track_page(_build_track()).partition("<script>")[0]
         ids = re.findall(r'\bid="([^"]+)"', page)
         edges = re.findall(r'data-edges="([^"]*)"', page)
         refs = {

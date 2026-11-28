@@ -19,8 +19,9 @@ import re
 import sys
 import tomllib
 from argparse import ArgumentParser
-from collections import Counter
+from collections import Counter, deque
 from datetime import date
+from itertools import chain, count
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import networkx as nx
@@ -29,15 +30,21 @@ from fastjsonschema import compile as fjs_compile
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from riko.base._guards import require_listlike, require_mapping
-from riko.base._iterutils import gen_non_null
-from riko.base._paths import INTERNAL_DOCS_DIR, ROOT_DIR, SEQUENCE_PATH, TRACKER_PATH
+from riko.base._iterutils import gen_instances, gen_non_null
+from riko.base._paths import (
+    GAMEPLANS_DIR,
+    INTERNAL_DOCS_DIR,
+    ROOT_DIR,
+    SEQUENCE_PATH,
+    TRACKER_PATH,
+)
 from riko.base._require_guards import require_instance
 
 from ._gen_planning import Snapshot, build_plan_url, load_snapshot, read_git
 from ._planning import Node, PlanFile, Section, load_planning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
     from ._planning import EdgeKind, PlanningData
@@ -96,6 +103,11 @@ class _Placement(NamedTuple):
     forked: bool
 
 
+class _Cell(NamedTuple):
+    row: int
+    column: int
+
+
 def _get_title(data: PlanningData, ref: str) -> str:
     """Gets a ref's Markdown title, or the ref itself while it has none."""
     section = data.sections.get(ref)
@@ -113,6 +125,13 @@ def _get_detail(data: PlanningData, ref: str) -> str:
 def _normalize_id(text: str) -> str:
     """Normalizes text to a lowercase id of letters, digits, ``_``, and ``-``."""
     return _UNSAFE.sub("-", text.lower()).strip("-_")
+
+
+def _build_edges(pairs: Iterable[tuple[str, str]]) -> list[dict[str, str]]:
+    """Builds the view's edge records from ``(upstream, downstream)`` ref pairs."""
+    return [
+        {"upstream": _normalize_id(u), "downstream": _normalize_id(v)} for u, v in pairs
+    ]
 
 
 def _get_plan_url(data: PlanningData, snapshot: Snapshot, node: Node) -> str:
@@ -443,13 +462,136 @@ def _build_areas(
             "id": _normalize_id(area),
             "title": _get_title(data, area),
             "cards": [cards[ref] for ref in refs],
-            "edges": [
-                {"upstream": _normalize_id(u), "downstream": _normalize_id(v)}
-                for u, v in links.subgraph(refs).edges
-            ],
+            "edges": _build_edges(links.subgraph(refs).edges),
         }
         for area, refs in groups.items()
     }
+
+
+def _place_shelf(graph: nx.DiGraph[str], order: Sequence[str]) -> dict[str, _Cell]:
+    """
+    Places a plan's slices: each row by depth, each column under the slice's parents.
+
+    A depth-first walk from the roots, in ``order``, gives each leaf the next column. A
+    child several parents lead to waits for the last of them and goes first among its
+    siblings; the others sit with the child that has the most descendants in the
+    middle. A parent takes the middle column of the children only it leads to, else of
+    all its children.
+
+    Examples:
+
+        >>> import networkx as nx
+        >>>
+        >>> graph = nx.DiGraph([("a", "b"), ("a", "c"), ("c", "d"), ("a", "e")])
+        >>> for ref, cell in _place_shelf(graph, "abcde").items():
+        ...     print(ref, *cell)
+        a 0 1
+        b 1 0
+        c 1 1
+        d 2 1
+        e 1 2
+
+    """
+    rows = {ref: placement.row for ref, placement in _place(graph, order).items()}
+    sizes = {ref: len(nx.descendants(graph, ref)) for ref in order}
+    columns: dict[str, int] = {}
+    entered: set[str] = set()
+    slots = count()
+
+    def visit(ref: str) -> None:
+        entered.add(ref)
+        ready = sorted(
+            (
+                child
+                for child in graph.successors(ref)
+                if child not in columns
+                and entered.issuperset(graph.predecessors(child))
+            ),
+            key=order.index,
+        )
+        ranked = sorted(
+            (child for child in ready if graph.in_degree(child) == 1),
+            key=lambda child: -sizes[child],
+        )
+        arranged: deque[str] = deque()
+
+        for index, child in enumerate(ranked):
+            (arranged.appendleft if index % 2 else arranged.append)(child)
+
+        for child in [*(c for c in ready if graph.in_degree(c) > 1), *arranged]:
+            visit(child)
+
+        children = list(graph.successors(ref))
+        owned = [columns[c] for c in children if graph.in_degree(c) == 1]
+        under = sorted(owned or [columns[c] for c in children if c in columns])
+        columns[ref] = under[(len(under) - 1) // 2] if under else next(slots)
+
+    for root in (ref for ref in order if graph.in_degree(ref) == 0):
+        visit(root)
+
+    return {ref: _Cell(rows[ref], columns[ref]) for ref in order}
+
+
+def _gen_shelf_plans(
+    data: PlanningData, snapshot: Snapshot
+) -> Iterator[dict[str, object]]:
+    """
+    Generates the plans shelf: each plan file with slices that ride no planning phase.
+
+    A slice that lands with a planning phase already shows in that phase's work, so a
+    plan whose slices all do is left off. Each slice notes its status, the open
+    decisions and unfinished work it still waits on (a slice of its own plan by label),
+    and its cell in a grid laid out from the plan's own ``blocked_by`` edges.
+    """
+    plans = gen_instances(data.containers.values(), PlanFile)
+    shelved = [
+        (plan, refs)
+        for plan in sorted(plans, key=lambda item: item.id)
+        if (refs := [item.ref for item in plan.slices if not item.lands_with])
+    ]
+
+    for plan, refs in shelved:
+        graph: nx.DiGraph[str] = nx.DiGraph()
+        graph.add_nodes_from(refs)
+        graph.add_edges_from(
+            (edge.upstream, edge.downstream)
+            for edge in data.edges
+            if edge.kind == "blocked_by"
+            and edge.upstream in graph
+            and edge.downstream in graph
+        )
+        cells = _place_shelf(graph, refs)
+        waiting = {ref: data.get_waiting(ref) for ref in refs}
+        labels = {ref: ref.partition(".")[2] or ref for ref in refs}
+        heading = data.docs.get(f"{plan.id}.md", "").partition("\n")[0]
+        title = heading.removeprefix("# ").removesuffix(" gameplan") or plan.id
+        path = (GAMEPLANS_DIR / f"{plan.id}.md").relative_to(ROOT_DIR).as_posix()
+        sections = {ref: data.sections.get(ref) for ref in refs}
+        yield {
+            "id": _normalize_id(plan.id),
+            "title": title,
+            "planUrl": f"{snapshot.repository}/blob/{snapshot.commit}/{path}",
+            "slices": [
+                {
+                    "id": _normalize_id(ref),
+                    "label": labels[ref],
+                    "title": _get_title(data, ref),
+                    "status": _WORK_STATUSES.get(
+                        data.get_status(ref), "waiting" if waiting[ref] else "ready"
+                    ),
+                    "needs": [labels.get(need, need) for need in waiting[ref]],
+                    **(
+                        {}
+                        if (section := sections[ref]) is None
+                        else {"planUrl": build_plan_url(snapshot, section)}
+                    ),
+                    "row": cells[ref].row,
+                    "column": cells[ref].column,
+                }
+                for ref in refs
+            ],
+            "edges": _build_edges(graph.edges),
+        }
 
 
 def _gen_prerequisites(
@@ -507,7 +649,7 @@ def build_forward_track(
     Returns:
 
         The ``snapshot``, ``page``, ``focus``, ``phases``, ``milestones``,
-        ``history``, ``areas``, and ``areaEdges`` of the view.
+        ``history``, ``areas``, ``areaEdges``, and ``plans`` of the view.
 
     Raises:
 
@@ -645,10 +787,8 @@ def build_forward_track(
             {**area, "row": boxes[key].row, "column": boxes[key].column}
             for key, area in areas.items()
         ],
-        "areaEdges": [
-            {"upstream": _normalize_id(u), "downstream": _normalize_id(v)}
-            for u, v in drawn.edges
-        ],
+        "areaEdges": _build_edges(drawn.edges),
+        "plans": list(_gen_shelf_plans(data, snapshot)),
     }
 
 
@@ -718,9 +858,24 @@ def gen_forward_track_problems(doc: _Record) -> Iterator[str]:
         for edge in _get_records(doc, "areaEdges")
         for key in ("upstream", "downstream")
     ]
+    plans = _get_records(doc, "plans")
+    shelved = {
+        _get_text(plan, "id"): [
+            _get_text(s, "id") for s in _get_records(plan, "slices")
+        ]
+        for plan in plans
+    }
+    plan_ends = [
+        (plan_id, _get_text(edge, key))
+        for plan, plan_id in zip(plans, shelved, strict=True)
+        for edge in _get_records(plan, "edges")
+        for key in ("upstream", "downstream")
+    ]
     yield from _gen_duplicates("node", *phase_ids, *milestone_ids)
-    yield from _gen_duplicates("area", *area_ids)
-    yield from _gen_duplicates("card", *card_ids)
+    yield from _gen_duplicates("area", *area_ids, *shelved)
+    yield from _gen_duplicates(
+        "card", *card_ids, *chain.from_iterable(shelved.values())
+    )
 
     for phase, phase_id in zip(phases, phase_ids, strict=True):
         work = (_get_text(item, "id") for item in _get_records(phase, "work"))
@@ -746,6 +901,11 @@ def gen_forward_track_problems(doc: _Record) -> Iterator[str]:
     )
     yield from (
         f"area edge names unknown area {end}" for end in ends if end not in area_ids
+    )
+    yield from (
+        f"plan {plan_id} edge names unknown slice {end}"
+        for plan_id, end in plan_ends
+        if end not in shelved[plan_id]
     )
 
 

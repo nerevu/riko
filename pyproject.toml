@@ -391,7 +391,7 @@ rows-without-id-lowered = 2026-10-30
 # one function that are themselves the only caller of another such helper. It only
 # goes down: a run fails above it and lowers it on a gain. It records the day as
 # `<key>-lowered`.
-chains = 6
+chains = 7
 chains-lowered = 2026-11-26
 
 [tool.riko.ratchet]

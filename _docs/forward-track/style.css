@@ -127,6 +127,50 @@ nav.jump a { color: var(--text); font-weight: 600; font-size: .92rem; }
 .card-top h4 { margin: 0; font-size: 1.1rem; }
 .badges { margin-left: auto; display: flex; gap: 4px; }
 .needs { display: inline-block; font: 600 11px var(--sans); color: var(--next); background: var(--next-bg); border: 1px solid color-mix(in srgb, var(--next) 40%, transparent); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+.shelf { margin-top: 36px; display: grid; gap: 6px; }
+.shelf h3 { font-size: 1.08rem; }
+.shelf .sub { margin: 0 0 6px; }
+.shelf-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px minmax(80px, 180px); gap: 12px; align-items: center; }
+.shelf-head { font: 11.5px var(--mono); color: var(--muted); letter-spacing: .04em; padding: 0 13px; }
+.shelf-head span:nth-child(2), .shelf-head span:nth-child(3), .shelf-row .num { text-align: right; }
+.shelf-plan { background: var(--card); border: 1px solid var(--edge); border-radius: 9px; }
+.shelf-plan[open] { border-color: var(--next); }
+.shelf-plan summary { cursor: pointer; padding: 9px 12px; list-style: none; }
+.shelf-plan summary::-webkit-details-marker { display: none; }
+.shelf-plan summary:focus-visible { outline: 2px solid var(--next); outline-offset: 2px; border-radius: 9px; }
+.plan-name { min-width: 0; overflow-wrap: anywhere; }
+.plan-name::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); transition: transform .15s; }
+.shelf-plan[open] .plan-name::before { transform: rotate(90deg); }
+.shelf-row .num { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+.bar { height: 7px; border-radius: 99px; background: var(--line); overflow: hidden; display: flex; }
+.bar i { display: block; height: 100%; }
+.bar .done { background: var(--landed); } .bar .ready { background: var(--next); }
+.plan-body { border-top: 1px solid var(--line); padding: 14px 12px 12px; display: grid; gap: 10px; overflow-x: auto; background: var(--panel); border-radius: 0 0 9px 9px; }
+.shelf > *, .shelf-plan, .plan-body { min-width: 0; }
+.shelf-graph { --motion-time: 220ms; justify-content: start; width: max-content; column-gap: 24px; row-gap: 42px; grid-template-columns: repeat(var(--visible-columns, 2), clamp(210px, 17vw, 250px)); }
+.shelf-graph > .cell { align-items: stretch; }
+.shelf-graph [hidden] { display: none !important; }
+.shelf-card { cursor: default; }
+.shelf-card.expandable { cursor: pointer; }
+.shelf-card .reveal { width: 100%; display: flex; align-items: center; gap: .5em; border: 0; padding: .45rem 0 0; background: transparent; color: var(--link); text-align: left; cursor: pointer; font: inherit; font-size: .85rem; }
+.reveal::before { content: "▸"; }
+.reveal[aria-expanded="true"]::before { content: "▾"; }
+.via-label { fill: var(--text); font: 12px var(--sans); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.blockers { margin: .45em 0 0; color: var(--muted); font-size: .87em; }
+@keyframes settle-card { from { transform: translate(var(--dx), var(--dy)); } to { transform: translate(0, 0); } }
+@keyframes reveal-card { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dismiss-card { to { opacity: 0; } }
+.cell.moving { animation: settle-card var(--motion-time) ease-in-out both; }
+.cell.entering { animation: reveal-card var(--motion-time) ease-in-out both; }
+.exit-copy { position: absolute; pointer-events: none; box-sizing: border-box; animation: dismiss-card 140ms ease-in-out forwards; }
+.shelf-card .card-top { flex-wrap: wrap; column-gap: 8px; row-gap: 2px; }
+.shelf-card h4 { font: 650 .95rem var(--mono); white-space: nowrap; }
+.card.ready { border-color: var(--next); background: var(--next-bg); }
+.card.complete { background: var(--landed-bg); }
+.card.deferred { opacity: .6; }
+.pill.ready { color: var(--next); } .pill.complete { color: var(--landed); }
+.plan-link { justify-self: start; font-size: .9rem; }
+@media (prefers-reduced-motion: reduce) { .plan-name::before { transition: none; } .cell.moving, .cell.entering, .exit-copy { animation: none; } }
 .gates { display: grid; gap: 12px; }
 .gate { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
 .gate:hover { border-color: var(--wire); }

@@ -90,13 +90,21 @@ at call sites.
   `location` (`implementation-sequence.md › R7 › R7.fan-in`). Open phases become
   `areas`: one card per phase (its open milestones and the other-area phases it really
   `needs`), placed by `_place` on a grid of real in-area `edges`; `areaEdges` are the
-  cross-area dependencies, transitively reduced.
-  `python -m riko.cli._gen_forward_track --html` renders the validated view through
+  cross-area dependencies, transitively reduced. `plans` is the shelf: each plan
+  file with slices that land with no phase (`lands_with` empty), its title from the
+  Markdown H1, and each such slice's status (`ready`, `waiting`, `in_progress`,
+  `complete`, `deferred`), `needs` (its unfinished blockers, a slice of its own plan
+  by label), and row and column from `_place_shelf`, which centers each parent over
+  the children only it leads to. The page opens each plan on its first slices and
+  reveals the rest per card, compacting empty columns and drawing a dashed "via"
+  connector through a hidden slice.
+  `manage codegen --progress` (left out of `--all`) renders the validated view through
   `_docs/forward-track/index.html.j2` (its `style.css` and `controls.js` inlined, and no
   document wrapper since the artifact host adds one) to `output/forward-track.html`,
   which is never committed: overview tiles, Next up, Phases, History, Scheduled work
   (area boxes stacked per column, cards on a CSS grid, elbow connectors drawn by the
-  script) beside Release gates, and a dialog per phase. It refuses (exit 1, no file)
+  script, then the plans shelf as one disclosure row per plan) beside Release gates,
+  and a dialog per phase. It refuses (exit 1, no file)
   when the view fails its checks. Claude republishes the page to the progress-view
   artifact (<https://claude.ai/artifact/Gy1JHYcXhr1EaTdmjEzdYM>) on request.
 - **Marked blocks** — `riko/cli/_gen_blocks.py` is the shared helper behind the

@@ -3646,6 +3646,12 @@ template in `_docs/forward-track/` into one self-contained page: overview, next 
 phases, history, then open work grouped into areas (laid out by their real
 dependencies, one card per phase) beside the release gates M1 to M5.
 
+**planning-data.plan-shelf: Plans shelf.** Plan files whose slices ride no phase
+show below the areas as a shelf: one row per plan with its slice count, ready
+count, and progress bar, opening into its slices laid out by their own
+`blocked_by` edges, each naming the work it still waits on. A slice that
+lands with a phase stays in that phase's work instead (user, 2026-11-27).
+
 **planning-data.step-1: TOML sources and generated views.** A TOML source beside
 every gameplan with slices, the
 generated R-track and P-track tables in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md),
