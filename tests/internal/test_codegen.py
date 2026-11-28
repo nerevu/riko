@@ -2003,6 +2003,16 @@ class TestBuildForwardTrack:
         problems = gen_forward_track_problems({**track, "plans": plans})
         assert list(problems) == ["plan shelf edge names unknown slice nowhere"]
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=ValueError,
+        reason="a progress view without a focus is not yet implemented",
+    )
+    def test_track_without_a_ready_main_track_slice_has_no_focus(self):
+        phases = {"R90": {"area": "core", **_LANDED}}
+        data = PlanningData.from_documents({"plan": {"phases": phases}}, {})
+        build_forward_track(data, _TRACK_SNAPSHOT, _TRACK_PAGE, [])
+
 
 FORWARD_TRACK_PAGE_MARKUP = [
     pytest.param(
