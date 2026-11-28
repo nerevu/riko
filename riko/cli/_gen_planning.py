@@ -85,6 +85,7 @@ _CLASS_DEFS = (
 PLANNING_DOCS: dict[Path, frozenset[str]] = {
     TRACKER_PATH: frozenset({"track-r", "track-p"}),
     SEQUENCE_PATH: frozenset({"graph", "next", "lanes", "decisions"}),
+    GAMEPLANS_DIR / "database-transforms.md": frozenset({"slices"}),
     GAMEPLANS_DIR / "feed-native-streaming.md": frozenset({"slices"}),
 }
 

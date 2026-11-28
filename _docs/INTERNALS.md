@@ -64,9 +64,10 @@ at call sites.
 - **Planning blocks** — `riko/cli/_gen_planning.py` (`manage codegen --planning`)
   rewrites the `<!-- planning-* -->` blocks in `PLANNING_DOCS`: the R/P tracker tables
   in `_docs/PHASE_CHECKLISTS.md`, the Mermaid graph, next-up, lanes, and decisions in
-  `_docs/gameplans/implementation-sequence.md`, and the slice table in
-  `_docs/gameplans/feed-native-streaming.md`. Its source is the planning model from
-  `riko/cli/_planning.py` (`load_planning`), which joins the facts in
+  `_docs/gameplans/implementation-sequence.md`, and the slice table in each other
+  gameplan listed there (`_docs/gameplans/feed-native-streaming.md`). Its source is
+  the planning model from `riko/cli/_planning.py` (`load_planning`), which joins the
+  facts in
   `_docs/gameplans/*.toml` (dates, `blocked_by`/`scheduled_after` edges, riders, areas,
   lanes, decisions) to the titles and prose in their Markdown homes (`### <id>: name`
   headings, `**<id>: title.**` lead-ins, whose title is the bold text minus its final

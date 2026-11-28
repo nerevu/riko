@@ -3660,6 +3660,15 @@ Each migrated gameplan names its slices by what they deliver
 records the old label once ("Earlier notes call it S3.") so older prose and commit
 subjects still resolve. Exit slices keep `add`, `migrate`, and `delete`.
 
+Gameplans with slices that still need a TOML: agent-scenarios, agents, ai-inference,
+artifact-conversion, autopilot-provisioning, azure-automation, bado-anyio-alignment,
+cli, connectors, correctness-audit, dotdict-parsing, enrichment-modules,
+entity-resolution, fanout-topology, feed-monitoring, highergov-feed, mcp,
+microsoft-administration, monthly-dashboard, operations-as-code, orchestration,
+performance, provider-integrations, rdp-connect, reference-data, rest-incremental,
+riko-site, tabular-interop, and v1-cutover; extensibility, commercialization, and
+module-documentation have ordered labels that may not count as slices.
+
 **planning-data.timing: Commit-derived durations.** A tool records each landed slice's
 elapsed days, active commit days, and active session hours from git and the session
 transcripts, backfills the landed slices, and feeds scheduling predictions (the TOML
