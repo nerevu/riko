@@ -402,9 +402,8 @@ def _build_areas(
     links.add_nodes_from(owners)
     links.add_edges_from(
         (upstream, downstream)
-        for edge in data.edges
-        if edge.kind == "blocked_by"
-        and (upstream := _get_container(data, edge.upstream)) in owners
+        for edge in data.blocking_edges
+        if (upstream := _get_container(data, edge.upstream)) in owners
         and (downstream := _get_container(data, edge.downstream)) in owners
         and upstream != downstream
         and data.get_status(edge.upstream) not in {"complete", "settled"}
@@ -555,10 +554,8 @@ def _gen_shelf_plans(
         graph.add_nodes_from(refs)
         graph.add_edges_from(
             (edge.upstream, edge.downstream)
-            for edge in data.edges
-            if edge.kind == "blocked_by"
-            and edge.upstream in graph
-            and edge.downstream in graph
+            for edge in data.blocking_edges
+            if edge.upstream in graph and edge.downstream in graph
         )
         cells = _place_shelf(graph, refs)
         waiting = {ref: data.get_waiting(ref) for ref in refs}

@@ -1046,6 +1046,11 @@ class PlanningData:
         )
 
     @cached_property
+    def blocking_edges(self) -> tuple[Edge, ...]:
+        """Every declared ``blocked_by`` edge, without the chosen orders."""
+        return tuple(edge for edge in self.edges if edge.kind == "blocked_by")
+
+    @cached_property
     def _entries(self) -> Mapping[str, str]:
         """Each container's first self-landing slice, which its own edges apply to."""
         firsts = (
